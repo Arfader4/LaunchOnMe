@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikona trybu "camera": prosty kontur 24x24, kolor nadaje launcher (tint), a w kafelku szybkich ustawień system. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M4,8 H7 L9,5 H15 L17,8 H20 V19 H4 Z M15.5,13 A3.5,3.5 0 1 1 8.5,13 A3.5,3.5 0 1 1 15.5,13 Z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Odczyt kalendarza do sugestii trybów (np. "Lot" w kalendarzu → tryb Podróż). Pytamy dopiero przy dodaniu reguły. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- Tapeta trybu: zwykłe uprawnienie, nadawane przy instalacji (bez okienka). -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <!-- Widżet "Ulubione kontakty": kontakty z gwiazdką (tylko odczyt). -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Pogoda z Open-Meteo. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Reguły Bluetooth: lista sparowanych urządzeń i informacja o połączeniu. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Reguły Wi-Fi i miejsca: nazwa sieci i ostatnia znana lokalizacja (tylko gdy launcher jest otwarty). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Ustawienia trybu: "Nie przeszkadzać" i tryb dźwięku (użytkownik nadaje osobny dostęp w ustawieniach). -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <!-- Ustawienia trybu: jasność, wygaszanie, autoobracanie (osobna zgoda "Modyfikowanie ustawień systemu"). -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <!-- Odczyt, czy NFC jest włączone. -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
+    <!-- Od Androida 11 aplikacja widzi tylko te inne aplikacje, o które "zapyta".
+         Tu deklarujemy: pokaż mi wszystko, co ma ikonę w szufladzie. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- Aplikacja Zegar (widżet "W skrócie" otwiera ją po dotknięciu godziny). -->
+        <intent>
+            <action android:name="android.intent.action.SHOW_ALARMS" />
+        </intent>
+        <!-- Aplikacje, które mają widżety (także te bez ikony w szufladzie). -->
+        <intent>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ContextLauncher">
+
+        <!-- singleTask: przycisk Home zawsze wraca do TEJ samej instancji launchera.
+             excludeFromRecents: launcher nie pojawia się na liście ostatnich aplikacji. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:stateNotNeeded="true"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.ContextLauncher"
+            android:windowSoftInputMode="adjustResize">
+
+            <!-- To czyni nas launcherem: system proponuje tę aktywność po naciśnięciu Home. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <!-- Zostawiamy też zwykłą ikonę, żeby Android Studio mogło uruchamiać aplikację przyciskiem Run. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Odbiera treści z systemowego "Udostępnij": tekst i linki, PDF-y, obrazy i inne pliki.
+             taskAffinity="" = nie miesza się z zadaniem launchera. -->
+        <activity
+            android:name=".ShareActivity"
+            android:exported="true"
+            android:label="Przypnij do trybu"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.ContextLauncher"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/*" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+
+        <!-- Niewidoczna aktywność skrótów trybu (przytrzymanie ikony launchera → tryb).
+             Przełącza tryb i od razu się zamyka; noHistory + excludeFromRecents = nie zostawia śladu. -->
+        <activity
+            android:name=".ModeShortcutActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Kafelek "Tryb" w szybkich ustawieniach. Użytkownik dodaje go sam: panel → ołówek → przeciągnij kafelek. -->
+        <service
+            android:name=".ModeTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_mode_star"
+            android:label="Tryb"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Kropki powiadomień na ikonach. Działa dopiero po włączeniu w "Dostęp do powiadomień". -->
+        <service
+            android:name=".system.NotificationDotsService"
+            android:exported="false"
+            android:label="Kropki powiadomień (Context Launcher)"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Połączenia Bluetooth na potrzeby reguł (działa także, gdy launcher jest zamknięty). -->
+        <receiver
+            android:name=".system.BluetoothConnectionReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Udostępnia kopie plików z "Pod ręką" czytnikom PDF itp. na czas otwarcia. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+
+</manifest>
