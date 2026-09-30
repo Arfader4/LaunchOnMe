@@ -6,11 +6,17 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Tapeta trybu: zwykłe uprawnienie, nadawane przy instalacji (bez okienka). -->
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <!-- Gest w dół na ekranie głównym rozwija panel powiadomień. -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+    <!-- Odinstalowanie aplikacji z launchera (systemowe okno potwierdzenia). -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Widżet "Ulubione kontakty": kontakty z gwiazdką (tylko odczyt). -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <!-- Pogoda z Open-Meteo. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Mapa (osmdroid) sprawdza, czy jest sieć, zanim pobierze kafelki. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Reguły Bluetooth: lista sparowanych urządzeń i informacja o połączeniu. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
@@ -55,6 +61,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ContextLauncher">
 
+
         <!-- singleTask: przycisk Home zawsze wraca do TEJ samej instancji launchera.
              excludeFromRecents: launcher nie pojawia się na liście ostatnich aplikacji. -->
         <activity
@@ -64,7 +71,7 @@
             android:launchMode="singleTask"
             android:stateNotNeeded="true"
             android:excludeFromRecents="true"
-            android:theme="@style/Theme.ContextLauncher"
+            android:theme="@style/Theme.ContextLauncher.Home"
             android:windowSoftInputMode="adjustResize">
 
             <!-- To czyni nas launcherem: system proponuje tę aktywność po naciśnięciu Home. -->
@@ -130,7 +137,7 @@
         <service
             android:name=".system.NotificationDotsService"
             android:exported="false"
-            android:label="Kropki powiadomień (Context Launcher)"
+            android:label="Kropki powiadomień (LaunchOnMe)"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />

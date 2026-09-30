@@ -135,20 +135,29 @@ private fun HeaderPrompt(
     }
 }
 
+// Małe okrągłe przyciski ✓ / ✕ / ikona — konwencja dla ciasnych miejsc (paski, podpowiedzi, edycja układu).
+// Tam, gdzie jest dużo miejsca (Ustawienia, okna), zostają zwykłe przyciski z tekstem.
 @Composable
-private fun RoundAction(symbol: String, color: Color, label: String, onClick: () -> Unit) {
+internal fun RoundAction(symbol: String, color: Color, label: String, onClick: () -> Unit, filled: Boolean = false) {
+    RoundIconButton(color, label, onClick, filled) {
+        Text(symbol, color = if (filled) Color.White else color, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+internal fun RoundIconButton(color: Color, label: String, onClick: () -> Unit, filled: Boolean = false, content: @Composable () -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(40.dp)
             .clip(CircleShape)
-            .background(color.copy(alpha = 0.18f))
+            .background(if (filled) color else color.copy(alpha = 0.18f))
             .clickable(onClick = onClick)
             .semantics { contentDescription = label },
-    ) {
-        Text(symbol, color = color, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-    }
+    ) { content() }
 }
+
+internal val AcceptColor = Color(0xFF4FC27E)
 
 // Przypomnienie o ręcznych przełącznikach (Wi-Fi, Bluetooth…) jako mała ikonka z licznikiem obok ⋯.
 // Dotknięcie rozwija listę; każda pozycja otwiera właściwy panel systemowy.

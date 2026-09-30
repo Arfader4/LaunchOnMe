@@ -1,7 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Ciemne tło okna już przed narysowaniem Compose, żeby nie było białego mignięcia po Home. -->
+    <!-- Ciemne tło okna już przed narysowaniem Compose, żeby nie było białego mignięcia (ShareActivity itp.). -->
     <style name="Theme.ContextLauncher" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/launcher_background</item>
+    </style>
+
+    <!-- Ekran główny: okno ZAWSZE przezroczyste z tapetą pod spodem (jak w każdym launcherze).
+         Musi to być w motywie, a nie przełączane w kodzie: Android tworzy powierzchnię okna raz, przy starcie,
+         i późniejsza zmiana flagi dawała "duchy" po animacjach oraz tapetę widoczną dopiero po powrocie.
+         Gdy tapeta jest wyłączona w Ustawieniach, Compose po prostu maluje nieprzezroczyste tło. -->
+    <style name="Theme.ContextLauncher.Home" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:colorBackgroundCacheHint">@null</item>
     </style>
 </resources>

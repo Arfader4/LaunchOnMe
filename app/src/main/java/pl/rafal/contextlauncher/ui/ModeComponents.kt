@@ -39,7 +39,10 @@ import androidx.compose.ui.unit.dp
 import pl.rafal.contextlauncher.data.db.ModeEntity
 
 // Kolory do wyboru dla nowego trybu (te same co w makiecie).
-val ModeColors = listOf(0xFFF0A844, 0xFF8FB2FF, 0xFF7FD6AE, 0xFFFF9A7F, 0xFFB9A5FF, 0xFFD4AF37, 0xFF4FB3BF, 0xFFE0736B, 0xFF8B5A2B)
+val ModeColors = listOf(
+    0xFFF0A844, 0xFF8FB2FF, 0xFF7FD6AE, 0xFFFF9A7F, 0xFFB9A5FF, 0xFFD4AF37, 0xFF4FB3BF, 0xFFE0736B, 0xFF8B5A2B,
+    0xFF4DF5CD, 0xFFFFD166, 0xFFEF476F, 0xFF06D6A0, 0xFF118AB2, 0xFFA78BFA, 0xFFF472B6, 0xFF94A3B8, 0xFF84CC16,
+)
 
 @Composable
 fun ModeDot(color: Long, size: Int = 10) {
@@ -152,7 +155,7 @@ fun NewModeDialog(onConfirm: (name: String, color: Long, icon: String) -> Unit, 
                     singleLine = true,
                 )
                 IconPicker(selected = icon, color = color, onSelect = { icon = it })
-                ColorSwatches(colors = ModeColors, selected = color, onSelect = { c -> if (c != null) color = c })
+                ColorSwatches(colors = ModeColors, selected = color, modeBadge = true, onSelect = { c -> if (c != null) color = c })
             }
         },
         confirmButton = {

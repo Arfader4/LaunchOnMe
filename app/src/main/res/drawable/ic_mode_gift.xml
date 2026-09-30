@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikona trybu "gift": kontur 24x24 (styl ikon trybów), kolor nadaje launcher / system. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M4,10 H20 V20 H4 Z M3,7 H21 V10 H3 Z M12,7 V20 M12,7 C10,3 6.5,5 9,7 M12,7 C14,3 17.5,5 15,7"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

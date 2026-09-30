@@ -7,6 +7,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import pl.rafal.contextlauncher.data.db.AppRestrictionEntity
 import pl.rafal.contextlauncher.data.db.CardItemEntity
 import pl.rafal.contextlauncher.data.db.FolderAppEntity
@@ -18,21 +22,54 @@ import pl.rafal.contextlauncher.data.db.SuggestionRuleEntity
 import pl.rafal.contextlauncher.ui.theme.Palette
 import pl.rafal.contextlauncher.ui.theme.ThemeMode
 
-// Eksport i import całej konfiguracji do jednego pliku JSON (np. przeniesienie z emulatora na telefon).
-// Nie przenosimy: widżetów innych aplikacji (ich identyfikatory działają tylko na jednym telefonie),
-// naklejek i plików z "Pod ręką" (to kopie plików, nie dane) oraz statystyk uruchomień.
+// Eksport i import całej konfiguracji (np. przeniesienie z emulatora na telefon albo nowy telefon).
+// Dwa formaty: sam JSON (ustawienia) albo .zip = ten sam JSON + pliki: naklejki z kart, tapety trybów,
+// biblioteka i tablice StickOnMe. Ścieżki plików w JSON-ie zapisujemy względnie ("@FILES@/…"), bo na innym
+// telefonie (albo profilu) folder aplikacji może się nazywać inaczej.
+// Nigdy nie przenosimy: widżetów innych aplikacji (ich identyfikatory działają tylko na jednym telefonie),
+// plików z "Pod ręką" (to tylko odnośniki) i statystyk uruchomień.
 object Backup {
-    private const val VERSION = 1
+    private const val VERSION = 2          // 2 = naklejki, tapety i układy trybów (czytamy też 1)
+    private const val FILES = "@FILES@"   // znacznik folderu aplikacji w ścieżkach
+    private const val CONFIG = "config.json"
 
-    suspend fun export(context: Context, target: Uri) = withContext(Dispatchers.IO) {
+    suspend fun export(context: Context, target: Uri, withFiles: Boolean = false) = withContext(Dispatchers.IO) {
         val db = LauncherDatabase.get(context)
         val theme = ThemePrefs.get(context)
         val prefs = AppPrefs.get(context)
+        val root = context.filesDir.canonicalFile
+        val files = linkedSetOf<File>() // co trafi do .zip (zbiór — ten sam plik raz)
+
+        // Ścieżka w pamięci aplikacji → "@FILES@/stickers/…" (i plik do spakowania). Cudze ścieżki → null.
+        fun portable(path: String): String? {
+            val f = runCatching { File(path).canonicalFile }.getOrNull() ?: return null
+            if (!f.isFile || !f.path.startsWith(root.path + File.separator)) return null
+            files += f
+            return FILES + "/" + f.relativeTo(root).invariantSeparatorsPath
+        }
+
+        val cards = db.cardItemDao().getAll().filter { isPortable(it, withFiles) }.mapNotNull { card ->
+            if (card.widgetKind != CustomWidgetKind.STICKER.name) return@mapNotNull card
+            // Naklejka: pliki (obecny i pierwsza wersja) jako ścieżki względne; bez pliku naklejka nie ma sensu.
+            val cfg = runCatching { JSONObject(card.config ?: "{}") }.getOrDefault(JSONObject())
+            for (key in listOf("file", "original")) {
+                val path = cfg.optString(key)
+                if (path.isNotBlank()) {
+                    val rel = portable(path)
+                    if (rel != null) cfg.put(key, rel) else cfg.remove(key)
+                }
+            }
+            if (cfg.has("file")) card.copy(config = cfg.toString()) else null
+        }
+        val modeList = db.modeDao().getAll()
 
         val json = JSONObject()
             .put("version", VERSION)
-            .put("modes", JSONArray(db.modeDao().getAll().map { it.toJson() }))
-            .put("cards", JSONArray(db.cardItemDao().getAll().filter(::isPortable).map { it.toJson() }))
+            // Stare położenie (obie pisownie: /data/user/0/… i kanoniczna /data/data/…) — do poprawienia ścieżek w tablicach.
+            .put("filesDir", context.filesDir.absolutePath)
+            .put("filesDirCanonical", root.path)
+            .put("modes", JSONArray(modeList.map { it.toJson() }))
+            .put("cards", JSONArray(cards.map { it.toJson() }))
             .put("pinned", JSONArray(db.pinnedItemDao().getAll().filter { it.kind != PinnedItemEntity.KIND_FILE }.map { it.toJson() }))
             .put("folders", JSONArray(db.folderDao().getFolders().map { it.toJson() }))
             .put("folderApps", JSONArray(db.folderDao().getApps().map { it.toJson() }))
@@ -51,34 +88,116 @@ object Backup {
                 JSONObject()
                     .put("themeMode", theme.themeMode.value.name)
                     .put("defaultPalette", theme.defaultPalette.value.name)
+                    .put("customTheme", pl.rafal.contextlauncher.ui.theme.CustomTheme.colors.let {
+                        JSONObject().put("bg", it.background).put("surface", it.surface).put("accent", it.accent).put("text", it.text)
+                    })
                     .put("homeModeId", prefs.homeModeId.value ?: -1)
                     .put("leftHanded", prefs.leftHanded.value)
                     .put("returnToHome", prefs.returnToHome.value)
                     .put("autoSwitch", prefs.autoSwitch.value)
                     .put("uniformLook", prefs.uniformLook.value)
-                    .put("showLabels", prefs.showLabels.value),
+                    .put("showLabels", prefs.showLabels.value)
+                    .put("modeLayouts", prefs.modeLayouts.value), // odstępy i rozmiar ikon per tryb (klucze = id trybów)
             )
 
+        if (withFiles) {
+            // Tapety trybów (i domyślna: modeId = -1) razem z kadrem i ekranem blokady.
+            val wallpapers = WallpaperStore(context).saved(modeList.map { it.id }).mapNotNull { w ->
+                portable(w.path)?.let { rel ->
+                    JSONObject().put("modeId", w.modeId ?: -1L).put("file", rel).put("lock", w.lock)
+                        .putOpt("crop", w.crop?.let { "${it.left},${it.top},${it.right},${it.bottom}" })
+                }
+            }
+            json.put("wallpapers", JSONArray(wallpapers))
+            // StickOnMe: cała biblioteka naklejek i wszystkie tablice (JSON, miniatury, zdjęcia w assets/).
+            listOf("stickers/library", "stickers/boards").forEach { dir ->
+                File(root, dir).walkTopDown().filter { it.isFile }.forEach { files += it.canonicalFile }
+            }
+        }
+
         val stream = context.contentResolver.openOutputStream(target, "wt") ?: error("Nie można zapisać pliku")
-        stream.bufferedWriter().use { it.write(json.toString(2)) }
+        if (!withFiles) {
+            stream.bufferedWriter().use { it.write(json.toString(2)) }
+        } else {
+            // ZipOutputStream ≈ System.IO.Compression.ZipArchive: najpierw config.json, potem pliki w files/…
+            ZipOutputStream(stream.buffered()).use { zip ->
+                zip.putNextEntry(ZipEntry(CONFIG))
+                zip.write(json.toString(2).toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+                files.forEach { f ->
+                    runCatching {
+                        zip.putNextEntry(ZipEntry("files/" + f.relativeTo(root).invariantSeparatorsPath))
+                        f.inputStream().use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            }
+        }
+    }
+
+    // Czy plik to .zip (zaczyna się od "PK"), a nie sam JSON.
+    private fun isZip(context: Context, source: Uri): Boolean =
+        context.contentResolver.openInputStream(source)?.use { it.read() == 0x50 && it.read() == 0x4B }
+            ?: error("Nie można odczytać pliku")
+
+    // Rozpakowanie .zip: config.json musi być pierwszy (sprawdzamy wersję, zanim cokolwiek zapiszemy),
+    // pliki trafiają tylko do stickers/ i wallpapers/ w folderze aplikacji (ochrona przed "../" w nazwach).
+    private fun unzip(context: Context, source: Uri, root: File): String {
+        val stream = context.contentResolver.openInputStream(source) ?: error("Nie można odczytać pliku")
+        return ZipInputStream(stream.buffered()).use { zip ->
+            val first = zip.nextEntry ?: error("Pusty plik")
+            require(first.name == CONFIG) { "To nie jest kopia LaunchOnMe" }
+            val text = zip.readBytes().toString(Charsets.UTF_8)
+            val version = JSONObject(text).optInt("version")
+            require(version in 1..VERSION) { "Nieobsługiwana wersja pliku" }
+            val allowed = listOf(File(root, "stickers"), File(root, "wallpapers")).map { it.canonicalPath + File.separator }
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (entry.isDirectory || !entry.name.startsWith("files/")) continue
+                val out = File(root, entry.name.removePrefix("files/")).canonicalFile
+                // Istniejących plików nie nadpisujemy: nazwy to UUID / id tablic, więc to ten sam plik
+                // (a tablica edytowana po zrobieniu kopii nie wróci do starej wersji).
+                if (allowed.none { out.path.startsWith(it) } || out.exists()) continue
+                out.parentFile?.mkdirs()
+                out.outputStream().use { zip.copyTo(it) }
+            }
+            text
+        }
     }
 
     // Import ZASTĘPUJE obecną konfigurację. Wszystko w jednej transakcji: błąd w połowie = nic się nie zmienia.
     suspend fun import(context: Context, source: Uri) = withContext(Dispatchers.IO) {
-        val text = context.contentResolver.openInputStream(source)?.bufferedReader()?.use { it.readText() }
-            ?: error("Nie można odczytać pliku")
+        val root = context.filesDir.canonicalFile
+        val zipped = isZip(context, source)
+        val text = if (zipped) unzip(context, source, root)
+            else context.contentResolver.openInputStream(source)?.bufferedReader()?.use { it.readText() }
+                ?: error("Nie można odczytać pliku")
         val json = JSONObject(text)
-        require(json.optInt("version") == VERSION) { "Nieobsługiwana wersja pliku" }
+        require(json.optInt("version") in 1..VERSION) { "Nieobsługiwana wersja pliku" }
+        val home = context.filesDir // ścieżki budujemy w tej samej pisowni, której używa reszta aplikacji
+        val oldRoots = listOf(json.optString("filesDir"), json.optString("filesDirCanonical")).filter { it.isNotBlank() }
+
+        // "@FILES@/…" (albo stara ścieżka z innego telefonu) → ścieżka w tym telefonie.
+        fun local(path: String): String {
+            if (path.startsWith("$FILES/")) return File(home, path.removePrefix("$FILES/")).path
+            val old = oldRoots.firstOrNull { path.startsWith("$it/") } ?: return path
+            return File(home, path.removePrefix("$old/")).path
+        }
+        // Tylko wewnątrz danego folderu aplikacji ("@FILES@/../databases" z podrobionego pliku odpada).
+        fun inside(path: String, dir: String): String? {
+            val limit = File(root, dir).canonicalPath + File.separator
+            return path.takeIf { runCatching { File(it).canonicalPath.startsWith(limit) }.getOrDefault(false) }
+        }
 
         val db = LauncherDatabase.get(context)
         var newHomeId: Long? = null
+        // Nowe id nadaje baza, więc budujemy mapy "stare id → nowe id" (jak przy imporcie z kluczami IDENTITY).
+        val modeIds = mutableMapOf<Long, Long>()
 
         db.withTransaction {
             db.modeDao().deleteAll()   // kaskadowo: karty, Pod ręką, reguły, statystyki
             db.folderDao().deleteAll() // kaskadowo: aplikacje w folderach
 
-            // Nowe id nadaje baza, więc budujemy mapy "stare id → nowe id" (jak przy imporcie z kluczami IDENTITY).
-            val modeIds = mutableMapOf<Long, Long>()
             json.getJSONArray("modes").objects().forEach { o ->
                 modeIds[o.getLong("id")] = db.modeDao().insert(o.toMode())
             }
@@ -92,7 +211,10 @@ object Backup {
                 ready.forEach { o ->
                     val parent = o.optLongOrNull("parentId")?.let { folderIds[it] }
                     folderIds[o.getLong("id")] = db.folderDao().insertFolder(
-                        FolderEntity(parentId = parent, name = o.getString("name"), createdAt = o.optLong("createdAt")),
+                        FolderEntity(
+                            parentId = parent, name = o.getString("name"), createdAt = o.optLong("createdAt"),
+                            icon = o.optStringOrNull("icon"), color = o.optLongOrNull("color"),
+                        ),
                     )
                 }
                 pending = pending - ready.toSet()
@@ -109,6 +231,7 @@ object Backup {
                 }
             }.let { if (it.isNotEmpty()) db.folderDao().insertApps(it) }
 
+            val cardIds = mutableMapOf<Long, Long>() // stare id wiersza karty → nowe
             json.getJSONArray("cards").objects().forEach { o ->
                 val modeId = modeIds[o.getLong("modeId")] ?: return@forEach
                 var config = o.optStringOrNull("config")
@@ -118,8 +241,28 @@ object Backup {
                     folderIds[cfg.optLong("folderId", -1)]?.let { cfg.put("folderId", it) }
                     config = cfg.toString()
                 }
-                db.cardItemDao().insert(o.toCardItem(modeId, config))
+                // Naklejka: ścieżki plików (rozpakowanych z .zip) w tym telefonie.
+                if (o.optStringOrNull("widgetKind") == CustomWidgetKind.STICKER.name && config != null) {
+                    val cfg = JSONObject(config)
+                    for (key in listOf("file", "original")) {
+                        val p = cfg.optString(key)
+                        if (p.isNotBlank()) {
+                            val safe = inside(local(p), "stickers")
+                            if (safe != null) cfg.put(key, safe) else cfg.remove(key)
+                        }
+                    }
+                    config = cfg.toString()
+                }
+                val newId = db.cardItemDao().insert(o.toCardItem(modeId, config))
+                if (o.has("id")) cardIds[o.getLong("id")] = newId
             }
+            // Stosy: stare id widżetów → nowe (widżetów systemowych nie eksportujemy, więc te po prostu wypadają),
+            // a potem porządki (stos z jednym widżetem się rozpada, pusty znika).
+            db.cardItemDao().getAll().filter { it.widgetKind == CustomWidgetKind.STACK.name }.forEach { stack ->
+                val data = StackData.of(stack.config)
+                db.cardItemDao().updateConfig(stack.id, data.copy(members = data.members.mapNotNull { cardIds[it] }).toJson())
+            }
+            modeIds.values.forEach { repairStacks(db.cardItemDao(), it) }
 
             json.getJSONArray("pinned").objects().forEach { o ->
                 val modeId = modeIds[o.getLong("modeId")] ?: return@forEach
@@ -162,6 +305,14 @@ object Backup {
         val p = json.getJSONObject("prefs")
         ThemePrefs.get(context).apply {
             runCatching { setThemeMode(ThemeMode.valueOf(p.getString("themeMode"))) }
+            // Własny schemat przed ustawieniem domyślnego, żeby od razu miał właściwe kolory.
+            p.optJSONObject("customTheme")?.let { c ->
+                runCatching {
+                    setCustomColors(
+                        pl.rafal.contextlauncher.ui.theme.CustomColors(c.getLong("bg"), c.getLong("surface"), c.getLong("accent"), c.getLong("text")),
+                    )
+                }
+            }
             Palette.fromName(p.optString("defaultPalette"))?.let { setDefaultPalette(it) }
         }
         AppPrefs.get(context).apply {
@@ -171,12 +322,51 @@ object Backup {
             autoSwitch.set(p.optBoolean("autoSwitch", false))
             uniformLook.set(p.optBoolean("uniformLook", false))
             showLabels.set(p.optBoolean("showLabels", true))
+            // Układy trybów: klucze to stare id trybów → przepinamy na nowe.
+            p.optString("modeLayouts").takeIf { it.isNotBlank() }?.let { text ->
+                val remapped = ModeLayout.parseAll(text).mapNotNull { (id, layout) -> modeIds[id]?.let { it to layout } }.toMap()
+                modeLayouts.set(ModeLayout.writeAll(remapped))
+            }
+        }
+
+        if (zipped) {
+            // Tapety trybów z kopii zastępują obecne (stare tryby już nie istnieją).
+            json.optJSONArray("wallpapers")?.let { array ->
+                val entries = array.objects().mapNotNull { o ->
+                    val oldId = o.optLong("modeId", -1L)
+                    val modeId = if (oldId == -1L) null else (modeIds[oldId] ?: return@mapNotNull null)
+                    val path = inside(local(o.getString("file")), "wallpapers")?.takeIf { File(it).isFile } ?: return@mapNotNull null
+                    WallpaperStore.Saved(modeId, path, o.optBoolean("lock", false), o.optStringOrNull("crop")?.let { WallpaperStore.parseCrop(it) })
+                }
+                WallpaperStore(context).replaceAll(entries)
+            }
+            // Tablice StickOnMe: ścieżki zdjęć i naklejek w ich plikach JSON wskazywały na stary telefon.
+            File(root, "stickers/boards").listFiles { f -> f.extension == "json" }?.forEach { file ->
+                runCatching {
+                    val board = pl.rafal.stickonme.Board.of(file.readText()) ?: return@runCatching
+                    val fixed = board.copy(
+                        bgImage = board.bgImage?.let(::local),
+                        layers = board.layers.map { l -> l.copy(path = l.path?.let(::local)) },
+                    )
+                    if (fixed != board) file.writeText(fixed.toJson())
+                }
+            }
+        }
+
+        // Porządek (tylko pełna kopia, która przynosi własne naklejki): pliki naklejek, których nie używa już
+        // żadna karta, usuwamy. Import samego JSON-a naklejek nie ma — wtedy niczego nie kasujemy.
+        if (zipped) runCatching {
+            val used = db.cardItemDao().getAll().filter { it.widgetKind == CustomWidgetKind.STICKER.name }.flatMap { card ->
+                val cfg = runCatching { JSONObject(card.config ?: "{}") }.getOrDefault(JSONObject())
+                listOf(cfg.optString("file"), cfg.optString("original")).filter { it.isNotBlank() }.map { File(it).canonicalPath }
+            }.toSet()
+            File(root, "stickers").listFiles { f -> f.isFile }?.filter { it.canonicalPath !in used }?.forEach { it.delete() }
         }
     }
 
-    // Co da się przenieść na inny telefon.
-    private fun isPortable(item: CardItemEntity): Boolean =
-        item.type != CardItemEntity.TYPE_WIDGET && item.widgetKind != CustomWidgetKind.STICKER.name
+    // Co da się przenieść na inny telefon (naklejki tylko razem z plikami, czyli w .zip).
+    private fun isPortable(item: CardItemEntity, withFiles: Boolean): Boolean =
+        item.type != CardItemEntity.TYPE_WIDGET && (withFiles || item.widgetKind != CustomWidgetKind.STICKER.name)
 
     // --- Zamiana encji na JSON i z powrotem ---
 
@@ -197,9 +387,10 @@ object Backup {
     )
 
     private fun CardItemEntity.toJson() = JSONObject()
+        .put("id", id) // potrzebne stosom: wskazują swoje widżety po id (przy imporcie przepinamy na nowe)
         .put("modeId", modeId).put("type", type).put("packageName", packageName).put("className", className)
         .put("userSerial", userSerial).put("x", x).put("y", y).put("w", w).put("h", h)
-        .putOpt("widgetKind", widgetKind).putOpt("config", config)
+        .putOpt("widgetKind", widgetKind).putOpt("config", config).put("page", page)
 
     private fun JSONObject.toCardItem(modeId: Long, config: String?) = CardItemEntity(
         modeId = modeId,
@@ -210,6 +401,7 @@ object Backup {
         x = getInt("x"), y = getInt("y"), w = getInt("w"), h = getInt("h"),
         widgetKind = optStringOrNull("widgetKind"),
         config = config,
+        page = optInt("page", 0).coerceIn(STACKED_PAGE, 4), // starsze kopie nie mają stron → pierwsza; max 5 stron; -1 = w stosie
     )
 
     private fun PinnedItemEntity.toJson() = JSONObject()
@@ -218,6 +410,7 @@ object Backup {
 
     private fun FolderEntity.toJson() = JSONObject()
         .put("id", id).putOpt("parentId", parentId).put("name", name).put("createdAt", createdAt)
+        .putOpt("icon", icon).putOpt("color", color)
 
     private fun FolderAppEntity.toJson() = JSONObject()
         .put("folderId", folderId).put("packageName", packageName).put("className", className).put("userSerial", userSerial)

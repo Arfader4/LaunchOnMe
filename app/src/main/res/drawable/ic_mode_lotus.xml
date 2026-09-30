@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikona trybu "lotus": kontur 24x24 (styl ikon trybów), kolor nadaje launcher / system. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12,20 C7,20 3.5,17 3,13 C6.5,13 9.5,15 12,20 C14.5,15 17.5,13 21,13 C20.5,17 17,20 12,20 Z M12,20 C10,16.5 10,10.5 12,6.5 C14,10.5 14,16.5 12,20"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

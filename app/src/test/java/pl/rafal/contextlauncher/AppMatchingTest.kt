@@ -36,4 +36,10 @@ class AppMatchingTest {
     fun `limit obcina wynik`() {
         assertEquals(2, match(listOf("com.google"), limit = 2).size)
     }
+
+    @Test
+    fun `dwie aplikacje o tej samej nazwie to jedna rola`() {
+        val phone = listOf("com.google.android.apps.messaging" to "Wiadomości", "com.samsung.android.messaging" to "Wiadomości")
+        assertEquals(1, matchApps(phone, listOf("messaging"), { it.first }, { it.second }).size)
+    }
 }

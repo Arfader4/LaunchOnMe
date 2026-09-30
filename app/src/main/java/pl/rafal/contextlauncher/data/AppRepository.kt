@@ -1,7 +1,11 @@
 package pl.rafal.contextlauncher.data
 
 import android.content.Context
+import android.content.ComponentName
 import android.content.pm.LauncherApps
+import android.content.pm.ShortcutInfo
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Handler
 import android.os.Looper
 import android.os.UserHandle
@@ -13,7 +17,11 @@ import kotlinx.coroutines.withContext
 import java.text.Collator
 
 // Repozytorium ukrywa szczegóły Androida przed resztą aplikacji (jak warstwa DAL w .NET).
-class AppRepository(context: Context, onAppsChanged: () -> Unit = {}) {
+class AppRepository(
+    private val context: Context,
+    onAppsChanged: () -> Unit = {},
+    onShortcutsChanged: () -> Unit = {},
+) {
 
     // LauncherApps to systemowa usługa stworzona właśnie dla launcherów.
     private val launcherApps = context.getSystemService(LauncherApps::class.java)
@@ -26,6 +34,8 @@ class AppRepository(context: Context, onAppsChanged: () -> Unit = {}) {
         override fun onPackageChanged(packageName: String, user: UserHandle) = onAppsChanged()
         override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = onAppsChanged()
         override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = onAppsChanged()
+        // Aplikacja zmieniła swoje skróty (np. komunikator dodał nową rozmowę).
+        override fun onShortcutsChanged(packageName: String, shortcuts: MutableList<ShortcutInfo>, user: UserHandle) = onShortcutsChanged()
     }
 
     init {
@@ -58,7 +68,60 @@ class AppRepository(context: Context, onAppsChanged: () -> Unit = {}) {
     }
 
     fun launch(app: AppInfo) {
-        launcherApps.startMainActivity(app.component, app.user, null, null)
+        val shortcut = app.shortcutId
+        // sourceBounds + opcje = okno aplikacji "wyrasta" z ikony (a nie wjeżdża z boku).
+        val bounds = pl.rafal.contextlauncher.ui.LaunchOrigin.sourceBounds()
+        val options = pl.rafal.contextlauncher.ui.LaunchOrigin.options()
+        if (shortcut != null) launcherApps.startShortcut(app.packageName, shortcut, bounds, options, app.user)
+        else launcherApps.startMainActivity(app.component, app.user, bounds, options)
+    }
+
+    // Skróty są dostępne tylko dla DOMYŚLNEGO launchera (system pilnuje tego uprawnienia).
+    fun hasShortcutAccess(): Boolean = runCatching { launcherApps.hasShortcutHostPermission() }.getOrDefault(false)
+
+    // Wszystkie skróty aplikacji (statyczne z manifestu, dynamiczne i przypięte), jako "ikony" AppInfo.
+    // Ikona skrótu dostaje w rogu małą ikonę aplikacji, żeby było wiadomo, do czego prowadzi (jak w Pixel Launcherze).
+    suspend fun loadShortcuts(): List<AppInfo> = withContext(Dispatchers.Default) {
+        if (!hasShortcutAccess()) return@withContext emptyList()
+        val query = LauncherApps.ShortcutQuery().setQueryFlags(
+            LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
+                LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED,
+        )
+        val density = context.resources.displayMetrics.densityDpi
+        launcherApps.profiles.flatMap { user ->
+            val serial = userManager.getSerialNumberForUser(user)
+            val appIcons = mutableMapOf<String, android.graphics.drawable.Drawable?>()
+            runCatching { launcherApps.getShortcuts(query, user) }.getOrNull().orEmpty()
+                .filter { it.isEnabled }
+                .map { info ->
+                    val appIcon = appIcons.getOrPut(info.`package`) {
+                        launcherApps.getActivityList(info.`package`, user).firstOrNull()?.getIcon(0)
+                    }
+                    val own = runCatching { launcherApps.getShortcutIconDrawable(info, density) }.getOrNull()
+                    AppInfo(
+                        label = (info.shortLabel ?: info.longLabel ?: info.id).toString(),
+                        component = info.activity ?: ComponentName(info.`package`, info.`package`),
+                        user = user,
+                        userSerial = serial,
+                        icon = badged(own ?: appIcon, appIcon).asImageBitmap(),
+                        shortcutId = info.id,
+                    )
+                }
+        }.distinctBy { it.key }.sortedWith(compareBy(Collator.getInstance()) { it.label })
+    }
+
+    // Ikona skrótu + mała ikona aplikacji w prawym dolnym rogu.
+    private fun badged(main: android.graphics.drawable.Drawable?, badge: android.graphics.drawable.Drawable?): Bitmap {
+        val size = 144
+        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        main?.let { canvas.drawBitmap(it.toBitmap(size, size), 0f, 0f, null) }
+        if (badge != null && main !== badge) {
+            val b = size * 4 / 10
+            canvas.drawBitmap(badge.toBitmap(b, b), (size - b).toFloat(), (size - b).toFloat(), null)
+        }
+        return out
     }
 
     // Systemowy ekran "Informacje o aplikacji" (odinstaluj, uprawnienia, wymuś zatrzymanie).

@@ -6,6 +6,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,9 +21,13 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
 import org.json.JSONObject
 import pl.rafal.contextlauncher.data.AppInfo
 import pl.rafal.contextlauncher.data.appKey
@@ -35,6 +40,17 @@ import pl.rafal.contextlauncher.data.CardCustomWidget
 import pl.rafal.contextlauncher.data.CustomWidgetKind
 import pl.rafal.contextlauncher.data.FolderApp
 import pl.rafal.contextlauncher.data.FolderTree
+import pl.rafal.contextlauncher.data.CardFolderData
+import pl.rafal.contextlauncher.data.SHORTCUT_KEY
+import pl.rafal.contextlauncher.data.parseAppKey
+import pl.rafal.contextlauncher.data.ModeLayout
+import pl.rafal.contextlauncher.data.ModePlan
+import pl.rafal.contextlauncher.data.appItemFor
+import pl.rafal.contextlauncher.data.STACKED_PAGE
+import pl.rafal.contextlauncher.data.StackData
+import pl.rafal.contextlauncher.data.PageSpace
+import pl.rafal.contextlauncher.data.repairStacks
+import pl.rafal.contextlauncher.data.autoFolderName
 import pl.rafal.contextlauncher.data.db.FolderAppEntity
 import pl.rafal.contextlauncher.data.db.FolderEntity
 import pl.rafal.contextlauncher.data.CalendarReader
@@ -102,10 +118,15 @@ import pl.rafal.contextlauncher.layout.CardGrid
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     // Po zmianie listy aplikacji w systemie: oznacz do ponownego wczytania i od razu odśwież.
-    private val repository = AppRepository(application) {
-        appsDirty = true
-        refresh()
-    }
+    private val repository = AppRepository(
+        application,
+        onAppsChanged = {
+            appsDirty = true
+            refresh()
+        },
+        // Komunikatory zmieniają skróty (ostatnie rozmowy) bardzo często — wtedy doczytujemy tylko skróty.
+        onShortcutsChanged = { reloadShortcuts() },
+    )
     private val database = LauncherDatabase.get(application)
     private val modeDao = database.modeDao()
     private val cardItemDao = database.cardItemDao()
@@ -126,6 +147,25 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     // StateFlow ≈ właściwość z INotifyPropertyChanged: UI subskrybuje i odświeża się sam.
     private val allApps = MutableStateFlow<List<AppInfo>>(emptyList())
+
+    // Skróty aplikacji (tylko gdy jesteśmy domyślnym launcherem). Na karcie i w folderach działają jak ikony.
+    private val _shortcuts = MutableStateFlow<List<AppInfo>>(emptyList())
+    val shortcuts: StateFlow<List<AppInfo>> = _shortcuts.asStateFlow()
+    fun hasShortcutAccess() = repository.hasShortcutAccess()
+    private var shortcutsJob: Job? = null
+    private var shortcutsLoaded = false
+
+    // Jedno wczytywanie naraz: nowe zgłoszenie anuluje poprzednie, a krótka pauza zbiera serię zmian w jedną.
+    private fun reloadShortcuts(debounceMs: Long = 400) {
+        shortcutsJob?.cancel()
+        shortcutsJob = viewModelScope.launch {
+            delay(debounceMs)
+            runCatching { repository.loadShortcuts() }.onSuccess {
+                _shortcuts.value = it
+                shortcutsLoaded = repository.hasShortcutAccess()
+            }
+        }
+    }
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
@@ -218,13 +258,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             .flatMapLatest { mode ->
                 if (mode == null) flowOf(emptyList()) else cardItemDao.observeForMode(mode.id)
             }
-            .combine(allApps) { items, apps ->
+            .combine(combine(allApps, _shortcuts) { a, sc -> a to sc }) { items, (apps, shortcutList) ->
                 // mapNotNull pomija elementy, których nie da się pokazać (np. odinstalowana aplikacja).
                 items.mapNotNull { item ->
                     // when ≈ switch z wyrażeniem (C# 8 switch expression).
                     when (item.type) {
                         CardItemEntity.TYPE_APP ->
                             apps.firstOrNull { it.matches(item) }?.let { CardApp(item, it) }
+                        CardItemEntity.TYPE_SHORTCUT ->
+                            shortcutList.firstOrNull { it.matches(item) }?.let { CardApp(item, it) }
                         CardItemEntity.TYPE_WIDGET ->
                             item.appWidgetId?.let { CardWidget(item, it) }
                         CardItemEntity.TYPE_CUSTOM ->
@@ -236,6 +278,90 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 }
             }
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // --- Strony karty ---
+    // Wszystkie strony trybu są w cardElements (każdy element zna swoją stronę); UI pokazuje je w HorizontalPager.
+    // currentPage = strona, na którą trafia to, co dodajemy (jak "bieżący arkusz" w Excelu).
+    private val _currentPage = MutableStateFlow(0)
+    val currentPage: StateFlow<Int> = _currentPage.asStateFlow()
+
+    // Czy następną zmianę strony UI ma pokazać przesunięciem (true tylko po przeniesieniu elementu).
+    // Zwykła właściwość, nie Flow: UI czyta ją w chwili, gdy strona się zmienia (ustawiamy ją PRZED zmianą).
+    var animateNextPage = false
+        private set
+
+    fun setPage(page: Int) {
+        animateNextPage = false
+        _currentPage.value = page.coerceAtLeast(0)
+    }
+
+    // Ile stron zajmują elementy aktywnego trybu — z surowych wierszy bazy (także z niewidocznymi,
+    // np. odinstalowanymi aplikacjami), żeby liczba stron zgadzała się z porządkowaniem w compactPages.
+    val usedPages: StateFlow<Int> = activeMode
+        .flatMapLatest { mode -> if (mode == null) flowOf(emptyList()) else cardItemDao.observeForMode(mode.id) }
+        .map { items -> (items.maxOfOrNull { it.page } ?: 0) + 1 }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 1)
+
+    // Elementy jednej strony — kolizje i wolne miejsca liczymy tylko w jej obrębie.
+    private suspend fun pageItems(modeId: Long, page: Int): List<CardItemEntity> =
+        cardItemDao.getForMode(modeId).filter { it.page == page }
+
+    // Przeniesienie elementu na sąsiednią stronę (upuszczenie przy lewej/prawej krawędzi w edycji).
+    // Na nowej stronie próbujemy to samo miejsce, a gdy zajęte — najbliższe wolne.
+    // wanted = miejsce na docelowej stronie (gdzie puszczono element); bez niego — to samo co na starej stronie.
+    fun moveToPage(element: CardElement, delta: Int, wanted: GridRect? = null) {
+        val item = element.item
+        val target = item.page + delta
+        val limit = appPrefs.maxPages.value
+        if (target < 0) return
+        if (target >= limit) {
+            Toast.makeText(getApplication(), "Limit stron: $limit (zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
+            return
+        }
+        viewModelScope.launch {
+            val message = database.withTransaction {
+                val taken = pageItems(item.modeId, target).map { it.toRect() }
+                val want = wanted ?: item.toRect()
+                val spot = want.takeIf { CardGrid.canPlace(it, taken) } ?: CardGrid.nearestFreeSpot(want, taken)
+                    ?: return@withTransaction "Na stronie ${target + 1} nie ma miejsca"
+                cardItemDao.updatePage(item.id, target, spot.x, spot.y)
+                null
+            }
+            if (message == null) {
+                if (_currentPage.value != target) { // przeciąganiem już tam jesteśmy — wtedy bez zmian
+                    animateNextPage = true
+                    _currentPage.value = target // pokazujemy stronę, na którą trafił element
+                }
+            } else {
+                Toast.makeText(getApplication(), message, Toast.LENGTH_SHORT).show()
+                // Element został na swojej stronie — wracamy do niej, żeby nie wyglądało, jakby zniknął.
+                if (_currentPage.value != item.page) {
+                    animateNextPage = true
+                    _currentPage.value = item.page
+                }
+            }
+        }
+    }
+
+    // Po edycji: puste strony w środku znikają (strony 0, 2 → 0, 1), żeby nie było "dziur" przy przesuwaniu.
+    private suspend fun compactPages(modeId: Long) {
+        val items = cardItemDao.getForMode(modeId).filter { it.page >= 0 } // widżety w stosach (STACKED_PAGE) nie mają strony
+        val used = items.map { it.page }.distinct().sorted()
+        animateNextPage = false // numery się tylko porządkują — bez przesuwania ekranu
+        if (used.withIndex().all { (i, p) -> i == p }) {
+            _currentPage.update { cur -> cur.coerceAtMost((used.size - 1).coerceAtLeast(0)) }
+            return
+        }
+        val remap = used.withIndex().associate { (i, p) -> p to i }
+        database.withTransaction {
+            items.forEach { item ->
+                val newPage = remap.getValue(item.page)
+                if (newPage != item.page) cardItemDao.updatePage(item.id, newPage, item.x, item.y)
+            }
+        }
+        // Bieżąca strona (aktualna wartość — mogła się zmienić w trakcie zapisu): jej nowy numer, a gdy była pusta — poprzednia.
+        _currentPage.update { cur -> remap[cur] ?: (used.count { it < cur } - 1).coerceAtLeast(0) }
+    }
 
     // --- Sugestie trybów ---
 
@@ -382,6 +508,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         insertRule(mode, SuggestionRuleEntity.TYPE_PLACE, placeRuleParams(location.latitude, location.longitude, radiusMeters, label))
     }
 
+    // Miejsce wskazane na mapie (nie trzeba w nim być).
+    fun addPlaceRule(mode: ModeEntity, label: String, lat: Double, lon: Double, radiusMeters: Int) =
+        insertRule(mode, SuggestionRuleEntity.TYPE_PLACE, placeRuleParams(lat, lon, radiusMeters, label))
+
+    // Gdzie otworzyć mapę: ostatnia znana lokalizacja telefonu (null = brak zgody albo brak odczytu).
+    fun lastKnownPoint(): Pair<Double, Double>? = signalsReader.lastLocation()?.let { it.latitude to it.longitude }
+
     private fun insertRule(mode: ModeEntity, type: String, params: String) {
         viewModelScope.launch { suggestionDao.insertRule(SuggestionRuleEntity(modeId = mode.id, type = type, params = params)) }
     }
@@ -441,6 +574,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     // --- Najczęściej używane w trybie ---
+
+    // Liczba uruchomień w aktywnym trybie, po kluczu aplikacji (do sortowania folderów "najczęściej używane").
+    val launchCounts: StateFlow<Map<String, Int>> =
+        activeMode
+            .flatMapLatest { mode -> if (mode == null) flowOf(emptyList()) else suggestionDao.observeTop(mode.id, 500) }
+            .map { stats ->
+                stats.associate { "${android.content.ComponentName(it.packageName, it.className).flattenToString()}#${it.userSerial}" to it.count }
+            }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     val frequentApps: StateFlow<List<AppInfo>> =
         activeMode
@@ -506,7 +648,25 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val alarmAt: Long?,
         val hasCalendar: Boolean,
         val agenda: List<GlanceEvent> = emptyList(),
+        val alarmApp: String? = null, // aplikacja, która ustawiła budzik — gdy to nie Zegar, pokazujemy jej nazwę
     )
+
+    // Budzik z systemu to "najbliższy alarm" dowolnej aplikacji (Zegar, Kalendarz, aplikacja snu…).
+    // Stąd "07:00", którego nie ma w Zegarze. Otwieramy więc tę aplikację, która go ustawiła.
+    private var alarmShowIntent: android.app.PendingIntent? = null
+
+    fun openAlarmSource(): Boolean {
+        val intent = alarmShowIntent ?: return false
+        return runCatching {
+            // Od Androida 14 wysyłający musi jawnie zezwolić na otwarcie ekranu przez PendingIntent innej aplikacji.
+            val options = android.app.ActivityOptions.makeBasic()
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                @Suppress("DEPRECATION")
+                options.setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+            }
+            intent.send(getApplication(), 0, null, null, null, null, options.toBundle())
+        }.isSuccess
+    }
 
     // Co minutę i po każdym powrocie na ekran (np. po ustawieniu budzika) czytamy na nowo.
     val glance: StateFlow<GlanceInfo> =
@@ -514,9 +674,23 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             .mapLatest { now ->
                 val alarm = getApplication<Application>().getSystemService(android.app.AlarmManager::class.java)
                 val (next, agenda) = calendar.glance(now) // jedno zapytanie do kalendarza zamiast dwóch
+                val info = alarm?.nextAlarmClock
+                alarmShowIntent = info?.showIntent
+                val creator = info?.showIntent?.creatorPackage
+                val clockPackage = runCatching {
+                    getApplication<Application>().packageManager
+                        .resolveActivity(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS), 0)?.activityInfo?.packageName
+                }.getOrNull()
+                val creatorLabel = creator?.takeIf { it != clockPackage }?.let { pkg ->
+                    runCatching {
+                        val pm = getApplication<Application>().packageManager
+                        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+                    }.getOrNull()
+                }
                 GlanceInfo(
+                    alarmApp = creatorLabel,
                     event = next,
-                    alarmAt = alarm?.nextAlarmClock?.triggerTime,
+                    alarmAt = info?.triggerTime,
                     hasCalendar = calendar.hasPermission(),
                     agenda = agenda,
                 )
@@ -597,6 +771,61 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    // Kreator nowego trybu (wywiad): tryb z planu, z aplikacjami wybranymi na ostatnim kroku.
+    // Nowy tryb od razu staje się aktywny — widać efekt kreatora.
+    fun createModeFromPlan(plan: ModePlan, apps: List<AppInfo>) {
+        viewModelScope.launch {
+            val template = plan.toTemplate()
+            val iconSize = plan.iconCells ?: appPrefs.appIconCells.value
+            // Wszystko w jednej transakcji: tryb staje się aktywny dopiero z gotową kartą (bez mignięcia pustej).
+            database.withTransaction {
+                val modeId = modeDao.insert(
+                    ModeEntity(
+                        name = template.name,
+                        icon = template.icon,
+                        color = template.color,
+                        sortOrder = modes.value.size,
+                        lastActiveAt = System.currentTimeMillis(),
+                    ),
+                )
+                applyNewModeDefaults(modeId)
+                // Własny rozmiar ikon trybu (ten sam zapis co w Ustawieniach trybu → Układ karty).
+                plan.iconCells?.let { cells ->
+                    val all = ModeLayout.parseAll(appPrefs.modeLayouts.value)
+                    appPrefs.modeLayouts.set(ModeLayout.writeAll(all + (modeId to ModeLayout(iconCells = cells))))
+                }
+                val taken = mutableListOf<GridRect>()
+                val taken2 = mutableListOf<GridRect>() // druga strona: aplikacje, które nie zmieściły się na pierwszej
+                template.widgets.forEach { widget ->
+                    val spot = CardGrid.findFreeSpot(taken, widget.w, widget.h) ?: return@forEach
+                    taken += spot
+                    cardItemDao.insert(
+                        CardItemEntity(
+                            modeId = modeId, type = CardItemEntity.TYPE_CUSTOM,
+                            packageName = "", className = "", userSerial = 0,
+                            x = spot.x, y = spot.y, w = spot.w, h = spot.h,
+                            widgetKind = widget.kind.name, config = widget.config,
+                        ),
+                    )
+                }
+                apps.forEach { app ->
+                    val spot = CardGrid.findFreeSpot(taken, iconSize, iconSize)
+                    if (spot != null) {
+                        taken += spot
+                        cardItemDao.insert(app.cardItem(modeId, spot))
+                    } else if (appPrefs.maxPages.value > 1) {
+                        val next = CardGrid.findFreeSpot(taken2, iconSize, iconSize) ?: return@forEach
+                        taken2 += next
+                        cardItemDao.insert(app.cardItem(modeId, next, page = 1))
+                    }
+                }
+                template.rules.forEach { (type, params) ->
+                    suggestionDao.insertRule(SuggestionRuleEntity(modeId = modeId, type = type, params = params))
+                }
+            }
+        }
+    }
+
     // --- Wygląd ---
 
     val themeMode: StateFlow<ThemeMode> = themePrefs.themeMode
@@ -605,6 +834,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setThemeMode(mode: ThemeMode) = themePrefs.setThemeMode(mode)
 
     fun setDefaultPalette(palette: Palette) = themePrefs.setDefaultPalette(palette)
+
+    // Kreator motywów: zapis własnych kolorów i od razu użycie ich jako domyślnego schematu.
+    fun saveCustomTheme(colors: pl.rafal.contextlauncher.ui.theme.CustomColors) {
+        themePrefs.setCustomColors(colors)
+        themePrefs.setDefaultPalette(Palette.CUSTOM)
+    }
 
     fun updateModeAppearance(mode: ModeEntity, icon: String?, color: Long, palette: Palette?, accent: Long?) {
         viewModelScope.launch {
@@ -627,13 +862,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (mode.id == appPrefs.homeModeId.value) appPrefs.setHomeModeId(null) // usunięto stronę główną
         viewModelScope.launch {
             // Kaskada w bazie usunie wiersze, ale nie sprząta poza nią: identyfikatory widżetów u systemu i pliki naklejek.
-            cardItemDao.getForMode(mode.id).forEach { item ->
-                item.appWidgetId?.let(widgets::deleteId)
-                if (item.widgetKind == CustomWidgetKind.STICKER.name) {
-                    runCatching { JSONObject(item.config ?: "{}").optString("file") }.getOrNull()
-                        ?.takeIf { it.isNotBlank() }?.let(StickerStore::delete)
-                }
-            }
+            cardItemDao.getForMode(mode.id).forEach(::cleanupItem) // widżety systemowe, pliki naklejek (z oryginałami)
             wallpapers.clear(mode.id)
             modeDao.delete(mode.id)
         }
@@ -679,20 +908,75 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun addAppsToFolder(folderId: Long, apps: List<AppInfo>) {
+        viewModelScope.launch { insertIntoFolder(folderId, apps) }
+    }
+
+    // Zwraca id nowych wierszy — edycja układu zapamiętuje je, żeby "✕" mógł cofnąć wrzucenie do folderu.
+    private suspend fun insertIntoFolder(folderId: Long, apps: List<AppInfo>): List<Long> {
+        // toSet() + "!in" ≈ HashSet i !Contains: pomijamy aplikacje, które już są w tym folderze.
+        val alreadyThere = folderTree.value.apps(folderId).map { it.app.key }.toSet()
+        val toAdd = apps.filter { it.key !in alreadyThere }.map { app ->
+            FolderAppEntity(
+                folderId = folderId,
+                packageName = app.component.packageName,
+                className = app.component.className,
+                userSerial = app.userSerial,
+            )
+        }
+        return if (toAdd.isNotEmpty()) folderDao.insertApps(toAdd) else emptyList()
+    }
+
+    // Wygląd folderu: symbol (null = miniatura z ikon aplikacji) i kolor tła (null = neutralny).
+    fun setFolderLook(folder: FolderEntity, icon: String?, color: Long?) {
+        viewModelScope.launch { folderDao.setFolderLook(folder.id, icon, color) }
+    }
+
+    // Folder na karcie aktywnego trybu w wybranym rozmiarze (w komórkach siatki). Jeśli widżet tego folderu
+    // już tam jest, zmieniamy mu rozmiar i rozsuwamy sąsiadów (ta sama logika co przy przeciąganiu w edycji).
+    fun placeFolderOnCard(folderId: Long, w: Int, h: Int) {
+        val mode = activeMode.value ?: return
+        val page = _currentPage.value
         viewModelScope.launch {
-            // toSet() + "!in" ≈ HashSet i !Contains: pomijamy aplikacje, które już są w tym folderze.
-            val alreadyThere = folderTree.value.apps(folderId).map { it.app.key }.toSet()
-            val toAdd = apps.filter { it.key !in alreadyThere }.map { app ->
-                FolderAppEntity(
-                    folderId = folderId,
-                    packageName = app.component.packageName,
-                    className = app.component.className,
-                    userSerial = app.userSerial,
-                )
+            var placedFolderOn: Int? = null // inna strona, gdy bieżąca była pełna
+            val message = database.withTransaction {
+                val all = cardItemDao.getForMode(mode.id)
+                val existing = all.firstOrNull { it.isFolderWidget(folderId) }
+                val items = all.filter { it.page == (existing?.page ?: page) } // folder już jest → liczy się jego strona
+                if (existing != null) {
+                    val target = GridRect(
+                        existing.x.coerceAtMost(CardGrid.COLUMNS - w),
+                        existing.y.coerceAtMost((CardGrid.rows - h).coerceAtLeast(0)),
+                        w, h,
+                    )
+                    val plan = CardGrid.placeWithPush(existing.id, target, items.associate { it.id to it.toRect() })
+                    if (plan == null) return@withTransaction "Za mało miejsca na karcie na ten rozmiar"
+                    plan.forEach { (id, r) -> cardItemDao.updateRect(id, r.x, r.y, r.w, r.h) }
+                    "Zmieniono rozmiar folderu na karcie"
+                } else {
+                    val (target, spot) = PageSpace(all, appPrefs.maxPages.value).find(page, w, h)
+                        ?: return@withTransaction "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)"
+                    cardItemDao.insert(
+                        CardItemEntity(
+                            modeId = mode.id, type = CardItemEntity.TYPE_CUSTOM,
+                            packageName = "", className = "", userSerial = 0,
+                            x = spot.x, y = spot.y, w = w, h = h,
+                            widgetKind = CustomWidgetKind.FOLDER.name,
+                            config = JSONObject().put("folderId", folderId).toString(),
+                            page = target,
+                        ),
+                    )
+                    if (target != page) placedFolderOn = target
+                    "Dodano folder do trybu ${mode.name}"
+                }
             }
-            if (toAdd.isNotEmpty()) folderDao.insertApps(toAdd)
+            Toast.makeText(getApplication(), message, Toast.LENGTH_SHORT).show()
+            placedFolderOn?.let { showPlacedPage(it, page) }
         }
     }
+
+    private fun CardItemEntity.isFolderWidget(folderId: Long): Boolean =
+        widgetKind == CustomWidgetKind.FOLDER.name &&
+            runCatching { JSONObject(config ?: "{}").optLong("folderId", -1) }.getOrDefault(-1L) == folderId
 
     fun moveAppToFolder(app: FolderApp, folderId: Long) {
         viewModelScope.launch { folderDao.moveApp(app.entry.id, folderId) }
@@ -702,35 +986,51 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { folderDao.deleteApp(app.entry.id) }
     }
 
+    // Element trafił na inną stronę niż oglądana (bieżąca była pełna) → przechodzimy tam i mówimy o tym.
+    // requested = strona, na którą chcieliśmy dodać (oglądana w chwili dodawania).
+    private suspend fun showPlacedPage(page: Int, requested: Int) {
+        if (page == requested) return
+        // Nowa strona musi najpierw "istnieć" w UI (baza odświeża listę z opóźnieniem) — inaczej ekran
+        // przewinąłby się na pustkę. Czekamy chwilę, aż liczba stron ją obejmie.
+        withTimeoutOrNull(700) { usedPages.first { it > page } }
+        animateNextPage = true
+        _currentPage.value = page
+        Toast.makeText(getApplication(), "Brak miejsca — dodano na stronie ${page + 1}", Toast.LENGTH_SHORT).show()
+    }
+
+    private suspend fun pageSpace(modeId: Long) = PageSpace(cardItemDao.getForMode(modeId), appPrefs.maxPages.value)
+
     // --- Własne widżety ---
 
     fun addCustomWidget(kind: CustomWidgetKind, config: String = "{}") {
         val mode = activeMode.value ?: return
+        val requested = _currentPage.value
         viewModelScope.launch {
-            if (!placeCustomWidget(cardItemDao, mode.id, kind, config)) {
-                Toast.makeText(getApplication(), "Brak miejsca na karcie na ten widżet", Toast.LENGTH_SHORT).show()
-            }
+            val placed = placeCustomWidget(cardItemDao, mode.id, kind, config, requested, appPrefs.maxPages.value)
+            if (placed == null) Toast.makeText(getApplication(), "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
+            else showPlacedPage(placed, requested)
         }
     }
 
     // Naklejka: kopia obrazka do pamięci launchera, potem widżet na karcie.
     fun addSticker(uri: Uri) {
         val mode = activeMode.value ?: return
+        val requested = _currentPage.value
         viewModelScope.launch {
             val result = runCatching {
                 val path = StickerStore.import(getApplication(), uri)
                 val placed = placeCustomWidget(
                     cardItemDao, mode.id, CustomWidgetKind.STICKER, JSONObject().put("file", path).toString(),
+                    requested, appPrefs.maxPages.value,
                 )
-                if (!placed) StickerStore.delete(path) // nie ma miejsca = nie trzymamy niepotrzebnej kopii
+                if (placed == null) StickerStore.delete(path) // nie ma miejsca = nie trzymamy niepotrzebnej kopii
                 placed
             }
-            val message = when {
-                result.isFailure -> "Nie udało się dodać naklejki"
-                result.getOrNull() == false -> "Brak miejsca na karcie na naklejkę"
-                else -> null
+            when {
+                result.isFailure -> Toast.makeText(getApplication(), "Nie udało się dodać naklejki", Toast.LENGTH_SHORT).show()
+                result.getOrNull() == null -> Toast.makeText(getApplication(), "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
+                else -> showPlacedPage(result.getOrNull()!!, requested)
             }
-            message?.let { Toast.makeText(getApplication(), it, Toast.LENGTH_SHORT).show() }
         }
     }
 
@@ -798,15 +1098,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             widgets.deleteId(appWidgetId) // sprzątamy, żeby nie zostawić "osieroconego" id w systemie
             return
         }
+        val page = _currentPage.value
         viewModelScope.launch {
-            val existing = cardItemDao.getForMode(mode.id)
             val (w, h) = widgets.cellSize(info) // dekonstrukcja pary, jak var (w, h) = ... w C#
-            val spot = CardGrid.findFreeSpot(existing.map { it.toRect() }, w, h)
-            if (spot == null) {
+            val found = pageSpace(mode.id).find(page, w, h)
+            if (found == null) {
                 widgets.deleteId(appWidgetId)
-                Toast.makeText(getApplication(), "Brak miejsca na karcie na ten widżet", Toast.LENGTH_SHORT).show()
+                Toast.makeText(getApplication(), "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
                 return@launch
             }
+            val (target, spot) = found
             cardItemDao.insert(
                 CardItemEntity(
                     modeId = mode.id,
@@ -819,8 +1120,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     w = spot.w,
                     h = spot.h,
                     appWidgetId = appWidgetId,
+                    page = target,
                 ),
             )
+            showPlacedPage(target, page)
         }
     }
 
@@ -840,6 +1143,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     @Volatile private var appsDirty = true
 
     fun refresh() {
+        // Launcher właśnie stał się domyślnym (dopiero wtedy system udostępnia skróty) — doczytaj je.
+        if (!shortcutsLoaded && !appsDirty && repository.hasShortcutAccess()) reloadShortcuts(debounceMs = 0)
         // launch ≈ odpalenie Task bez czekania; viewModelScope anuluje go, gdy ViewModel zniknie.
         if (appsDirty) {
             appsDirty = false
@@ -847,6 +1152,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 runCatching { repository.loadApps() }
                     .onSuccess { allApps.value = it }
                     .onFailure { appsDirty = true } // spróbujemy przy następnym powrocie
+                reloadShortcuts(debounceMs = 0)
             }
         }
         suggestionRefresh.value++
@@ -931,67 +1237,508 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun addToActiveMode(app: AppInfo) {
         val mode = activeMode.value ?: return // ?: return ≈ "if (mode == null) return;"
+        val page = _currentPage.value
         viewModelScope.launch {
             val existing = cardItemDao.getForMode(mode.id)
-            if (existing.any { app.matches(it) }) return@launch // już jest na karcie
+            if (existing.any { app.matches(it) }) return@launch // już jest na karcie (na dowolnej stronie)
 
-            // Szukamy wolnego miejsca 2×2 na siatce 8×12. Gdy karta pełna, nic nie dodajemy.
-            val spot = CardGrid.findFreeSpot(
-                others = existing.map { it.toRect() },
-                w = CardGrid.APP_SIZE,
-                h = CardGrid.APP_SIZE,
-            ) ?: return@launch
-
-            cardItemDao.insert(
-                CardItemEntity(
-                    modeId = mode.id,
-                    packageName = app.component.packageName,
-                    className = app.component.className,
-                    userSerial = app.userSerial,
-                    x = spot.x,
-                    y = spot.y,
-                    w = spot.w,
-                    h = spot.h,
-                ),
-            )
+            // Wolne miejsce na bieżącej stronie, a gdy pełna — na kolejnej (także nowej, w limicie stron).
+            val found = PageSpace(existing, appPrefs.maxPages.value).find(page, CardGrid.APP_SIZE, CardGrid.APP_SIZE)
+            if (found == null) {
+                Toast.makeText(getApplication(), "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val (target, spot) = found
+            cardItemDao.insert(app.cardItem(mode.id, spot, target))
+            showPlacedPage(target, page)
         }
     }
 
     // Upuszczenie ikony z szuflady w konkretne miejsce karty. Zajęte → najbliższe wolne (findFreeSpot).
     fun addToActiveModeAt(app: AppInfo, x: Int, y: Int) {
         val mode = activeMode.value ?: return
+        val page = _currentPage.value
         viewModelScope.launch {
-            val existing = cardItemDao.getForMode(mode.id)
-            if (existing.any { app.matches(it) }) {
+            val all = cardItemDao.getForMode(mode.id)
+            if (all.any { app.matches(it) }) {
                 Toast.makeText(getApplication(), "${app.label} już jest na karcie", Toast.LENGTH_SHORT).show()
                 return@launch
             }
-            val others = existing.map { it.toRect() }
+            val existing = all.filter { it.page == page }
             val wanted = GridRect(x, y, CardGrid.APP_SIZE, CardGrid.APP_SIZE)
-            val spot = wanted.takeIf { CardGrid.canPlace(it, others) }
-                ?: CardGrid.findFreeSpot(others, CardGrid.APP_SIZE, CardGrid.APP_SIZE)
-            if (spot == null) {
-                Toast.makeText(getApplication(), "Karta jest pełna", Toast.LENGTH_SHORT).show()
+            // Zajęte miejsce: odsuwamy to, co tam leży (id -1 = nowa ikona, jeszcze bez wiersza w bazie).
+            val plan = CardGrid.placeWithPush(-1L, wanted, existing.associate { it.id to it.toRect() })
+            // Nie da się odsunąć sąsiadów → pierwsze wolne pole na tej stronie albo na kolejnej.
+            val found = if (plan != null) page to wanted
+                else PageSpace(all, appPrefs.maxPages.value).find(page, CardGrid.APP_SIZE, CardGrid.APP_SIZE)
+            if (found == null) {
+                Toast.makeText(getApplication(), "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
                 return@launch
             }
-            cardItemDao.insert(
-                CardItemEntity(
-                    modeId = mode.id,
-                    packageName = app.component.packageName,
-                    className = app.component.className,
-                    userSerial = app.userSerial,
-                    x = spot.x, y = spot.y, w = spot.w, h = spot.h,
-                ),
-            )
+            val (target, spot) = found
+            database.withTransaction {
+                plan?.filterKeys { it != -1L }?.forEach { (id, r) -> cardItemDao.updateRect(id, r.x, r.y, r.w, r.h) }
+                cardItemDao.insert(app.cardItem(mode.id, spot, target))
+            }
+            showPlacedPage(target, page)
         }
     }
 
     // Ikona z karty wrzucona na widżet folderu: trafia do folderu i znika z karty.
     fun moveCardAppIntoFolder(element: CardApp, folderWidget: CardCustomWidget) {
         val folderId = folderWidget.config.optLong("folderId", -1).takeIf { it > 0 } ?: return
-        viewModelScope.launch {
-            addAppsToFolder(folderId, listOf(element.app))
+        val track = editing // odczyt od razu: "✕" może przyjść, zanim zapis się skończy
+        folderDropJob = viewModelScope.launch {
+            val added = insertIntoFolder(folderId, listOf(element.app))
+            if (track) editFolderAdds += added // "✕" usunie je z folderu, a ikona wróci na kartę ze zdjęcia
             cardItemDao.delete(element.item.id)
+        }
+    }
+
+    // --- Foldery na karcie (powstają z ikon; nie trafiają do szuflady) ---
+
+    // Ikona upuszczona na ikonę: obie lądują w nowym folderze, w miejscu tej, na którą upuszczono.
+    // draggedItemId = wiersz przeciąganej ikony na karcie (null, gdy przyszła z szuflady).
+    fun mergeIntoCardFolder(target: CardApp, app: AppInfo, draggedItemId: Long?) {
+        if (target.app.key == app.key) return
+        folderDropJob = viewModelScope.launch {
+            database.withTransaction {
+                draggedItemId?.let { cardItemDao.delete(it) }
+                cardItemDao.delete(target.item.id)
+                val apps = listOf(target.app, app)
+                cardItemDao.insert(
+                    CardItemEntity(
+                        modeId = target.item.modeId, type = CardItemEntity.TYPE_CUSTOM,
+                        packageName = "", className = "", userSerial = 0,
+                        x = target.item.x, y = target.item.y, w = target.item.w, h = target.item.h,
+                        widgetKind = CustomWidgetKind.CARD_FOLDER.name,
+                        config = CardFolderData(autoFolderName(apps), null, null, apps.map { it.key }).toJson(),
+                        page = target.item.page,
+                    ),
+                )
+            }
+        }
+    }
+
+    // Świeży wiersz folderu z bazy (element z UI mógł się już zmienić, np. po dodaniu innej ikony).
+    private suspend fun freshItem(element: CardElement): CardItemEntity? =
+        cardItemDao.getForMode(element.item.modeId).firstOrNull { it.id == element.item.id }
+
+    fun addToCardFolder(folder: CardCustomWidget, apps: List<AppInfo>, draggedItemId: Long? = null) {
+        folderDropJob = viewModelScope.launch {
+            database.withTransaction {
+                val item = freshItem(folder) ?: return@withTransaction
+                val data = CardFolderData.of(item.config)
+                val added = apps.map { it.key }.filter { it !in data.keys }
+                cardItemDao.updateConfig(item.id, data.copy(keys = data.keys + added).toJson())
+                draggedItemId?.let { cardItemDao.delete(it) } // ikona z karty "wchodzi" do folderu
+            }
+        }
+    }
+
+    // Nazwa, wygląd, kolejność — wszystko, co zmienia sam opis folderu.
+    fun updateCardFolder(folder: CardCustomWidget, change: (CardFolderData) -> CardFolderData) {
+        viewModelScope.launch {
+            database.withTransaction { // odczyt + zapis razem: dwie szybkie zmiany nie nadpiszą się nawzajem
+                val item = freshItem(folder) ?: return@withTransaction
+                cardItemDao.updateConfig(item.id, change(CardFolderData.of(item.config)).toJson())
+            }
+        }
+    }
+
+    // Wolne pole dla ikony jak najbliżej wskazanego miejsca.
+    private fun spotNear(x: Int, y: Int, taken: List<GridRect>): GridRect? {
+        val size = CardGrid.APP_SIZE
+        val wanted = GridRect(x.coerceAtMost(CardGrid.COLUMNS - size), y.coerceAtMost((CardGrid.rows - size).coerceAtLeast(0)), size, size)
+        return wanted.takeIf { CardGrid.canPlace(it, taken) } ?: CardGrid.nearestFreeSpot(wanted, taken)
+    }
+
+    // Wyjęcie aplikacji z folderu: na kartę obok folderu (toCard) albo po prostu z folderu.
+    // Gdy w folderze zostanie jedna aplikacja, folder znika, a ona wraca na jego miejsce (jak w Androidzie).
+    // path = podfolder, z którego wyjmujemy (pusta = główny). Automatyczne znikanie dotyczy tylko głównego folderu.
+    fun takeOutOfCardFolder(folder: CardCustomWidget, app: AppInfo, toCard: Boolean, path: List<Int> = emptyList()) {
+        viewModelScope.launch {
+            val message = database.withTransaction {
+                val item = freshItem(folder) ?: return@withTransaction null
+                val data = CardFolderData.of(item.config)
+                val taken0 = pageItems(item.modeId, item.page).filter { it.id != item.id }.map { it.toRect() }.toMutableList()
+                if (path.isNotEmpty()) {
+                    // Z podfolderu: tylko usuwamy klucz; folder na karcie zostaje, jak był.
+                    cardItemDao.updateConfig(item.id, data.update(path) { it.copy(keys = it.keys - app.key) }.toJson())
+                    taken0 += item.toRect()
+                    if (!toCard) return@withTransaction null
+                    val spot = spotNear(item.x, item.y, taken0) ?: return@withTransaction "Brak miejsca na karcie dla ${app.label}"
+                    appItemFor(item.modeId, app.key, spot, item.page)?.let { cardItemDao.insert(it) }
+                    return@withTransaction null
+                }
+                val rest = data.keys - app.key
+                // Liczą się tylko zainstalowane (odinstalowane klucze zostają w folderze, ale ich nie widać).
+                val installed = (allApps.value + _shortcuts.value).map { it.key }.toSet()
+                val visibleRest = rest.filter { it in installed }
+                val taken = pageItems(item.modeId, item.page).filter { it.id != item.id }.map { it.toRect() }.toMutableList()
+                if (!data.keep && data.children.isEmpty() && visibleRest.size <= 1) {
+                    cardItemDao.delete(item.id)
+                    visibleRest.firstOrNull()?.let { key ->
+                        val spot = spotNear(item.x, item.y, taken)
+                        spot?.let { appItemFor(item.modeId, key, it, item.page) }?.let { e ->
+                            cardItemDao.insert(e)
+                            taken += e.toRect()
+                        }
+                    }
+                } else {
+                    cardItemDao.updateConfig(item.id, data.copy(keys = rest).toJson())
+                    taken += item.toRect()
+                }
+                if (!toCard) return@withTransaction null
+                val spot = spotNear(item.x, item.y, taken) ?: return@withTransaction "Brak miejsca na karcie dla ${app.label}"
+                appItemFor(item.modeId, app.key, spot, item.page)?.let { cardItemDao.insert(it) }
+                null
+            }
+            message?.let { Toast.makeText(getApplication(), it, Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    // "Rozwiąż folder": wszystkie aplikacje wracają na kartę wokół miejsca folderu.
+    fun dissolveCardFolder(folder: CardCustomWidget) {
+        viewModelScope.launch {
+            val skipped = database.withTransaction {
+                val item = freshItem(folder) ?: return@withTransaction 0
+                cardItemDao.delete(item.id)
+                val taken = pageItems(item.modeId, item.page).map { it.toRect() }.toMutableList()
+                var missing = 0
+                val installed = (allApps.value + _shortcuts.value).map { it.key }.toSet()
+                CardFolderData.of(item.config).allKeys().distinct().filter { it in installed }.forEach { key -> // razem z podfolderami
+                    val spot = spotNear(item.x, item.y, taken)
+                    val entity = spot?.let { appItemFor(item.modeId, key, it, item.page) }
+                    if (entity == null) {
+                        missing++
+                    } else {
+                        cardItemDao.insert(entity)
+                        taken += entity.toRect()
+                    }
+                }
+                missing
+            }
+            if (skipped > 0) Toast.makeText(getApplication(), "Brak miejsca dla $skipped aplikacji", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // "Zapisz w szufladzie": kopia folderu z karty (z podfolderami) jako folder w zakładce Foldery.
+    // Skróty zostają pominięte — foldery szuflady trzymają tylko aplikacje.
+    fun saveCardFolderToDrawer(data: CardFolderData) {
+        viewModelScope.launch {
+            suspend fun insert(folder: CardFolderData, parentId: Long?) {
+                val id = folderDao.insertFolder(FolderEntity(parentId = parentId, name = folder.name, icon = folder.icon, color = folder.color))
+                val apps = folder.keys.mapNotNull { key ->
+                    if (key.startsWith(SHORTCUT_KEY)) return@mapNotNull null
+                    parseAppKey(key)?.let { (component, serial) ->
+                        FolderAppEntity(folderId = id, packageName = component.packageName, className = component.className, userSerial = serial)
+                    }
+                }
+                if (apps.isNotEmpty()) folderDao.insertApps(apps)
+                folder.children.forEach { insert(it, id) }
+            }
+            database.withTransaction { insert(data, null) } // wszystko albo nic (bez połowy drzewa po błędzie)
+            Toast.makeText(getApplication(), "Zapisano „${data.name}” w szufladzie (Foldery)", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // "Kopiuj do trybu…": niezależna kopia folderu z karty na kartę innego trybu (w wolnym miejscu).
+    fun copyCardFolderToMode(data: CardFolderData, modeId: Long, w: Int, h: Int) {
+        viewModelScope.launch {
+            // Kopia trafia na pierwszą stronę tamtego trybu (albo dalszą, gdy pierwsza pełna).
+            val found = pageSpace(modeId).find(0, w, h) ?: pageSpace(modeId).find(0, CardGrid.APP_SIZE, CardGrid.APP_SIZE)
+            val modeName = modes.value.firstOrNull { it.id == modeId }?.name.orEmpty()
+            if (found == null) {
+                Toast.makeText(getApplication(), "Karta trybu $modeName jest pełna", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val (targetPage, spot) = found
+            cardItemDao.insert(
+                CardItemEntity(
+                    modeId = modeId, type = CardItemEntity.TYPE_CUSTOM,
+                    packageName = "", className = "", userSerial = 0,
+                    x = spot.x, y = spot.y, w = spot.w, h = spot.h,
+                    widgetKind = CustomWidgetKind.CARD_FOLDER.name,
+                    config = data.copy(keep = true).toJson(),
+                    page = targetPage,
+                ),
+            )
+            Toast.makeText(getApplication(), "Skopiowano „${data.name}” do trybu $modeName", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Folder z szuflady jako NIEZALEŻNA kopia na karcie aktywnego trybu (zmiany nie wracają do szuflady).
+    fun copyDrawerFolderToCard(folderId: Long) {
+        val tree = folderTree.value
+        fun build(id: Long): CardFolderData? {
+            val f = tree.folder(id) ?: return null
+            return CardFolderData(
+                name = f.name, icon = f.icon, color = f.color,
+                keys = tree.apps(id).map { it.app.key },
+                keep = true,
+                children = tree.subfolders(id).mapNotNull { build(it.id) },
+            )
+        }
+        val data = build(folderId) ?: return
+        addCustomWidget(CustomWidgetKind.CARD_FOLDER, data.toJson())
+    }
+
+    // Folder z szuflady przeciągnięty na kartę: kładziemy go w rozmiarze ikony tam, gdzie puszczono palec.
+    fun placeFolderAt(folderId: Long, x: Int, y: Int) {
+        val mode = activeMode.value ?: return
+        val page = _currentPage.value
+        viewModelScope.launch {
+            var placedOn: Int? = null // inna strona, gdy bieżąca była pełna
+            val message = database.withTransaction {
+                val all = cardItemDao.getForMode(mode.id)
+                if (all.any { it.isFolderWidget(folderId) }) return@withTransaction "Ten folder już jest na karcie"
+                val existing = all.filter { it.page == page }
+                val size = CardGrid.APP_SIZE
+                val wanted = GridRect(x, y, size, size)
+                val plan = CardGrid.placeWithPush(-1L, wanted, existing.associate { it.id to it.toRect() })
+                val (target, spot) = (if (plan != null) page to wanted else PageSpace(all, appPrefs.maxPages.value).find(page, size, size))
+                    ?: return@withTransaction "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)"
+                if (target != page) placedOn = target
+                plan?.filterKeys { it != -1L }?.forEach { (id, r) -> cardItemDao.updateRect(id, r.x, r.y, r.w, r.h) }
+                cardItemDao.insert(
+                    CardItemEntity(
+                        modeId = mode.id, type = CardItemEntity.TYPE_CUSTOM,
+                        packageName = "", className = "", userSerial = 0,
+                        x = spot.x, y = spot.y, w = size, h = size,
+                        widgetKind = CustomWidgetKind.FOLDER.name,
+                        config = JSONObject().put("folderId", folderId).toString(),
+                        page = target,
+                    ),
+                )
+                null
+            }
+            message?.let { Toast.makeText(getApplication(), it, Toast.LENGTH_SHORT).show() }
+            placedOn?.let { showPlacedPage(it, page) }
+        }
+    }
+
+    // Zmiana rozmiaru ikon aplikacji (1×1 / 2×2) na WSZYSTKICH kartach. Przy powiększaniu ikona, która
+    // zaczęłaby na coś nachodzić, przenosi się w najbliższe wolne miejsce.
+    fun setAppIconCells(size: Int) {
+        if (size == appPrefs.appIconCells.value) return
+        appPrefs.appIconCells.set(size)
+        val overrides = modeLayouts.value
+        viewModelScope.launch {
+            // Tryby z własnym rozmiarem ikon (ustawienia trybu) zostają bez zmian.
+            cardItemDao.getAll().groupBy { it.modeId }.forEach { (modeId, items) ->
+                if (overrides[modeId]?.iconCells == null) resizeIcons(items, size)
+            }
+        }
+    }
+
+    // Przeliczenie ikon jednej karty na nowy rozmiar (1×1 / 2×2), z przenoszeniem kolidujących w wolne miejsca.
+    private suspend fun resizeIcons(items: List<CardItemEntity>, size: Int) {
+        items.groupBy { it.page }.values.forEach { resizeIconsOnPage(it, size) } // każda strona osobno
+    }
+
+    private suspend fun resizeIconsOnPage(items: List<CardItemEntity>, size: Int) {
+        val isIcon = { i: CardItemEntity -> i.type == CardItemEntity.TYPE_APP || i.type == CardItemEntity.TYPE_SHORTCUT }
+        val placed = items.filterNot(isIcon).map { it.toRect() }.toMutableList()
+        items.filter(isIcon).sortedWith(compareBy({ it.y }, { it.x })).forEach { app ->
+            val wanted = GridRect(app.x.coerceAtMost(CardGrid.COLUMNS - size), app.y, size, size)
+            val spot = wanted.takeIf { CardGrid.canPlace(it, placed) } ?: CardGrid.findFreeSpot(placed, size, size)
+            if (spot == null) {
+                cardItemDao.delete(app.id) // karta pełna: ikona i tak jest w szufladzie
+            } else {
+                placed += spot
+                cardItemDao.updateRect(app.id, spot.x, spot.y, spot.w, spot.h)
+            }
+        }
+    }
+
+    // --- Układ karty per tryb ---
+
+    val modeLayouts: StateFlow<Map<Long, ModeLayout>> = appPrefs.modeLayouts.flow
+        .map { ModeLayout.parseAll(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ModeLayout.parseAll(appPrefs.modeLayouts.value))
+
+    // Układ aktywnego trybu (odstępy dla karty); rozmiar ikon liczy się niżej razem z ustawieniem globalnym.
+    val activeLayout: StateFlow<ModeLayout> = combine(activeMode, modeLayouts) { mode, all -> mode?.let { all[it.id] } ?: ModeLayout.DEFAULT }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ModeLayout.DEFAULT)
+
+    fun setModeLayout(mode: ModeEntity, layout: ModeLayout) {
+        val all = ModeLayout.parseAll(appPrefs.modeLayouts.value) // prosto z ustawień: dwie szybkie zmiany się nie zgubią
+        val before = all[mode.id] ?: ModeLayout.DEFAULT
+        appPrefs.modeLayouts.set(ModeLayout.writeAll(all + (mode.id to layout)))
+        val global = appPrefs.appIconCells.value
+        val oldSize = before.iconCells ?: global
+        val newSize = layout.iconCells ?: global
+        if (oldSize != newSize) {
+            if (activeMode.value?.id == mode.id) CardGrid.appSize = newSize
+            viewModelScope.launch { resizeIcons(cardItemDao.getForMode(mode.id), newSize) }
+        }
+    }
+
+    // Wynik przeciągania / zmiany rozmiaru z wypychaniem: kilka elementów naraz, w jednej transakcji.
+    fun applyLayout(changes: Map<Long, GridRect>) {
+        viewModelScope.launch {
+            database.withTransaction {
+                changes.forEach { (id, r) -> cardItemDao.updateRect(id, r.x, r.y, r.w, r.h) }
+            }
+        }
+    }
+
+    // Kilka aplikacji naraz (przycisk "+ Aplikacje" w edycji układu) — każda w pierwsze wolne miejsce.
+    fun addAppsToActiveMode(apps: List<AppInfo>) {
+        val mode = activeMode.value ?: return
+        val page = _currentPage.value
+        viewModelScope.launch {
+            val existing = cardItemDao.getForMode(mode.id)
+            val space = PageSpace(existing, appPrefs.maxPages.value) // pełna strona → dalej na kolejnych
+            var skipped = 0
+            var lastPage = page
+            apps.filter { app -> existing.none { app.matches(it) } }.forEach { app ->
+                val found = space.find(page, CardGrid.APP_SIZE, CardGrid.APP_SIZE)
+                if (found == null) {
+                    skipped++
+                    return@forEach
+                }
+                val (target, spot) = found
+                lastPage = maxOf(lastPage, target)
+                cardItemDao.insert(app.cardItem(mode.id, spot, target))
+            }
+            if (skipped > 0) Toast.makeText(getApplication(), "Brak miejsca dla $skipped aplikacji (limit stron)", Toast.LENGTH_SHORT).show()
+            if (lastPage != page) {
+                if (skipped == 0) Toast.makeText(getApplication(), "Część aplikacji trafiła na stronę ${lastPage + 1}", Toast.LENGTH_SHORT).show()
+                withTimeoutOrNull(700) { usedPages.first { it > lastPage } }
+                animateNextPage = true
+                _currentPage.value = lastPage
+            }
+        }
+    }
+
+    // --- Edycja układu z zapisem / anulowaniem ---
+    // Zmiany trafiają do bazy od razu (widać je na żywo), ale przy wejściu w edycję robimy zdjęcie karty.
+    // "✕" przywraca zdjęcie; "✓", Wstecz i Home zatwierdzają. Nieodwracalne sprzątanie (identyfikatory
+    // widżetów u systemu, pliki naklejek) odkładamy do zatwierdzenia — jak transakcja z COMMIT / ROLLBACK.
+    private var editSnapshot: Pair<Long, List<CardItemEntity>>? = null
+    private val editCleanups = mutableListOf<CardItemEntity>()
+    private val editFolderAdds = mutableListOf<Long>() // wiersze folder_apps dodane upuszczeniem na folder
+    private var folderDropJob: Job? = null               // ostatnie upuszczenie na folder — anulowanie na nie czeka
+    private var editing = false          // ustawiane od razu (synchronicznie), zanim zdjęcie się wczyta
+    private var beginJob: Job? = null     // odczyt zdjęcia z bazy — zapis/anulowanie najpierw na niego czeka
+
+    val isEditing: Boolean get() = editing
+
+    fun beginEdit() {
+        val mode = activeMode.value ?: return
+        if (editing) return
+        editing = true
+        editCleanups.clear()
+        editFolderAdds.clear()
+        beginJob = viewModelScope.launch { editSnapshot = mode.id to cardItemDao.getForMode(mode.id) }
+    }
+
+    fun commitEdit() {
+        if (!editing) return
+        editing = false
+        viewModelScope.launch {
+            beginJob?.join()
+            folderDropJob?.join()
+            editJobs.toList().forEach { it.join() } // najpierw dokończone zmiany stosów, potem porządki
+            editJobs.clear()
+            val modeId = editSnapshot?.first
+            editSnapshot = null
+            editFolderAdds.clear()
+            modeId?.let {
+                repairStacks(cardItemDao, it) // stosy z jednym widżetem się rozpadają, sieroty wracają na kartę
+                compactPages(it)
+            }
+            val toClean = editCleanups.toList()
+            editCleanups.clear()
+            toClean.forEach(::cleanupItem)
+        }
+    }
+
+    fun cancelEdit() {
+        if (!editing) return
+        editing = false
+        viewModelScope.launch {
+            beginJob?.join()
+            folderDropJob?.join()
+            editJobs.toList().forEach { it.join() }
+            editJobs.clear()
+            val (modeId, snapshot) = editSnapshot ?: return@launch
+            editSnapshot = null
+            editCleanups.clear()
+            val folderAdds = editFolderAdds.toList()
+            editFolderAdds.clear()
+            if (folderAdds.isNotEmpty()) folderDao.deleteApps(folderAdds)
+            val snapshotIds = snapshot.map { it.id }.toSet()
+            // Elementy dodane w trakcie edycji znikają razem ze swoimi zasobami.
+            cardItemDao.getForMode(modeId).filter { it.id !in snapshotIds }.forEach(::cleanupItem)
+            database.withTransaction {
+                cardItemDao.deleteForMode(modeId)
+                snapshot.forEach { cardItemDao.insert(it) } // z tymi samymi id, więc widżety i foldery wracają
+            }
+        }
+    }
+
+    private fun cleanupItem(item: CardItemEntity) {
+        item.appWidgetId?.let(widgets::deleteId)
+        if (item.widgetKind == CustomWidgetKind.STICKER.name) {
+            val cfg = runCatching { JSONObject(item.config ?: "{}") }.getOrNull() ?: return
+            // Plik naklejki i (jeśli była wycinana) jej oryginał.
+            listOf(cfg.optString("file"), cfg.optString("original")).filter { it.isNotBlank() }.forEach(StickerStore::delete)
+        }
+    }
+
+    // --- Naklejki ---
+
+    // Zmiana ustawień naklejki na ŚWIEŻYM odczycie z bazy (żeby nie nadpisać ścieżki pliku po wycinaniu).
+    fun updateStickerConfig(widget: CardCustomWidget, change: (JSONObject) -> Unit) {
+        viewModelScope.launch {
+            database.withTransaction {
+                val item = freshItem(widget) ?: return@withTransaction
+                val cfg = runCatching { JSONObject(item.config ?: "{}") }.getOrDefault(JSONObject())
+                change(cfg)
+                cardItemDao.updateConfig(item.id, cfg.toString())
+            }
+        }
+    }
+
+    // Naklejka poprawiona w StickOnMe: kopiujemy wynik do plików launchera (jak przy dodawaniu),
+    // a poprzednią wersję zostawiamy jako "oryginał" — "Przywróć oryginał" dalej działa.
+    fun replaceStickerFile(widgetId: Long, source: android.net.Uri) {
+        viewModelScope.launch {
+            val newPath = runCatching { StickerStore.import(getApplication(), source) }.getOrNull() ?: return@launch
+            val item = cardItemDao.getById(widgetId) ?: return@launch StickerStore.delete(newPath)
+            val cfg = runCatching { JSONObject(item.config ?: "{}") }.getOrDefault(JSONObject())
+            val current = cfg.optString("file")
+            val original = cfg.optString("original").ifBlank { current }
+            if (current.isNotBlank() && current != original) StickerStore.delete(current)
+            cfg.put("file", newPath)
+            if (original.isNotBlank()) cfg.put("original", original)
+            // Kształt i ramka są teraz "wypalone" w pliku przez StickOnMe — karta już ich nie dokłada.
+            // Dawne ustawienia z karty pamiętamy przy pierwszej wersji, żeby "Przywróć" oddało jej wygląd.
+            cfg.optString("shape").takeIf { it.isNotBlank() }?.let { if (!cfg.has("originalShape")) cfg.put("originalShape", it) }
+            cfg.optString("frame").takeIf { it.isNotBlank() }?.let { if (!cfg.has("originalFrame")) cfg.put("originalFrame", it) }
+            cfg.remove("shape")
+            cfg.remove("frame")
+            cardItemDao.updateConfig(item.id, cfg.toString())
+        }
+    }
+
+    // Powrót do zdjęcia sprzed wycięcia.
+    fun restoreStickerOriginal(widget: CardCustomWidget) {
+        viewModelScope.launch {
+            val item = freshItem(widget) ?: return@launch
+            val cfg = JSONObject(item.config ?: "{}")
+            val original = cfg.optString("original").takeIf { it.isNotBlank() } ?: return@launch
+            val current = cfg.optString("file")
+            if (current != original) StickerStore.delete(current)
+            cfg.put("file", original).remove("original")
+            cfg.optString("originalShape").takeIf { it.isNotBlank() }?.let { cfg.put("shape", it) }
+            cfg.optString("originalFrame").takeIf { it.isNotBlank() }?.let { cfg.put("frame", it) }
+            cfg.remove("originalShape")
+            cfg.remove("originalFrame")
+            cardItemDao.updateConfig(item.id, cfg.toString())
         }
     }
 
@@ -1005,13 +1752,177 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun removeFromMode(element: CardElement) {
         viewModelScope.launch {
-            cardItemDao.delete(element.item.id)
-            // "is" sprawdza typ i od razu rzutuje (smart cast), jak "if (element is CardWidget w)" w C#.
-            if (element is CardWidget) widgets.deleteId(element.appWidgetId)
-            // Naklejka ma kopię obrazka w pamięci launchera — sprzątamy ją razem z widżetem.
-            if (element is CardCustomWidget && element.kind == CustomWidgetKind.STICKER) {
-                element.config.optString("file").takeIf { it.isNotBlank() }?.let(StickerStore::delete)
+            // Usunięcie stosu usuwa też jego widżety (inaczej zostałyby niewidoczne, bez strony).
+            // Listę bierzemy świeżo z bazy — w UI mogła jeszcze nie dotrzeć ostatnio dorzucona pozycja.
+            val removed = database.withTransaction {
+                val fresh = freshItem(element) ?: element.item
+                val list = listOf(fresh) + if (fresh.widgetKind == CustomWidgetKind.STACK.name) {
+                    val ids = StackData.of(fresh.config).members.toSet()
+                    cardItemDao.getForMode(fresh.modeId).filter { it.id in ids }
+                } else emptyList()
+                list.forEach { cardItemDao.delete(it.id) }
+                list
             }
+            // W edycji układu sprzątanie czeka na "✓" (żeby "✕" mógł przywrócić widżet razem z jego danymi).
+            if (editing) editCleanups += removed else {
+                removed.forEach(::cleanupItem)
+                compactPages(element.item.modeId) // poza edycją pusta strona znika od razu
+            }
+        }
+    }
+
+    // --- Stosy widżetów ---
+
+    // Zmiany stosów w edycji: "✕" i "✓" czekają, aż się zapiszą (inaczej spóźniony zapis nadpisałby przywrócone zdjęcie).
+    private val editJobs = mutableListOf<Job>()
+
+    private fun launchStackChange(block: suspend () -> Unit) {
+        val job = viewModelScope.launch { block() }
+        if (editing) editJobs += job
+    }
+
+    // Widżet upuszczony na widżet: powstaje stos (albo widżet dołącza do istniejącego stosu) w miejscu celu.
+    fun stackWidgets(dragged: CardElement, target: CardElement) {
+        if (dragged.item.id == target.item.id) return
+        launchStackChange {
+            database.withTransaction {
+                val t = freshItem(target) ?: return@withTransaction
+                val d = freshItem(dragged) ?: return@withTransaction
+                if (t.widgetKind == CustomWidgetKind.STACK.name) {
+                    val data = StackData.of(t.config)
+                    cardItemDao.updateConfig(t.id, data.copy(members = data.members + d.id, index = data.members.size).toJson()) // nowy na wierzch
+                } else {
+                    cardItemDao.insert(
+                        CardItemEntity(
+                            modeId = t.modeId, type = CardItemEntity.TYPE_CUSTOM,
+                            packageName = "", className = "", userSerial = 0,
+                            x = t.x, y = t.y, w = t.w, h = t.h,
+                            widgetKind = CustomWidgetKind.STACK.name,
+                            config = StackData(listOf(t.id, d.id), 1).toJson(),
+                            page = t.page,
+                        ),
+                    )
+                    cardItemDao.updatePage(t.id, STACKED_PAGE, t.x, t.y)
+                }
+                cardItemDao.updatePage(d.id, STACKED_PAGE, d.x, d.y)
+            }
+        }
+    }
+
+    // Przewinięcie stosu: zapamiętujemy, który widżet jest na wierzchu (po powrocie na kartę będzie ten sam).
+    fun setStackIndex(stack: CardCustomWidget, index: Int) {
+        if (index < 0) return
+        launchStackChange {
+            database.withTransaction {
+                val item = freshItem(stack) ?: return@withTransaction
+                val data = StackData.of(item.config)
+                if (data.index != index) cardItemDao.updateConfig(item.id, data.copy(index = index.coerceIn(0, (data.members.size - 1).coerceAtLeast(0))).toJson())
+            }
+        }
+    }
+
+    // Gdzie przesunięcie w pionie zmienia widżet stosu (okno "Stos"): auto / cała powierzchnia / tylko uchwyt.
+    fun setStackSwipe(stack: CardCustomWidget, swipe: String) {
+        launchStackChange {
+            database.withTransaction {
+                val item = freshItem(stack) ?: return@withTransaction
+                cardItemDao.updateConfig(item.id, StackData.of(item.config).copy(swipe = swipe).toJson())
+            }
+        }
+    }
+
+    // Kolejność w stosie (okno "Stos"): przesunięcie widżetu o jedno miejsce wyżej/niżej.
+    fun moveInStack(stack: CardCustomWidget, memberId: Long, delta: Int) {
+        launchStackChange {
+            database.withTransaction {
+                val item = freshItem(stack) ?: return@withTransaction
+                val data = StackData.of(item.config)
+                val from = data.members.indexOf(memberId)
+                val to = from + delta
+                if (from < 0 || to !in data.members.indices) return@withTransaction
+                val list = data.members.toMutableList().apply { add(to, removeAt(from)) }
+                cardItemDao.updateConfig(item.id, data.copy(members = list, index = to).toJson())
+            }
+        }
+    }
+
+    // "Rozdziel stos": pierwszy widżet zajmuje miejsce stosu, reszta obok. Bez miejsca — na nową stronę za ostatnią.
+    fun dissolveStack(stack: CardCustomWidget) {
+        launchStackChange {
+            val moved = database.withTransaction {
+                val s = freshItem(stack) ?: return@withTransaction 0
+                val data = StackData.of(s.config)
+                val all = cardItemDao.getForMode(s.modeId)
+                // Najpierw plan w pamięci (id → strona i miejsce), zapis dopiero, gdy wszystko się mieści.
+                val taken = all.filter { it.page == s.page && it.id != s.id }.map { it.toRect() }.toMutableList()
+                val extraPage = (all.maxOfOrNull { it.page } ?: 0) + 1
+                val extraTaken = mutableListOf<GridRect>()
+                val plan = mutableListOf<Pair<Long, Triple<Int, GridRect, Boolean>>>() // id → (strona, miejsce, czy rozmiar stosu)
+                var toExtra = 0
+                data.members.forEachIndexed { i, id ->
+                    val m = all.firstOrNull { it.id == id } ?: return@forEachIndexed
+                    if (plan.isEmpty()) {
+                        plan += m.id to Triple(s.page, GridRect(s.x, s.y, s.w, s.h), true) // pierwszy na miejsce stosu
+                        taken += GridRect(s.x, s.y, s.w, s.h)
+                        return@forEachIndexed
+                    }
+                    val w = m.w.coerceAtMost(CardGrid.COLUMNS)
+                    val spot = CardGrid.nearestFreeSpot(GridRect(s.x.coerceAtMost(CardGrid.COLUMNS - w), s.y, w, m.h), taken)
+                        ?: CardGrid.findFreeSpot(taken, w, m.h)
+                    if (spot != null) {
+                        plan += m.id to Triple(s.page, spot, false)
+                        taken += spot
+                    } else {
+                        val extra = CardGrid.findFreeSpot(extraTaken, w, m.h) ?: GridRect(0, 0, w, m.h)
+                        plan += m.id to Triple(extraPage, extra, false)
+                        extraTaken += extra
+                        toExtra++
+                    }
+                }
+                // Nowa strona tylko w granicach limitu z Ustawień — inaczej stos zostaje, jak był.
+                if (toExtra > 0 && extraPage >= appPrefs.maxPages.value) return@withTransaction -1
+                cardItemDao.delete(s.id)
+                plan.forEach { (id, target) ->
+                    val (page, rect, stackSize) = target
+                    cardItemDao.updatePage(id, page, rect.x, rect.y)
+                    if (stackSize) cardItemDao.updateSize(id, rect.w, rect.h)
+                }
+                toExtra
+            }
+            when {
+                moved < 0 -> Toast.makeText(getApplication(), "Za mało miejsca, żeby rozdzielić stos", Toast.LENGTH_SHORT).show()
+                moved > 0 -> Toast.makeText(getApplication(), "Brak miejsca — $moved widżet(y) na nowej stronie", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Wyjęcie widżetu ze stosu na kartę (obok stosu). Gdy zostanie jeden, stos znika, a ten widżet zajmuje jego miejsce.
+    fun unstack(stack: CardCustomWidget, memberId: Long) {
+        launchStackChange {
+            val message = database.withTransaction {
+                val s = freshItem(stack) ?: return@withTransaction null
+                val data = StackData.of(s.config)
+                val all = cardItemDao.getForMode(s.modeId)
+                val member = all.firstOrNull { it.id == memberId } ?: return@withTransaction null
+                val taken = all.filter { it.page == s.page }.map { it.toRect() }
+                val w = member.w.coerceAtMost(CardGrid.COLUMNS)
+                val wanted = GridRect(s.x.coerceAtMost(CardGrid.COLUMNS - w), s.y, w, member.h)
+                val spot = CardGrid.nearestFreeSpot(wanted, taken) ?: CardGrid.findFreeSpot(taken, w, member.h)
+                    ?: return@withTransaction "Brak miejsca na tej stronie karty"
+                cardItemDao.updatePage(member.id, s.page, spot.x, spot.y)
+                val rest = data.members - memberId
+                if (rest.size <= 1) {
+                    rest.firstOrNull()?.let { last ->
+                        cardItemDao.updatePage(last, s.page, s.x, s.y)
+                        cardItemDao.updateSize(last, s.w, s.h)
+                    }
+                    cardItemDao.delete(s.id)
+                } else {
+                    cardItemDao.updateConfig(s.id, data.copy(members = rest, index = data.index.coerceAtMost(rest.size - 1)).toJson())
+                }
+                null
+            }
+            message?.let { Toast.makeText(getApplication(), it, Toast.LENGTH_SHORT).show() }
         }
     }
 
@@ -1068,6 +1979,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
+        // W trakcie edycji układu nie zmieniamy trybu pod palcami — sprawdzimy za minutę.
+        if (editing) {
+            scheduleAutoRecheck(60_000)
+            return
+        }
         val now = System.currentTimeMillis()
         // Tryb włączony "na czas" ma pierwszeństwo — automat poczeka, aż czas minie.
         val timedUntil = appPrefs.timedUntil.value
@@ -1151,9 +2067,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     // --- Kopia, skróty, zaawansowane ---
 
-    fun exportTo(uri: Uri) {
+    fun exportTo(uri: Uri, withFiles: Boolean = false) {
         viewModelScope.launch {
-            val ok = runCatching { Backup.export(getApplication(), uri) }.isSuccess
+            val ok = runCatching { Backup.export(getApplication(), uri, withFiles) }.isSuccess
             Toast.makeText(getApplication(), if (ok) "Zapisano konfigurację" else "Nie udało się zapisać pliku", Toast.LENGTH_SHORT).show()
         }
     }
@@ -1165,6 +2081,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 ?: "Wczytano konfigurację"
             Toast.makeText(getApplication(), message, Toast.LENGTH_LONG).show()
             suggestionRefresh.value++
+            // Tapety mogły przyjść z kopii — pokazujemy tapetę aktywnego trybu (i odświeżamy stan w ustawieniach).
+            if (result.isSuccess) {
+                _wallpaperVersion.value++
+                if (wallpapers.hasAny()) appPrefs.showWallpaper.set(true)
+                // activeMode jeszcze wskazuje stary (usunięty) tryb — bierzemy aktywny prosto z bazy.
+                val active = runCatching { modeDao.getAll().maxByOrNull { it.lastActiveAt } }.getOrNull()
+                active?.let { wallpapers.applyFor(it.id) }
+            }
         }
     }
 
@@ -1261,13 +2185,41 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             appPrefs.showWallpaper.set(true) // bez tego tapety nie widać pod kartą
             _wallpaperVersion.value++
             activeMode.value?.let { wallpapers.applyFor(it.id) }
+            _wallpaperCrop.value = WallpaperCropRequest(modeId) // od razu okno "Dopasuj" (jak systemowy wybór tapety)
         }
     }
 
-    fun clearWallpaper(modeId: Long?) {
-        wallpapers.clear(modeId)
+    // --- Kadrowanie tapety (powiększenie i przesunięcie) ---
+    private val _wallpaperCrop = MutableStateFlow<WallpaperCropRequest?>(null)
+    val wallpaperCrop: StateFlow<WallpaperCropRequest?> = _wallpaperCrop.asStateFlow()
+
+    fun openWallpaperCrop(modeId: Long?) {
+        _wallpaperCrop.value = WallpaperCropRequest(modeId)
+    }
+
+    fun closeWallpaperCrop() {
+        _wallpaperCrop.value = null
+    }
+
+    fun wallpaperCropOf(modeId: Long?): android.graphics.RectF? = wallpapers.cropFor(modeId)
+
+    suspend fun wallpaperPreview(modeId: Long?): android.graphics.Bitmap? = wallpapers.preview(modeId)
+
+    fun saveWallpaperCrop(modeId: Long?, crop: android.graphics.RectF?) {
+        _wallpaperCrop.value = null
+        wallpapers.setCrop(modeId, crop)
         _wallpaperVersion.value++
         activeMode.value?.let { mode -> viewModelScope.launch { wallpapers.applyFor(mode.id) } }
+    }
+
+    fun clearWallpaper(modeId: Long?) {
+        viewModelScope.launch {
+            wallpapers.clear(modeId)
+            _wallpaperVersion.value++
+            // Jeśli został inny obrazek (np. domyślny dla trybu bez własnego), od razu go ustawiamy.
+            activeMode.value?.let { mode -> wallpapers.applyFor(mode.id) }
+            Toast.makeText(getApplication(), "Usunięto tapetę", Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun setWallpaperOnLock(modeId: Long?, on: Boolean) {
@@ -1302,6 +2254,17 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     init {
+        CardGrid.appSize = appPrefs.appIconCells.value // rozmiar ikon z ustawień, zanim cokolwiek się ułoży
+        // Rozmiar ikon aktywnej karty: własny z ustawień trybu albo globalny (logika siatki liczy nowe ikony w tym rozmiarze).
+        viewModelScope.launch {
+            combine(activeMode, modeLayouts, appPrefs.appIconCells.flow) { mode, all, global ->
+                mode?.let { all[it.id]?.iconCells } ?: global
+            }.collect { CardGrid.appSize = it }
+        }
+        // Inny tryb = zaczynamy od jego pierwszej strony.
+        viewModelScope.launch {
+            activeMode.map { it?.id }.distinctUntilChanged().collect { setPage(0) }
+        }
         // Ładowarka i poziom baterii: komunikaty systemu (ContextCompat dodaje flagę wymaganą od Androida 14).
         val app = getApplication<Application>()
         androidx.core.content.ContextCompat.registerReceiver(
@@ -1346,3 +2309,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         private const val STABLE_MS = 60_000L
     }
 }
+
+// Prośba o okno kadrowania tapety. Klasa zamiast samego Long?, bo null znaczy tu "tapeta domyślna", a nie "brak prośby".
+data class WallpaperCropRequest(val modeId: Long?)

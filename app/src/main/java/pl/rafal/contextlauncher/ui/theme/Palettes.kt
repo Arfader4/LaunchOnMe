@@ -5,6 +5,11 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 // Jasny / ciemny / za systemem — wspólne dla całego launchera.
 enum class ThemeMode(val label: String) {
@@ -15,7 +20,7 @@ enum class ThemeMode(val label: String) {
 
 // Role kolorów jednego wariantu schematu (jasnego albo ciemnego).
 // Wszystkie ekrany biorą kolory z tych ról, nigdy "na sztywno" — dlatego zmiana motywu działa wszędzie.
-private data class Roles(
+internal data class Roles(
     val background: Long,
     val surface: Long,
     val surfaceVariant: Long,
@@ -43,6 +48,13 @@ enum class Palette(val label: String, private val light: Roles, private val dark
         light = Roles(0xFFFFFFFF, 0xFFFFFFFF, 0xFFF0F0F0, 0xFF7A7A7A, 0xFF000000, 0xFF333333, 0xFF000000, 0xFFFFFFFF),
         dark = Roles(0xFF000000, 0xFF0D0D0D, 0xFF1A1A1A, 0xFF5A5A5A, 0xFFFFFFFF, 0xFFD0D0D0, 0xFFFFFFFF, 0xFF000000),
     ),
+    // Własny schemat z kreatora (Ustawienia → Wygląd). Wartości poniżej są tylko zastępcze — prawdziwe
+    // kolory bierze z CustomTheme, więc zmiana w kreatorze od razu przemalowuje cały launcher.
+    CUSTOM(
+        "Własny",
+        light = Roles(0xFF10151A, 0xFF1A2229, 0xFF232D35, 0xFF33414C, 0xFFE8EEF0, 0xFFA6B3BA, 0xFF4DF5CD, 0xFF06201A),
+        dark = Roles(0xFF10151A, 0xFF1A2229, 0xFF232D35, 0xFF33414C, 0xFFE8EEF0, 0xFFA6B3BA, 0xFF4DF5CD, 0xFF06201A),
+    ),
     ELEGANT(
         "Elegant",
         light = Roles(0xFFF3F1E8, 0xFFFFFFFF, 0xFFE3E8E1, 0xFFC3CFC5, 0xFF17261E, 0xFF4F6358, 0xFF8C6D1F, 0xFFFFFFFF),
@@ -50,18 +62,23 @@ enum class Palette(val label: String, private val light: Roles, private val dark
     ),
     ;
 
+    // Role dla wariantu; własny schemat jest jeden (bez osobnej wersji jasnej/ciemnej).
+    private fun roles(dark: Boolean): Roles = if (this == CUSTOM) CustomTheme.colors.roles() else if (dark) this.dark else light
+
     // Trzy kolory do podglądu schematu w ustawieniach (tło, powierzchnia, akcent).
-    fun swatches(dark: Boolean): List<Color> = (if (dark) this.dark else light).let {
+    fun swatches(dark: Boolean): List<Color> = roles(dark).let {
         listOf(Color(it.background), Color(it.surfaceVariant), Color(it.primary))
     }
 
     // Pełny ColorScheme Material 3 z ról; accent (kolor główny) opcjonalnie nadpisuje primary.
     fun colorScheme(dark: Boolean, accent: Long?): ColorScheme {
-        val r = if (dark) this.dark else light
+        val r = roles(dark)
         val primary = accent?.let { Color(it) } ?: Color(r.primary)
         // Tekst na kolorze głównym: czarny na jasnym, biały na ciemnym (luminancja = jasność postrzegana).
         val onPrimary = if (accent == null) Color(r.onPrimary) else if (primary.luminance() > 0.5f) Color.Black else Color.White
-        val base = if (dark) darkColorScheme() else lightColorScheme()
+        // Własny schemat sam "wie", czy jest ciemny (po jasności tła) — niezależnie od przełącznika Jasny/Ciemny.
+        val isDark = if (this == CUSTOM) Color(r.background).luminance() < 0.5f else dark
+        val base = if (isDark) darkColorScheme() else lightColorScheme()
         return base.copy(
             primary = primary,
             onPrimary = onPrimary,
@@ -89,4 +106,31 @@ enum class Palette(val label: String, private val light: Roles, private val dark
 val AccentColors = listOf(
     0xFFF0A844, 0xFFD4AF37, 0xFFC0703A, 0xFFE0736B, 0xFFB9A5FF,
     0xFF8FB2FF, 0xFF4FB3BF, 0xFF7FD6AE, 0xFF3F8F5F, 0xFFECEAE4,
+    0xFF4DF5CD, 0xFFEF476F, 0xFFFFD166, 0xFF118AB2, 0xFFF472B6, 0xFF84CC16,
 )
+
+// Kolory własnego schematu: 4 wybierane w kreatorze, reszta ról wyliczana (mieszanie kolorów jak w Material).
+data class CustomColors(
+    val background: Long = 0xFF10151A,
+    val surface: Long = 0xFF1A2229,
+    val accent: Long = 0xFF4DF5CD,
+    val text: Long = 0xFFE8EEF0,
+) {
+    internal fun roles(): Roles = Roles(
+        background = background,
+        surface = surface,
+        surfaceVariant = mix(surface, text, 0.08f),   // lekko jaśniejsza/ciemniejsza powierzchnia (karty, pola)
+        outline = mix(surface, text, 0.22f),          // ramki i separatory
+        onBackground = text,
+        onSurfaceVariant = mix(text, background, 0.35f), // drugorzędny tekst
+        primary = accent,
+        onPrimary = if (Color(accent).luminance() > 0.5f) 0xFF111111 else 0xFFFFFFFF,
+    )
+}
+
+private fun mix(a: Long, b: Long, t: Float): Long = lerp(Color(a), Color(b), t).toArgb().toLong() and 0xFFFFFFFFL
+
+// Globalny stan własnego schematu. mutableStateOf = stan Compose: ekrany, które go czytają, przerysują się same.
+object CustomTheme {
+    var colors by mutableStateOf(CustomColors())
+}

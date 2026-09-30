@@ -39,6 +39,8 @@ android {
 }
 
 dependencies {
+    // StickOnMe (studio naklejek): własna ikona w szufladzie, ale ta sama instalacja i wspólne pliki naklejek.
+    implementation(project(":studio"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
@@ -51,6 +53,8 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+    // Mapa do wyboru miejsca (OpenStreetMap, bez klucza API).
+    implementation(libs.osmdroid.android)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

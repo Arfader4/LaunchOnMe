@@ -53,11 +53,24 @@ interface CardItemDao {
     @Insert
     suspend fun insert(item: CardItemEntity): Long
 
+    @Query("DELETE FROM card_items WHERE modeId = :modeId")
+    suspend fun deleteForMode(modeId: Long)
+
     @Query("UPDATE card_items SET x = :x, y = :y WHERE id = :id")
     suspend fun updatePosition(id: Long, x: Int, y: Int)
 
     @Query("SELECT * FROM card_items")
     suspend fun getAll(): List<CardItemEntity>
+
+    @Query("SELECT * FROM card_items WHERE id = :id")
+    suspend fun getById(id: Long): CardItemEntity?
+
+    @Query("UPDATE card_items SET x = :x, y = :y, w = :w, h = :h WHERE id = :id")
+    suspend fun updateRect(id: Long, x: Int, y: Int, w: Int, h: Int)
+
+    // Przeniesienie na inną stronę karty razem z nowym miejscem (na tamtej stronie może być zajęte stare).
+    @Query("UPDATE card_items SET page = :page, x = :x, y = :y WHERE id = :id")
+    suspend fun updatePage(id: Long, page: Int, x: Int, y: Int)
 
     @Query("UPDATE card_items SET w = :w, h = :h WHERE id = :id")
     suspend fun updateSize(id: Long, w: Int, h: Int)
@@ -115,17 +128,23 @@ interface FolderDao {
     @Query("UPDATE folders SET name = :name WHERE id = :id")
     suspend fun renameFolder(id: Long, name: String)
 
+    @Query("UPDATE folders SET icon = :icon, color = :color WHERE id = :id")
+    suspend fun setFolderLook(id: Long, icon: String?, color: Long?)
+
     @Query("DELETE FROM folders WHERE id = :id")
     suspend fun deleteFolder(id: Long)
 
     @Insert
-    suspend fun insertApps(apps: List<FolderAppEntity>)
+    suspend fun insertApps(apps: List<FolderAppEntity>): List<Long> // nowe id (jak OUTPUT inserted.Id)
 
     @Query("UPDATE folder_apps SET folderId = :folderId WHERE id = :id")
     suspend fun moveApp(id: Long, folderId: Long)
 
     @Query("DELETE FROM folder_apps WHERE id = :id")
     suspend fun deleteApp(id: Long)
+
+    @Query("DELETE FROM folder_apps WHERE id IN (:ids)")
+    suspend fun deleteApps(ids: List<Long>)
 }
 
 @Dao

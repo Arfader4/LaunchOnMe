@@ -1,5 +1,6 @@
 package pl.rafal.contextlauncher.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -46,12 +47,15 @@ data class CardItemEntity(
     val appWidgetId: Int? = null, // tylko dla widżetów: identyfikator nadany przez system (Int? = może być null)
     val widgetKind: String? = null, // tylko dla własnych widżetów: rodzaj, np. DUAL_CLOCK
     val config: String? = null,     // ustawienia własnego widżetu jako JSON, np. {"zone":"Europe/Lisbon"}
+    // Strona karty (0 = pierwsza). defaultValue musi się zgadzać z migracją — Room porównuje schemat przy starcie.
+    @ColumnInfo(defaultValue = "0") val page: Int = 0,
 ) {
     // companion object ≈ składowe static w C#.
     companion object {
         const val TYPE_APP = "APP"
         const val TYPE_WIDGET = "WIDGET"
         const val TYPE_CUSTOM = "CUSTOM"
+        const val TYPE_SHORTCUT = "SHORTCUT" // skrót aplikacji: className = id skrótu (np. "czat z Kasią")
     }
 }
 
@@ -106,6 +110,8 @@ data class FolderEntity(
     val parentId: Long? = null,
     val name: String,
     val createdAt: Long = System.currentTimeMillis(),
+    val icon: String? = null,  // klucz symbolu z FolderIcon; null = miniatura z ikon aplikacji
+    val color: Long? = null,   // kolor tła (ARGB); null = neutralne tło z motywu
 )
 
 // Aplikacja w folderze.

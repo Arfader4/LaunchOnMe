@@ -79,6 +79,13 @@ fun SettingsScreen(
     val shortcuts by prefs.modeShortcuts.flow.collectAsState()
     val showWallpaper by prefs.showWallpaper.flow.collectAsState()
     val notificationDots by prefs.notificationDots.flow.collectAsState()
+    val iconShape by prefs.iconShape.flow.collectAsState()
+    val appIconCells by prefs.appIconCells.flow.collectAsState()
+    val maxPages by prefs.maxPages.flow.collectAsState()
+    val labelScale by prefs.labelScale.flow.collectAsState()
+    val showFolderLabels by prefs.showFolderLabels.flow.collectAsState()
+    val folderAtBottom by prefs.folderAtBottom.flow.collectAsState()
+    val widgetCorner by prefs.widgetCorner.flow.collectAsState()
     val wallpaperDim by prefs.wallpaperDim.flow.collectAsState()
     val widgetOpacity by prefs.widgetOpacity.flow.collectAsState()
     val wallpaperVersion by viewModel.wallpaperVersion.collectAsState()
@@ -93,6 +100,11 @@ fun SettingsScreen(
     val exportFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) viewModel.exportTo(uri)
     }
+    // Pełna kopia: ustawienia + pliki (naklejki, tapety trybów, StickOnMe) w jednym .zip.
+    val exportZip = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) viewModel.exportTo(uri, withFiles = true)
+    }
+    var exportChoice by remember { mutableStateOf(false) }
     val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) confirmImport = uri
     }
@@ -207,6 +219,18 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     PaletteRow(selected = defaultPalette, onSelect = { it?.let(viewModel::setDefaultPalette) }, allowDefault = false)
+                    var creatorOpen by remember { mutableStateOf(false) }
+                    TextButton(onClick = { creatorOpen = true }) { Text("🎨 Kreator własnego schematu…") }
+                    if (creatorOpen) {
+                        ThemeCreatorDialog(
+                            initial = pl.rafal.contextlauncher.ui.theme.CustomTheme.colors,
+                            onSave = {
+                                viewModel.saveCustomTheme(it)
+                                creatorOpen = false
+                            },
+                            onDismiss = { creatorOpen = false },
+                        )
+                    }
                 }
             }
             item {
@@ -217,7 +241,36 @@ fun SettingsScreen(
                     onChange = prefs.uniformLook::set,
                 )
             }
-            item { Toggle(title = "Podpisy pod ikonami", checked = showLabels, onChange = prefs.showLabels::set) }
+            item {
+                Choice(
+                    title = "Rozmiar ikon aplikacji na karcie",
+                    subtitle = "Mała ikona zajmuje jedną kratkę — mieści się dwa razy więcej aplikacji.",
+                    options = listOf(1, 2),
+                    selected = appIconCells,
+                    labelOf = { if (it == 1) "Małe (1×1)" else "Duże (2×2)" },
+                    onSelect = viewModel::setAppIconCells,
+                )
+            }
+            item {
+                Choice(
+                    title = "Liczba stron karty",
+                    subtitle = "Ile stron może mieć karta trybu (przesuwasz w bok). W edycji przytrzymaj przeciągany element przy krawędzi — strona się przewinie (za ostatnią powstaje nowa).",
+                    options = listOf(1, 2, 3, 4, 5),
+                    selected = maxPages,
+                    labelOf = { "$it" },
+                    onSelect = prefs.maxPages::set,
+                )
+            }
+            item { Toggle(title = "Podpisy pod ikonami aplikacji", checked = showLabels, onChange = prefs.showLabels::set) }
+            item { Toggle(title = "Nazwy folderów na widżetach", checked = showFolderLabels, onChange = prefs.showFolderLabels::set) }
+            item {
+                Toggle(
+                    title = "Folder otwiera się u dołu",
+                    subtitle = "Bliżej kciuka (jak w One UI). Wyłączone: okno na środku ekranu.",
+                    checked = folderAtBottom,
+                    onChange = prefs.folderAtBottom::set,
+                )
+            }
             item {
                 Toggle(
                     title = "Kropki powiadomień",
@@ -254,6 +307,11 @@ fun SettingsScreen(
                     onClick = { pickDefaultWallpaper.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                 )
                 if (hasDefault) {
+                    Action(
+                        title = "Tapeta domyślna: dopasuj",
+                        subtitle = "Powiększ i przesuń obraz, jak w systemowym wyborze tapety.",
+                        onClick = { viewModel.openWallpaperCrop(null) },
+                    )
                     Action(title = "Usuń tapetę domyślną", onClick = { viewModel.clearWallpaper(null) })
                 }
                 }
@@ -312,14 +370,14 @@ fun SettingsScreen(
             item {
                 Action(
                     title = "Eksportuj konfigurację",
-                    subtitle = "Tryby, karty, reguły, foldery i wygląd do pliku JSON.",
-                ) { exportFile.launch("context-launcher.json") }
+                    subtitle = "Pełna kopia (.zip, z naklejkami, tapetami i StickOnMe) albo same ustawienia (.json).",
+                ) { exportChoice = true }
             }
             item {
                 Action(
                     title = "Importuj konfigurację",
-                    subtitle = "Zastępuje obecną. Widżety innych aplikacji i naklejki trzeba dodać ponownie.",
-                ) { importFile.launch(arrayOf("application/json", "*/*")) }
+                    subtitle = "Zastępuje obecną (.zip albo .json). Widżety innych aplikacji trzeba dodać ponownie.",
+                ) { importFile.launch(arrayOf("application/zip", "application/json", "*/*")) }
             }
             item {
                 Toggle(
@@ -332,14 +390,49 @@ fun SettingsScreen(
 
             // --- Zaawansowane ---
             item { Section("Zaawansowane") }
+            item {
+                Choice(
+                    title = "Rozmiar tekstu podpisów",
+                    subtitle = "Przy małych ikonach tekst i tak zmniejsza się, żeby się zmieścił.",
+                    options = listOf(85, 100, 115),
+                    selected = labelScale,
+                    labelOf = { when (it) { 85 -> "Mały"; 100 -> "Normalny"; else -> "Duży" } },
+                    onSelect = prefs.labelScale::set,
+                )
+            }
+            item {
+                Choice(
+                    title = "Kształt ikon trybów",
+                    options = IconShape.entries,
+                    selected = IconShape.of(iconShape),
+                    labelOf = { it.label },
+                    onSelect = { prefs.iconShape.set(it.name) },
+                )
+            }
+            item {
+                Choice(
+                    title = "Zaokrąglenie widżetów",
+                    options = listOf(0, 12, 20, 28),
+                    selected = widgetCorner,
+                    labelOf = { when (it) { 0 -> "Brak"; 12 -> "Małe"; 20 -> "Średnie"; else -> "Duże" } },
+                    onSelect = prefs.widgetCorner::set,
+                )
+            }
             item { Action(title = "Kreator trybów", subtitle = "Dodaj tryby z gotowych szablonów.", onClick = onOpenWizard) }
+            item {
+                Action(
+                    title = "Pokaż samouczek gestów",
+                    subtitle = "Szuflada, edycja układu, foldery, stosy i strony — pojawi się po zamknięciu Ustawień.",
+                    onClick = { prefs.tutorialDone.set(false) },
+                )
+            }
             item { Action(title = "Wyczyść „często używane”", subtitle = "Statystyki uruchomień we wszystkich trybach.", onClick = viewModel::clearLaunchStats) }
             item {
                 val version = remember {
                     runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
                 }
                 Text(
-                    "Context Launcher ${version.orEmpty()}",
+                    "LaunchOnMe ${version.orEmpty()}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 24.dp),
@@ -348,12 +441,38 @@ fun SettingsScreen(
         }
     }
 
+    if (exportChoice) {
+        AlertDialog(
+            onDismissRequest = { exportChoice = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Eksport konfiguracji") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = {
+                        exportChoice = false
+                        exportZip.launch("launchonme-kopia.zip")
+                    }) { Text("Pełna kopia (.zip) — z naklejkami, tapetami trybów i StickOnMe") }
+                    TextButton(onClick = {
+                        exportChoice = false
+                        exportFile.launch("launchonme-ustawienia.json")
+                    }) { Text("Same ustawienia (.json) — mały plik, bez obrazów") }
+                }
+            },
+            confirmButton = { TextButton(onClick = { exportChoice = false }) { Text("Anuluj") } },
+        )
+    }
+
     confirmImport?.let { uri ->
         AlertDialog(
             onDismissRequest = { confirmImport = null },
             containerColor = MaterialTheme.colorScheme.surface,
             title = { Text("Zastąpić obecną konfigurację?") },
-            text = { Text("Obecne tryby, karty, reguły i foldery zostaną zastąpione zawartością pliku.") },
+            text = {
+                Text(
+                    "Obecne tryby, karty, reguły i foldery zostaną zastąpione zawartością pliku. " +
+                        "Z pełnej kopii (.zip) wrócą też naklejki i tapety trybów, a biblioteka StickOnMe zostanie uzupełniona.",
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.importFrom(uri)

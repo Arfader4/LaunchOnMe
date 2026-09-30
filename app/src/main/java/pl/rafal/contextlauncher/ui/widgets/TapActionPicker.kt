@@ -34,24 +34,38 @@ import pl.rafal.contextlauncher.data.TapAction
 import pl.rafal.contextlauncher.data.db.ModeEntity
 import pl.rafal.contextlauncher.system.QuickToggle
 import pl.rafal.contextlauncher.ui.ModeBadge
+import pl.rafal.contextlauncher.ui.AppGridPickerDialog
+import pl.rafal.contextlauncher.ui.ShortcutPickerDialog
+import pl.rafal.contextlauncher.data.SystemAction
 
-// Kroki wyboru akcji: najpierw rodzaj, potem szczegół (aplikacja, przełącznik, tryb, link).
-private enum class Step { KIND, APP, TOGGLE, MODE, LINK }
+// Kroki okna: lista akcji, wybór rodzaju nowej akcji, szczegół (przełącznik, tryb, link, akcja systemowa).
+// Aplikacja i skrót wybierają się w osobnych oknach (siatka ikon / lista skrótów pogrupowana po aplikacji).
+private enum class Step { LIST, KIND, TOGGLE, MODE, LINK, SYSTEM }
 
-// Okno "Po dotknięciu naklejki…". Kontakt wybiera systemowa lista kontaktów (onPickPhone),
+// Okno "Po dotknięciu naklejki…": można ustawić KILKA akcji wykonywanych po kolei
+// (np. włącz latarkę → otwórz aparat). Kontakt wybiera systemowa lista kontaktów (onPickPhone),
 // bo tylko ona daje dostęp do jednego numeru bez uprawnień do całej książki.
 @Composable
 fun TapActionDialog(
-    current: TapAction?,
+    actions: List<TapAction>,
     apps: List<AppInfo>,
+    shortcuts: List<AppInfo>,
+    hasShortcutAccess: Boolean,
     modes: List<ModeEntity>,
     onPickPhone: (sms: Boolean) -> Unit,
-    onDone: (TapAction?) -> Unit,
+    onChange: (List<TapAction>) -> Unit,  // zmiana wersji roboczej (zapis dopiero "Zapisz")
+    onSave: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var step by remember { mutableStateOf(Step.KIND) }
-    var filter by remember { mutableStateOf("") }
-    var link by remember { mutableStateOf((current as? TapAction.OpenLink)?.url.orEmpty()) }
+    var step by remember { mutableStateOf(Step.LIST) }
+    var link by remember { mutableStateOf("") }
+    var appPickOpen by remember { mutableStateOf(false) }
+    var shortcutPickOpen by remember { mutableStateOf(false) }
+
+    fun add(action: TapAction) {
+        onChange(actions + action)
+        step = Step.LIST
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -59,59 +73,58 @@ fun TapActionDialog(
         title = {
             Text(
                 when (step) {
-                    Step.KIND -> "Po dotknięciu naklejki"
-                    Step.APP -> "Którą aplikację otworzyć?"
+                    Step.LIST -> "Po dotknięciu naklejki"
+                    Step.KIND -> "Dodaj akcję"
                     Step.TOGGLE -> "Co przełączać?"
                     Step.MODE -> "Który tryb włączyć?"
                     Step.LINK -> "Adres strony"
+                    Step.SYSTEM -> "Akcja systemowa"
                 },
             )
         },
         text = {
             when (step) {
-                Step.KIND -> Column {
-                    current?.let {
-                        Text("Teraz: ${it.label}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.heightIn(min = 8.dp))
+                Step.LIST -> Column {
+                    if (actions.isEmpty()) {
+                        Text("Nic — tylko ozdoba.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Option("✨  Nic — tylko ozdoba") { onDone(null) }
-                    Option("📱  Otwórz aplikację…") { step = Step.APP }
-                    Option("📞  Zadzwoń do…") { onPickPhone(false) }
-                    Option("💬  SMS do…") { onPickPhone(true) }
+                    actions.forEachIndexed { index, action ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Text("${index + 1}.  ${action.label}", modifier = Modifier.weight(1f).padding(vertical = 8.dp))
+                            TextButton(onClick = { onChange(actions.filterIndexed { i, _ -> i != index }) }) { Text("✕") }
+                        }
+                    }
+                    Spacer(Modifier.heightIn(min = 8.dp))
+                    TextButton(onClick = { step = Step.KIND }) { Text("+ Dodaj akcję") }
+                    if (actions.size > 1) {
+                        Text(
+                            "Akcje wykonują się po kolei. Aplikację, link albo panel najlepiej dać na koniec — przykryje ekran.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Step.KIND -> Column {
+                    Option("📱  Otwórz aplikację…") { appPickOpen = true }
+                    Option("↗  Skrót aplikacji (np. czat)…") { shortcutPickOpen = true }
+                    Option("📞  Zadzwoń do…") {
+                        step = Step.LIST
+                        onPickPhone(false)
+                    }
+                    Option("💬  SMS do…") {
+                        step = Step.LIST
+                        onPickPhone(true)
+                    }
                     Option("🔦  Przełącz funkcję…") { step = Step.TOGGLE }
+                    Option("⚙  Akcja systemowa (Wi-Fi, aparat…)…") { step = Step.SYSTEM }
                     Option("⭐  Włącz tryb…") { step = Step.MODE }
                     Option("🔗  Otwórz link…") { step = Step.LINK }
                 }
-                Step.APP -> Column {
-                    OutlinedTextField(
-                        value = filter,
-                        onValueChange = { filter = it },
-                        placeholder = { Text("Szukaj") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    val shown = apps.filter { filter.isBlank() || it.label.contains(filter.trim(), ignoreCase = true) }
-                    LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                        items(shown, key = { it.key }) { app ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable {
-                                        onDone(TapAction.OpenApp(app.component.packageName, app.component.className, app.userSerial, app.label))
-                                    }
-                                    .padding(vertical = 6.dp),
-                            ) {
-                                Image(bitmap = app.icon, contentDescription = null, modifier = Modifier.size(32.dp))
-                                Spacer(Modifier.width(12.dp))
-                                Text(app.label)
-                            }
-                        }
-                    }
-                }
                 Step.TOGGLE -> Column {
-                    QuickToggle.entries.forEach { toggle -> Option(toggle.label) { onDone(TapAction.Toggle(toggle)) } }
+                    QuickToggle.entries.forEach { toggle -> Option(toggle.label) { add(TapAction.Toggle(toggle)) } }
+                }
+                Step.SYSTEM -> LazyColumn(Modifier.heightIn(max = 380.dp)) {
+                    items(SystemAction.entries) { action -> Option(action.label) { add(TapAction.System(action)) } }
                 }
                 Step.MODE -> LazyColumn(Modifier.heightIn(max = 360.dp)) {
                     items(modes, key = { it.id }) { mode ->
@@ -120,7 +133,7 @@ fun TapActionDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
-                                .clickable { onDone(TapAction.SwitchMode(mode.id, mode.name)) }
+                                .clickable { add(TapAction.SwitchMode(mode.id, mode.name)) }
                                 .padding(vertical = 8.dp),
                         ) {
                             ModeBadge(mode, size = 28.dp)
@@ -140,19 +153,53 @@ fun TapActionDialog(
             }
         },
         confirmButton = {
-            if (step == Step.LINK) {
-                TextButton(onClick = {
+            when (step) {
+                Step.LIST -> TextButton(onClick = onSave) { Text("Zapisz") }
+                Step.LINK -> TextButton(onClick = {
                     val url = link.trim().let { if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it" }
-                    onDone(TapAction.OpenLink(url))
-                }, enabled = link.isNotBlank()) { Text("Zapisz") }
+                    link = ""
+                    add(TapAction.OpenLink(url))
+                }, enabled = link.isNotBlank()) { Text("Dodaj") }
+                else -> {}
             }
         },
         dismissButton = {
-            TextButton(onClick = { if (step == Step.KIND) onDismiss() else step = Step.KIND }) {
-                Text(if (step == Step.KIND) "Anuluj" else "Wstecz")
+            TextButton(onClick = { if (step == Step.LIST) onDismiss() else step = if (step == Step.KIND) Step.LIST else Step.KIND }) {
+                Text(if (step == Step.LIST) "Anuluj" else "Wstecz")
             }
         },
     )
+
+    // Aplikacje w siatce (jak w szufladzie) — przy setkach aplikacji to dużo szybsze niż lista.
+    if (appPickOpen) {
+        AppGridPickerDialog(
+            allApps = apps,
+            title = "Którą aplikację otworzyć?",
+            single = true,
+            onConfirm = { chosen ->
+                chosen.firstOrNull()?.let { app ->
+                    add(TapAction.OpenApp(app.component.packageName, app.component.className, app.userSerial, app.label))
+                }
+                appPickOpen = false
+            },
+            onDismiss = { appPickOpen = false },
+        )
+    }
+
+    // Skróty zostają listą: ich nazwy ("Nowa wiadomość", "Skanuj") są ważniejsze niż ikony, a grupa = aplikacja.
+    if (shortcutPickOpen) {
+        ShortcutPickerDialog(
+            shortcuts = shortcuts,
+            apps = apps,
+            hasAccess = hasShortcutAccess,
+            title = "Który skrót?",
+            onPick = { sc ->
+                sc.shortcutId?.let { add(TapAction.OpenShortcut(sc.packageName, it, sc.userSerial, sc.label)) }
+                shortcutPickOpen = false
+            },
+            onDismiss = { shortcutPickOpen = false },
+        )
+    }
 }
 
 @Composable

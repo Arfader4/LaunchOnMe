@@ -3,13 +3,7 @@ package pl.rafal.contextlauncher
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
-import android.view.WindowManager
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-import pl.rafal.contextlauncher.data.AppPrefs
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -40,19 +34,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         pendingWidgetId = savedInstanceState?.getInt(KEY_PENDING_WIDGET, NO_WIDGET) ?: NO_WIDGET
         enableEdgeToEdge()
-        // Tapeta w tle: okno przezroczyste + flaga "pokaż tapetę pod spodem" (jak w każdym launcherze).
-        // repeatOnLifecycle nie jest potrzebne — to tylko przełączenie flag okna przy zmianie ustawienia.
-        lifecycleScope.launch {
-            AppPrefs.get(this@MainActivity).showWallpaper.flow.collect { show ->
-                if (show) {
-                    window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-                    window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                } else {
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                    window.setBackgroundDrawableResource(R.color.launcher_background)
-                }
-            }
-        }
+        pl.rafal.contextlauncher.ui.LaunchOrigin.attach(window.decorView)
         setContent {
             // Motyw nakłada sam LauncherApp, bo zależy od aktywnego trybu.
             LauncherApp(
@@ -72,6 +54,12 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         widgets.host.stopListening()
+    }
+
+    // Każde dotknięcie zapamiętujemy (bez przejmowania go): z tego miejsca "wyrośnie" otwierana aplikacja.
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) pl.rafal.contextlauncher.ui.LaunchOrigin.touched(ev.rawX, ev.rawY)
+        return super.dispatchTouchEvent(ev)
     }
 
     // Wracamy na ekran główny (np. po odinstalowaniu aplikacji), więc odświeżamy listę.

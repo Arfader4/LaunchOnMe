@@ -62,8 +62,46 @@ class CardGridTest {
     }
 
     @Test
-    fun `widżetu nie da się zmniejszyć poniżej 2x2`() {
+    fun `widżetu nie da się zmniejszyć poniżej 1x1`() {
         val resized = CardGrid.resize(GridRect(0, 0, 4, 4), dwCells = -9f, dhCells = -9f)
-        assertEquals(GridRect(0, 0, 2, 2), resized)
+        assertEquals(GridRect(0, 0, 1, 1), resized)
+    }
+
+    @Test
+    fun `wyższy ekran daje więcej rzędów`() {
+        val old = CardGrid.rows
+        try {
+            CardGrid.rows = 16
+            assertEquals(GridRect(0, 14, 2, 2), CardGrid.snap(GridRect(0, 0, 2, 2), 0f, 30f))
+        } finally {
+            CardGrid.rows = old
+        }
+    }
+
+    @Test
+    fun `wypychanie przesuwa zasloniety element w najblizsze wolne miejsce`() {
+        val items = mapOf(1L to GridRect(0, 0, 2, 2), 2L to GridRect(2, 0, 2, 2))
+        // Element 1 jedzie na miejsce elementu 2 — dwójka zajmuje zwolnione miejsce (zamiana miejscami).
+        val plan = CardGrid.placeWithPush(1L, GridRect(2, 0, 2, 2), items)!!
+        assertEquals(GridRect(2, 0, 2, 2), plan[1L])
+        val moved = plan[2L]!!
+        assertTrue(!moved.overlaps(GridRect(2, 0, 2, 2)))
+        assertEquals(GridRect(0, 0, 2, 2), moved)
+    }
+
+    @Test
+    fun `elementy, ktorych nie dotyczy ruch, zostaja na miejscu`() {
+        val items = mapOf(1L to GridRect(0, 0, 2, 2), 2L to GridRect(6, 10, 2, 2))
+        val plan = CardGrid.placeWithPush(1L, GridRect(2, 2, 2, 2), items)!!
+        assertEquals(setOf(1L), plan.keys)
+    }
+
+    @Test
+    fun `pelna karta nie pozwala wypchnac`() {
+        val full = (0 until CardGrid.ROWS step 2).flatMap { y ->
+            (0 until CardGrid.COLUMNS step 2).map { x -> GridRect(x, y, 2, 2) }
+        }.mapIndexed { i, r -> i.toLong() to r }.toMap()
+        // Nowy element (id -1) nie ma dokąd wypchnąć tego, na który nachodzi.
+        assertNull(CardGrid.placeWithPush(-1L, GridRect(0, 0, 2, 2), full))
     }
 }

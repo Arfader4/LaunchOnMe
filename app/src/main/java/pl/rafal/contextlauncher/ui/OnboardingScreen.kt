@@ -141,7 +141,7 @@ private fun WelcomeStep() {
             .fillMaxSize()
             .padding(top = 48.dp),
     ) {
-        Text("Context Launcher", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
+        Text("LaunchOnMe", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
         Text(
             "Ekran główny, który zmienia się razem z Twoim dniem.",
             style = MaterialTheme.typography.titleMedium,
@@ -262,7 +262,7 @@ private fun TipsStep() {
         Text("Kilka gestów na start:", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Feature("Nazwa trybu u góry", "Zmiana trybu, a ⋮ przy trybie to jego reguły i ustawienia.")
         Feature("Przesunięcie w górę", "Szuflada ze wszystkimi aplikacjami i folderami.")
-        Feature("Menu ⋯", "Widżety, Pod ręką, foldery i zmiana układu karty.")
+        Feature("Przytrzymanie karty", "Edycja układu: widżety, przesuwanie, usuwanie. Ikona upuszczona na ikonę tworzy folder.")
         Feature("Przytrzymanie ikony", "Dodanie do trybu albo folderu, usuwanie, informacje o aplikacji.")
     }
 }

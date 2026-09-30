@@ -28,6 +28,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import pl.rafal.contextlauncher.data.ModeLayout
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -137,7 +139,9 @@ fun ModeSettingsSheet(
     wallpaperSet: Boolean,
     wallpaperOnLock: Boolean,
     onPickWallpaper: () -> Unit,
+    onBoardWallpaper: () -> Unit,   // tapeta z tablicy StickOnMe (kolaż, własna grafika)
     onClearWallpaper: () -> Unit,
+    onCropWallpaper: () -> Unit,
     onWallpaperLockChange: (Boolean) -> Unit,
     phoneSettings: ModePhoneSettings,
     hasDndAccess: Boolean,
@@ -154,6 +158,9 @@ fun ModeSettingsSheet(
     appRulesSummary: String,               // np. "3 zablokowane, 1 ukryta"
     onManageApps: () -> Unit,
     onDismiss: () -> Unit,
+    layout: ModeLayout = ModeLayout.DEFAULT,   // układ karty tego trybu
+    globalIconCells: Int = 2,
+    onLayoutChange: (ModeLayout) -> Unit = {},
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(
@@ -177,7 +184,7 @@ fun ModeSettingsSheet(
             IconPicker(selected = icon, color = mode.color) { onAppearanceChange(it.key, mode.color, palette, mode.accent) }
 
             Text("Kolor ikony", style = MaterialTheme.typography.titleSmall)
-            ColorSwatches(colors = ModeColors, selected = mode.color, onSelect = { c ->
+            ColorSwatches(colors = ModeColors, selected = mode.color, modeBadge = true, onSelect = { c ->
                 if (c != null) onAppearanceChange(mode.icon, c, palette, mode.accent)
             })
 
@@ -191,6 +198,27 @@ fun ModeSettingsSheet(
                 onSelect = { onAppearanceChange(mode.icon, mode.color, palette, it) },
                 allowNone = true, // "A" = kolor ze schematu
             )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 6.dp))
+
+            // Układ karty tylko tego trybu (np. "Praca" gęsto z małymi ikonami, "Dom" luźno z dużymi).
+            Text("Układ karty", style = MaterialTheme.typography.titleSmall)
+            Text("Rozmiar ikon aplikacji", style = MaterialTheme.typography.bodyMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                FilterChip(
+                    selected = layout.iconCells == null,
+                    onClick = { onLayoutChange(layout.copy(iconCells = null)) },
+                    label = { Text("Jak w Ustawieniach (${globalIconCells}×$globalIconCells)") },
+                )
+                FilterChip(selected = layout.iconCells == 1, onClick = { onLayoutChange(layout.copy(iconCells = 1)) }, label = { Text("1×1") })
+                FilterChip(selected = layout.iconCells == 2, onClick = { onLayoutChange(layout.copy(iconCells = 2)) }, label = { Text("2×2") })
+            }
+            Text("Odstępy między elementami", style = MaterialTheme.typography.bodyMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                listOf(0 to "Brak", 4 to "Małe", 8 to "Średnie", 14 to "Duże").forEach { (gap, label) ->
+                    FilterChip(selected = layout.gap == gap, onClick = { onLayoutChange(layout.copy(gap = gap)) }, label = { Text(label) })
+                }
+            }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 6.dp))
 
@@ -268,8 +296,10 @@ fun ModeSettingsSheet(
 
             // Tapeta ustawiana przy włączeniu trybu (tryby bez własnej dostają domyślną z Ustawień).
             Text("Tapeta trybu", style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                 AssistChip(onClick = onPickWallpaper, label = { Text(if (wallpaperSet) "Zmień obraz" else "Wybierz obraz") })
+                AssistChip(onClick = onBoardWallpaper, label = { Text("Z tablicy StickOnMe") })
+                if (wallpaperSet) AssistChip(onClick = onCropWallpaper, label = { Text("Dopasuj") })
                 if (wallpaperSet) AssistChip(onClick = onClearWallpaper, label = { Text("Usuń") })
             }
             if (wallpaperSet) {

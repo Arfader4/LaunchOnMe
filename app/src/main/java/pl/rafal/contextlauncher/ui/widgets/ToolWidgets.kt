@@ -43,6 +43,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import pl.rafal.contextlauncher.R
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material3.Icon
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -91,7 +95,32 @@ fun TodayWidget(agenda: List<GlanceEvent>, hasCalendar: Boolean, callbacks: Toda
     val zone = ZoneId.systemDefault()
     val today = now.atZone(zone).toLocalDate()
 
+  AdaptiveWidget { size, _, _ ->
+    // Mały: ikona kalendarza z liczbą dzisiejszych wydarzeń; 2×2 dodaje godzinę najbliższego.
+    if (size == WidgetSize.TINY || size == WidgetSize.SMALL) {
+        val todays = agenda.filter { it.day(zone) == today }
+        val next = agenda.firstOrNull { !it.allDay && it.end > now.toEpochMilli() }
+        CompactTile(
+            icon = R.drawable.ic_w_calendar,
+            onClick = callbacks?.let { cb -> if (!hasCalendar) cb.onGrant else if (next != null) ({ cb.onOpenEvent(next) }) else cb.onOpenDay },
+            label = if (size == WidgetSize.SMALL) next?.let { Instant.ofEpochMilli(it.begin).atZone(zone).format(Hm) + " " + it.title } ?: today.format(DayHeader) else null,
+            badge = todays.size.takeIf { it > 0 }?.toString(),
+        )
+        return@AdaptiveWidget
+    }
     WidgetSurface(onClick = null) {
+      BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Niski pasek: tylko najbliższe wydarzenie (albo krótka podpowiedź).
+        if (maxHeight < 64.dp) {
+            val next = agenda.firstOrNull { !it.allDay && it.end > now.toEpochMilli() } ?: agenda.firstOrNull()
+            when {
+                !hasCalendar -> HintText("Dotknij, aby pokazać plan", callbacks?.onGrant)
+                next == null -> HintText("Dziś i jutro nic w kalendarzu", callbacks?.onOpenDay)
+                else -> AgendaRow(next, now, onClick = callbacks?.let { cb -> { cb.onOpenEvent(next) } })
+            }
+            return@BoxWithConstraints
+        }
+      Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 today.format(DayHeader).replaceFirstChar { it.uppercase() },
@@ -131,7 +160,10 @@ fun TodayWidget(agenda: List<GlanceEvent>, hasCalendar: Boolean, callbacks: Toda
                 }
             }
         }
+      }
+      }
     }
+  }
 }
 
 @Composable
@@ -187,6 +219,39 @@ fun CountdownWidget(countdown: Countdown, onClick: (() -> Unit)?) {
         val today = now.atZone(ZoneId.systemDefault()).toLocalDate()
         val days = ChronoUnit.DAYS.between(today, date)
         BoxWithConstraints(Modifier.fillMaxSize()) {
+            // 1×1: sama liczba dni.
+            if (widgetSizeOf(maxWidth + 16.dp, maxHeight + 8.dp) == WidgetSize.TINY) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    FitText(
+                        if (days == 0L) "!" else "${kotlin.math.abs(days)}",
+                        Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                return@BoxWithConstraints
+            }
+            // 2×2 i niski pasek: liczba dni obok tytułu.
+            if (maxHeight < 90.dp || maxWidth < 110.dp) {
+                val size = (maxHeight.value * 0.55f).coerceIn(16f, 40f).sp
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
+                    FitText(if (days == 0L) "Dziś!" else "${kotlin.math.abs(days)}", Modifier.weight(0.45f), maxSize = size, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(6.dp))
+                    Column(Modifier.weight(0.55f)) {
+                        FitText(countdown.title.ifBlank { "Odliczanie" }, Modifier.fillMaxWidth(), maxSize = 13.sp)
+                        if (days != 0L) {
+                            FitText(
+                                if (days > 0) daysWord(days) else daysWord(-days) + " temu",
+                                Modifier.fillMaxWidth(),
+                                maxSize = 11.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                return@BoxWithConstraints
+            }
             val big = (maxHeight.value / 2.4f).coerceIn(28f, 64f).sp
             Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
                 Text(
@@ -270,6 +335,18 @@ class ChecklistCallbacks(
 // Lista do odhaczania. Dotknięcie pozycji = zrobione / niezrobione; zrobione spadają na koniec.
 @Composable
 fun ChecklistWidget(list: Checklist, callbacks: ChecklistCallbacks?) {
+  AdaptiveWidget { size, _, _ ->
+    // Mały: ikona listy z liczbą pozycji do zrobienia; 2×2 dodaje tytuł.
+    if (size == WidgetSize.TINY || size == WidgetSize.SMALL) {
+        val done = list.items.count { it.done }
+        CompactTile(
+            icon = R.drawable.ic_w_check,
+            onClick = callbacks?.onAdd,
+            label = if (size == WidgetSize.SMALL) list.title else null,
+            badge = if (list.items.isEmpty()) null else "${list.items.size - done}",
+        )
+        return@AdaptiveWidget
+    }
     WidgetSurface(onClick = null) {
         val doneCount = list.items.count { it.done }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -305,6 +382,7 @@ fun ChecklistWidget(list: Checklist, callbacks: ChecklistCallbacks?) {
             }
         }
     }
+  }
 }
 
 @Composable
@@ -363,34 +441,42 @@ fun ChecklistAddDialog(onAdd: (List<String>) -> Unit, onDismiss: () -> Unit) {
 @Composable
 fun QuickTogglesWidget(states: QuickStates, onToggle: ((QuickToggle) -> Unit)?) {
     WidgetSurface(onClick = null) {
-        Row(
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            QuickToggle.entries
-                .filter { it != QuickToggle.TORCH || states.torchAvailable }
-                .forEach { toggle ->
-                    val (symbol, on, label) = when (toggle) {
-                        QuickToggle.TORCH -> Triple("🔦", states.torch, toggle.label)
-                        QuickToggle.DND -> Triple("🌙", states.dnd, toggle.label)
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // Skalowanie: tyle przycisków, ile zmieści szerokość (w kolejności ważności), a podpisy
+            // tylko wtedy, gdy jest na nie wysokość. Przycisk rośnie razem z widżetem.
+            val w = maxWidth
+            val h = maxHeight
+            val showLabels = h >= 72.dp
+            val button = (if (showLabels) h - 22.dp else h).coerceIn(28.dp, 52.dp)
+            val fit = (w / (button + 10.dp)).toInt().coerceAtLeast(1)
+            val toggles = QuickToggle.entries.filter { it != QuickToggle.TORCH || states.torchAvailable }.take(fit)
+            Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                toggles.forEach { toggle ->
+                    val (icon, on, label) = when (toggle) {
+                        QuickToggle.TORCH -> Triple(R.drawable.ic_qs_torch, states.torch, toggle.label)
+                        QuickToggle.DND -> Triple(R.drawable.ic_qs_dnd, states.dnd, toggle.label)
                         QuickToggle.RINGER -> when (states.ringer) {
-                            RingerState.NORMAL -> Triple("🔔", true, "Dzwonek")
-                            RingerState.VIBRATE -> Triple("📳", false, "Wibracje")
-                            RingerState.SILENT -> Triple("🔕", false, "Cisza")
+                            RingerState.NORMAL -> Triple(R.drawable.ic_qs_bell, true, "Dzwonek")
+                            RingerState.VIBRATE -> Triple(R.drawable.ic_qs_vibrate, false, "Wibracje")
+                            RingerState.SILENT -> Triple(R.drawable.ic_qs_silent, false, "Cisza")
                         }
-                        QuickToggle.ROTATION -> Triple("⟳", states.rotation, toggle.label)
-                        QuickToggle.INTERNET -> Triple("📶", states.wifi, if (states.wifi) "Wi-Fi" else toggle.label)
-                        QuickToggle.BLUETOOTH -> Triple("ᛒ", states.bluetooth, toggle.label)
+                        QuickToggle.ROTATION -> Triple(R.drawable.ic_qs_rotate, states.rotation, toggle.label)
+                        QuickToggle.INTERNET -> Triple(R.drawable.ic_qs_wifi, states.wifi, if (states.wifi) "Wi-Fi" else toggle.label)
+                        QuickToggle.BLUETOOTH -> Triple(R.drawable.ic_qs_bluetooth, states.bluetooth, toggle.label)
                     }
-                    ToggleButton(symbol, label, on, onClick = onToggle?.let { { it(toggle) } })
+                    ToggleButton(icon, label, on, button, showLabels, onClick = onToggle?.let { { it(toggle) } })
                 }
+            }
         }
     }
 }
 
 @Composable
-private fun ToggleButton(symbol: String, label: String, on: Boolean, onClick: (() -> Unit)?) {
+private fun ToggleButton(icon: Int, label: String, on: Boolean, size: Dp, showLabel: Boolean, onClick: (() -> Unit)?) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -402,17 +488,21 @@ private fun ToggleButton(symbol: String, label: String, on: Boolean, onClick: ((
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(40.dp)
+                .size(size)
                 .clip(CircleShape)
                 .background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
         ) {
-            Text(
-                symbol,
-                fontSize = 18.sp,
-                color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            // Minimalistyczne ikony konturowe (jak w panelu szybkich ustawień), kolor z motywu.
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(size * 0.5f),
             )
         }
-        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (showLabel) {
+            Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -432,13 +522,19 @@ fun ContactsWidget(contacts: List<FavoriteContact>, hasPermission: Boolean, call
         when {
             !hasPermission -> HintText("Dotknij, aby pokazać ulubione kontakty", callbacks?.onGrant)
             contacts.isEmpty() -> HintText("Oznacz kontakty gwiazdką w aplikacji Kontakty", callbacks?.onOpenContacts)
-            else -> LazyRow(
-                userScrollEnabled = callbacks != null,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                items(contacts, key = { it.id }) { contact -> ContactBubble(contact, callbacks) }
+            else -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                // Niski widżet: same zdjęcia (bez imion), wysoki: większe zdjęcia z imionami.
+                val h = maxHeight
+                val showNames = h >= 70.dp
+                val avatar = (if (showNames) h - 20.dp else h - 4.dp).coerceIn(28.dp, 64.dp)
+                LazyRow(
+                    userScrollEnabled = callbacks != null,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(contacts, key = { it.id }) { contact -> ContactBubble(contact, callbacks, avatar, showNames) }
+                }
             }
         }
     }
@@ -446,18 +542,18 @@ fun ContactsWidget(contacts: List<FavoriteContact>, hasPermission: Boolean, call
 
 // Dotknięcie kontaktu rozwija małe menu: zadzwoń / SMS / karta kontaktu.
 @Composable
-private fun ContactBubble(contact: FavoriteContact, callbacks: ContactCallbacks?) {
+private fun ContactBubble(contact: FavoriteContact, callbacks: ContactCallbacks?, avatar: Dp = 44.dp, showName: Boolean = true) {
     var menu by remember { mutableStateOf(false) }
     Box {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .width(60.dp)
+                .width(avatar + 16.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .then(if (callbacks != null) Modifier.clickable { menu = true } else Modifier),
         ) {
-            Avatar(contact, 44)
-            Text(
+            Avatar(contact, avatar.value.toInt())
+            if (showName) Text(
                 contact.name.substringBefore(' '),
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,

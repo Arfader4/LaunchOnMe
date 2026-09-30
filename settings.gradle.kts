@@ -22,6 +22,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Context Launcher"
+rootProject.name = "LaunchOnMe"
 include(":app")
+include(":studio") // StickOnMe — studio naklejek (osobny moduł, w pakiecie z launcherem)
  

@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LaunchStatEntity::class,
         AppRestrictionEntity::class,
     ],
-    version = 10,
+    version = 12,
     exportSchema = false,
 )
 abstract class LauncherDatabase : RoomDatabase() {
@@ -41,7 +41,7 @@ abstract class LauncherDatabase : RoomDatabase() {
                     LauncherDatabase::class.java,
                     "launcher.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
                     .build()
                     .also { instance = it }
             }
@@ -195,5 +195,20 @@ private val MIGRATION_9_10 = object : Migration(9, 10) {
             "CREATE UNIQUE INDEX IF NOT EXISTS index_app_restrictions_modeId_packageName_userSerial " +
                 "ON app_restrictions (modeId, packageName, userSerial)",
         )
+    }
+}
+
+// Wersja 11: wygląd folderu (symbol i kolor). Obie kolumny mogą być puste, więc wystarczy ALTER.
+private val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE folders ADD COLUMN icon TEXT")
+        db.execSQL("ALTER TABLE folders ADD COLUMN color INTEGER")
+    }
+}
+
+// Wersja 12: strony karty. Istniejące elementy trafiają na pierwszą stronę (0).
+private val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE card_items ADD COLUMN page INTEGER NOT NULL DEFAULT 0")
     }
 }

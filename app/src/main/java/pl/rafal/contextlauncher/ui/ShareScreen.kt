@@ -111,6 +111,13 @@ fun ShareScreen(
                     FilterChip(selected = asSticker, onClick = { asSticker = true }, label = { Text("Naklejka na kartę") })
                 }
             }
+            if (asSticker) {
+                Text(
+                    "Po wybraniu trybu otworzy się StickOnMe: wytniesz obiekt, dodasz ramkę i zapiszesz — naklejka trafi na kartę.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (!asSticker) OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },

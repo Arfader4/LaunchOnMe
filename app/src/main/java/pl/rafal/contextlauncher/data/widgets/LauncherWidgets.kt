@@ -67,7 +67,22 @@ class LauncherWidgets private constructor(private val context: Context) {
 
     // Widok widżetu. Kontekst aktywności, żeby widżet dostał właściwy motyw.
     fun createView(activityContext: Context, appWidgetId: Int): LauncherWidgetHostView =
-        host.createView(activityContext, appWidgetId, info(appWidgetId)) as LauncherWidgetHostView
+        (host.createView(activityContext, appWidgetId, info(appWidgetId)) as LauncherWidgetHostView)
+            .also { views[appWidgetId] = java.lang.ref.WeakReference(it) }
+
+    // Ostatnio utworzone widoki widżetów (słabe referencje — nie trzymamy ich w pamięci dłużej niż ekran).
+    private val views = mutableMapOf<Int, java.lang.ref.WeakReference<android.view.View>>()
+
+    // Czy widżet ma przewijaną w pionie treść (lista albo siatka — w widżetach to ListView / GridView).
+    // Stos widżetów po tym poznaje, że przesunięcie w pionie ma przewijać treść, a nie zmieniać widżet.
+    fun scrollsVertically(appWidgetId: Int): Boolean {
+        val root = views[appWidgetId]?.get() ?: return false
+        fun check(view: android.view.View): Boolean =
+            view is android.widget.AbsListView || // ListView / GridView (StackView i "przerzucane" zdjęcia się nie liczą)
+                (view is android.widget.ScrollView && (view.canScrollVertically(1) || view.canScrollVertically(-1))) ||
+                (view is android.view.ViewGroup && (0 until view.childCount).any { check(view.getChildAt(it)) })
+        return check(root)
+    }
 
     // Ile komórek naszej siatki 8×12 powinien zająć widżet.
     fun cellSize(info: AppWidgetProviderInfo): Pair<Int, Int> {

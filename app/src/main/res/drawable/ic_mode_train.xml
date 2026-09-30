@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikona trybu "train": kontur 24x24 (styl ikon trybów), kolor nadaje launcher / system. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M7,3 H17 A3,3 0 0 1 20,6 V15 A3,3 0 0 1 17,18 H7 A3,3 0 0 1 4,15 V6 A3,3 0 0 1 7,3 Z M4,10 H20 M8,18 L6,21 M16,18 L18,21 M8,14 h0.01 M16,14 h0.01"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

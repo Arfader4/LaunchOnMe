@@ -23,6 +23,25 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.util.VelocityTracker1D
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlinx.coroutines.launch
+import pl.rafal.contextlauncher.R
+import androidx.compose.foundation.layout.aspectRatio
+import pl.rafal.contextlauncher.ui.LocalIconShape
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -58,24 +77,56 @@ import kotlin.math.sin
 private val Polish = Locale("pl")
 private val HourMinute: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 private val LongDate: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM", Polish) // "niedziela, 27 września"
+private val ShortDate: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, d MMM", Polish)   // "niedz., 27 wrz"
+private val DayMonth: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM")                 // "28.09"
 
 // --- Zegar ---
 
 @Composable
 fun ClockWidget(onClick: (() -> Unit)?) {
     val now = rememberCurrentMinute()
-    WidgetSurface(onClick = onClick) {
-        // Wielkość cyfr zależy od szerokości widżetu: po powiększeniu zegar rośnie razem z nim.
-        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
-            val timeSize = (maxWidth.value / 3.2f).coerceIn(34f, 96f).sp
-            Column {
-                val time = now.atZone(ZoneId.systemDefault())
-                Text(time.format(HourMinute), fontSize = timeSize, fontWeight = FontWeight.SemiBold, lineHeight = timeSize)
-                Text(
-                    time.format(LongDate).replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    val time = now.atZone(ZoneId.systemDefault())
+    AdaptiveWidget { size, _, _ ->
+        WidgetSurface(onClick = onClick) {
+            when (size) {
+                // 1×1: sama godzina, tak duża, jak się zmieści.
+                WidgetSize.TINY -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    FitText(time.format(HourMinute), Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                }
+                // 2×2: godzina + data DD.MM.
+                WidgetSize.SMALL -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                    FitText(time.format(HourMinute), Modifier.fillMaxWidth().weight(1f), textAlign = TextAlign.Center)
+                    FitText(
+                        time.format(DayMonth),
+                        Modifier.fillMaxWidth(),
+                        maxSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                // Niski pasek: jedna linia jak na pasku stanu — tekst maleje, zamiast się zawijać.
+                WidgetSize.STRIP -> Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                    FitText(time.format(HourMinute), Modifier.weight(0.45f), maxSize = 40.sp)
+                    Spacer(Modifier.width(8.dp))
+                    FitText(
+                        time.format(ShortDate).replaceFirstChar { it.uppercase() },
+                        Modifier.weight(0.55f),
+                        maxSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                WidgetSize.LARGE -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                    FitText(time.format(HourMinute), Modifier.fillMaxWidth().weight(1f), maxSize = 110.sp)
+                    FitText(
+                        time.format(LongDate).replaceFirstChar { it.uppercase() },
+                        Modifier.fillMaxWidth(),
+                        maxSize = 18.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -85,6 +136,22 @@ fun ClockWidget(onClick: (() -> Unit)?) {
 
 @Composable
 fun WeatherWidget(weather: Weather?, hasPermission: Boolean, onClick: (() -> Unit)?) {
+  AdaptiveWidget { size, _, _ ->
+    // 1×1 i 2×2: ikona pogody i temperatura, obie skalują się do kratki.
+    if (weather != null && hasPermission && (size == WidgetSize.TINY || size == WidgetSize.SMALL)) {
+        WidgetSurface(onClick = onClick) {
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Icon(
+                    painter = painterResource(WeatherCodes.icon(weather.code, weather.isDay)),
+                    contentDescription = WeatherCodes.describe(weather.code),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f).aspectRatio(1f),
+                )
+                FitText("${weather.temperature}°", Modifier.fillMaxWidth(), maxSize = 28.sp, textAlign = TextAlign.Center)
+            }
+        }
+        return@AdaptiveWidget
+    }
     WidgetSurface(onClick = onClick) {
         when {
             !hasPermission -> {
@@ -98,6 +165,32 @@ fun WeatherWidget(weather: Weather?, hasPermission: Boolean, onClick: (() -> Uni
             }
             weather == null -> Text("Wczytywanie pogody…", color = MaterialTheme.colorScheme.onSurfaceVariant)
             else -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                // Mały: ikona + temperatura (i opis, jeśli zmieści się w poziomie).
+                if (maxHeight < 90.dp) {
+                    val icon = (maxHeight - 8.dp).coerceIn(18.dp, 40.dp)
+                    val wideStrip = maxWidth > 150.dp // odczyt tutaj: wewnątrz Row zewnętrzny zakres jest niedostępny
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            painter = painterResource(WeatherCodes.icon(weather.code, weather.isDay)),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(icon),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        FitText("${weather.temperature}°", Modifier.weight(if (wideStrip) 0.35f else 1f), maxSize = (icon.value * 0.8f).sp)
+                        if (wideStrip) {
+                            Spacer(Modifier.width(8.dp))
+                            FitText(
+                                WeatherCodes.describe(weather.code),
+                                Modifier.weight(0.65f),
+                                maxSize = 14.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    return@BoxWithConstraints
+                }
                 val wide = maxWidth > 240.dp
                 Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -141,11 +234,14 @@ fun WeatherWidget(weather: Weather?, hasPermission: Boolean, onClick: (() -> Uni
             }
         }
     }
+  }
 }
 
 // --- Tarcza trybów ---
 
 // Tryby rozłożone na okręgu wokół przycisku "+". Pierścień można obracać palcem (przy wielu trybach).
+// Widżet "Tryby" skaluje się jak nagłówek: od samej ikony (1×1), przez pasek z nazwą i "+",
+// po pełną tarczę z kołem. Dzięki temu zastępuje dawny nagłówek karty.
 @Composable
 fun ModeDialWidget(
     modes: List<ModeEntity>,
@@ -153,8 +249,224 @@ fun ModeDialWidget(
     enabled: Boolean,
     onSelect: (ModeEntity) -> Unit,
     onNewMode: () -> Unit,
+    subtitle: String? = null,  // np. "do 17:30" (tryb na czas)
+    badge: Boolean = false,    // czerwona kropka: coś czeka w menu
+    menu: @Composable (expanded: Boolean, onDismiss: () -> Unit) -> Unit = { _, _ -> },
 ) {
-    var rotation by remember { mutableFloatStateOf(0f) } // w stopniach
+    var menuOpen by remember { mutableStateOf(false) }
+    val active = modes.firstOrNull { it.id == activeId }
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Wymiary czytamy tutaj: wewnątrz zagnieżdżonych Box/Row nie są dostępne (DSL marker zasłania zewnętrzny zakres).
+        val w = maxWidth
+        val h = maxHeight
+        // Progi: do 2 kratek szerokości sam "+", od 3 kratek pasek z ikoną i nazwą, pełna tarcza od ok. 4×4.
+        val tiny = w < 125.dp
+        val strip = !tiny && min(w, h) < 180.dp
+        when {
+            // 1×1 / 2×2: przycisk "+" (nowy tryb) z kropką w kolorze aktualnego trybu.
+            // Od 2×2 pod przyciskiem jest podpis "Nowy tryb" — sam "+" nie mówił, co robi.
+            tiny -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxSize().padding(4.dp),
+            ) {
+                val labeled = w >= 70.dp && h >= 70.dp
+                val labelH = if (labeled) 16.dp else 0.dp
+                val side = (min(w, h - labelH) - 8.dp).coerceAtMost(64.dp)
+                Box {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(side)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable(enabled = enabled, onClick = onNewMode)
+                            .semantics { contentDescription = "Stwórz tryb (aktywny: ${active?.name.orEmpty()})" },
+                    ) {
+                        FitText("+", Modifier.fillMaxSize(0.6f), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Light, textAlign = TextAlign.Center)
+                    }
+                    // Kropka w kolorze aktywnego trybu — jej dotknięcie otwiera listę trybów.
+                    active?.let {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .size(side * 0.34f)
+                                .clip(CircleShape)
+                                .clickable(enabled = enabled) { menuOpen = true }
+                                .background(MaterialTheme.colorScheme.surface)
+                                .padding(2.dp)
+                                .clip(CircleShape)
+                                .background(pl.rafal.contextlauncher.ui.modeBadgeColor(it.color, pl.rafal.contextlauncher.ui.isThemeDark()))
+                                .semantics { contentDescription = "Tryb ${it.name}, zmień" },
+                        )
+                    }
+                    if (badge) BadgeDot(Modifier.align(Alignment.BottomEnd))
+                    menu(menuOpen) { menuOpen = false }
+                }
+                if (labeled) {
+                    FitText(
+                        "Nowy tryb",
+                        Modifier.fillMaxWidth().height(labelH),
+                        maxSize = 12.sp,
+                        fontWeight = FontWeight.Normal,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            // Pasek: ikona + nazwa (+ "do 17:30"), a gdy jest miejsce — przycisk "+".
+            strip -> WidgetSurface(onClick = null) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(enabled = enabled) { menuOpen = true },
+                        ) {
+                            Box {
+                                active?.let { ModeBadge(it, size = (h - 20.dp).coerceIn(24.dp, 44.dp)) }
+                                if (badge) BadgeDot(Modifier.align(Alignment.TopEnd))
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            // Nazwa zajmuje resztę miejsca i maleje, gdy się nie mieści (bez zawijania do pionu).
+                            Column(Modifier.weight(1f)) {
+                                FitText(active?.name.orEmpty(), Modifier.fillMaxWidth(), maxSize = 18.sp)
+                                subtitle?.let {
+                                    FitText(it, Modifier.fillMaxWidth(), maxSize = 11.sp, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                        menu(menuOpen) { menuOpen = false }
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    run {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size((h - 20.dp).coerceIn(28.dp, 44.dp))
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable(enabled = enabled, onClick = onNewMode)
+                                .semantics { contentDescription = "Stwórz tryb" },
+                        ) { Text("+", color = MaterialTheme.colorScheme.onPrimary, fontSize = 22.sp, fontWeight = FontWeight.Light) }
+                    }
+                }
+            }
+            else -> FullModeDial(modes, activeId, enabled, onSelect, onNewMode)
+        }
+    }
+}
+
+@Composable
+private fun BadgeDot(modifier: Modifier) {
+    Box(
+        modifier
+            .size(12.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.error),
+    )
+}
+
+@Composable
+private fun FullModeDial(
+    modes: List<ModeEntity>,
+    activeId: Long?,
+    enabled: Boolean,
+    onSelect: (ModeEntity) -> Unit,
+    onNewMode: () -> Unit,
+) {
+    // Przy jednym trybie tarcza nie ma czego pokazywać — zamiast pustego koła podpowiadamy, co dalej.
+    if (modes.size < 2) {
+        WidgetSurface(onClick = null) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable(enabled = enabled, onClick = onNewMode)
+                        .semantics { contentDescription = "Stwórz tryb" },
+                ) {
+                    Text("+", color = MaterialTheme.colorScheme.onPrimary, fontSize = 30.sp, fontWeight = FontWeight.Light)
+                }
+                Spacer(Modifier.height(10.dp))
+                Text("Dodaj kolejny tryb", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Tu pojawi się tarcza do szybkiego przełączania",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        return
+    }
+
+    // --- "Fidget spinner" ---
+    // Pierścień z trybami kręci się palcem z bezwładnością: puszczony rozpędzony kręci się dalej, zwalnia,
+    // "klika" na najbliższy tryb pod znacznikiem ▲ u góry i ten tryb się włącza. Przy każdym trybie
+    // mijającym znacznik telefon lekko drga (jak zapadka). Dotknięcie trybu obraca go pod znacznik i włącza.
+    val n = modes.size
+    val step = 360f / n
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    // Start od razu na aktywnym trybie (bez obracania się przy każdym pokazaniu karty). W stopniach, bez limitu.
+    val rotation = remember { Animatable(-(modes.indexOfFirst { it.id == activeId }.coerceAtLeast(0)) * step) }
+    var interacting by remember { mutableStateOf(false) } // palec albo rozpęd — wtedy nie ruszamy tarczy z zewnątrz
+    val gesture = remember { intArrayOf(0) } // numer ostatniego gestu: stary rozpęd nie "puszcza" nowego chwytu
+    val currentModes by rememberUpdatedState(modes)
+    val currentOnSelect by rememberUpdatedState(onSelect)
+    val currentActiveId by rememberUpdatedState(activeId)
+
+    // Który tryb jest teraz pod znacznikiem. Tryb i leży na kącie rotation + i·step (0 = góra).
+    fun topIndex(rot: Float): Int = Math.floorMod(Math.round(-rot / step), n)
+    // Najbliższy obrót (w którąkolwiek stronę), przy którym tryb [index] stoi pod znacznikiem.
+    fun rotationFor(index: Int, from: Float): Float {
+        val base = -index * step
+        val turns = Math.round((from - base) / 360f)
+        return base + turns * 360f
+    }
+
+    // Ustawienie tarczy na aktywny tryb (start, zmiana trybu z innego miejsca) — tylko gdy nikt nie kręci.
+    LaunchedEffect(activeId, modes.map { it.id }) {
+        val index = currentModes.indexOfFirst { it.id == activeId }
+        if (index < 0 || interacting) return@LaunchedEffect
+        rotation.animateTo(rotationFor(index, rotation.value), spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow))
+    }
+    // Zapadka: drgnięcie, gdy kolejny tryb mija znacznik (tylko przy kręceniu, nie przy samoczynnym ustawianiu).
+    LaunchedEffect(n) {
+        var last = topIndex(rotation.value)
+        snapshotFlow { topIndex(rotation.value) }.collect { index ->
+            if (index != last && interacting) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            last = index
+        }
+    }
+
+    // Rozpęd → wyhamowanie → "kliknięcie" na tryb (lekkie sprężynowanie) → włączenie trybu.
+    suspend fun settle(velocity: Float, id: Int) {
+        try {
+            if (kotlin.math.abs(velocity) > 30f) {
+                rotation.animateDecay(velocity, exponentialDecay(frictionMultiplier = 0.45f, absVelocityThreshold = 15f)) // mniejsze tarcie = dłużej się kręci
+            }
+            val index = topIndex(rotation.value)
+            rotation.animateTo(rotationFor(index, rotation.value), spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow))
+            val mode = currentModes.getOrNull(index)
+            if (mode != null && mode.id != currentActiveId) {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                currentOnSelect(mode)
+            }
+        } finally {
+            if (gesture[0] == id) interacting = false // przerwany nowym chwytem → nowy gest sam zdecyduje
+        }
+    }
 
     WidgetSurface(onClick = null) {
         BoxWithConstraints(
@@ -162,9 +474,29 @@ fun ModeDialWidget(
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (!enabled || modes.size < 2) Modifier
-                    else Modifier.pointerInput(modes.size) {
-                        detectDragGestures { change, drag ->
+                    if (!enabled) Modifier
+                    else Modifier.pointerInput(n) {
+                        // Prędkość kątowa z ostatnich ruchów palca (jak VelocityTracker w Androidzie, ale w stopniach).
+                        val tracker = VelocityTracker1D(isDataDifferential = false)
+                        var angle = 0f
+                        detectDragGestures(
+                            onDragStart = {
+                                interacting = true
+                                gesture[0]++
+                                tracker.resetTracking()
+                                angle = rotation.value
+                                scope.launch { rotation.stop() } // złapanie kręcącej się tarczy ją zatrzymuje
+                            },
+                            onDragEnd = {
+                                val velocity = tracker.calculateVelocity().coerceIn(-2500f, 2500f)
+                                val id = gesture[0]
+                                scope.launch { settle(velocity, id) }
+                            },
+                            onDragCancel = {
+                                val id = gesture[0]
+                                scope.launch { settle(0f, id) }
+                            },
+                        ) { change, drag ->
                             change.consume()
                             // Obrót = różnica kątów palca względem środka (atan2 ≈ Math.Atan2 w C#).
                             val center = Offset(size.width / 2f, size.height / 2f)
@@ -175,56 +507,100 @@ fun ModeDialWidget(
                             ).toFloat()
                             if (delta > 180f) delta -= 360f
                             if (delta < -180f) delta += 360f
-                            rotation += delta
+                            angle += delta
+                            tracker.addDataPoint(change.uptimeMillis, angle)
+                            val target = angle
+                            scope.launch { rotation.snapTo(target) }
                         }
                     },
                 ),
         ) {
             val side = min(maxWidth, maxHeight)
             val badge = (side * 0.2f).coerceIn(36.dp, 56.dp)
-            val radius = side / 2 - badge / 2 - 6.dp
+            val radius = side / 2 - badge / 2 - 8.dp
+            val track = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+            val rot = rotation.value
+
+            // Tor pierścienia (jak łożysko spinnera) — widać, że to coś do kręcenia.
+            Box(
+                Modifier
+                    .size(radius * 2)
+                    .drawBehind {
+                        drawCircle(track, radius = size.minDimension / 2f, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+                    },
+            )
 
             modes.forEachIndexed { index, mode ->
-                // Kąt kolejnego trybu: równe odstępy, pierwszy na górze (-90°), plus obrót palcem.
-                val angle = Math.toRadians((rotation - 90f + index * 360f / modes.size).toDouble())
+                // Kąt trybu: równe odstępy, 0° = góra (stąd -90° w układzie ekranu), plus obrót tarczy.
+                val deg = rot + index * step
+                val angle = Math.toRadians((deg - 90f).toDouble())
                 val isActive = mode.id == activeId
+                // Im bliżej znacznika, tym większy znaczek (płynnie, także w trakcie kręcenia).
+                val fromTop = kotlin.math.abs(((deg % 360f) + 540f) % 360f - 180f) // 0 = na górze
+                val closeness = (1f - fromTop / step).coerceIn(0f, 1f)
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .offset(radius * cos(angle).toFloat(), radius * sin(angle).toFloat())
+                        .graphicsLayer {
+                            scaleX = 1f + 0.22f * closeness
+                            scaleY = 1f + 0.22f * closeness
+                        }
                         .size(badge + 8.dp)
                         .clip(CircleShape)
                         .then(
                             if (isActive) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
                             else Modifier,
                         )
-                        .clickable(enabled = enabled) { onSelect(mode) }
+                        .clickable(enabled = enabled) {
+                            // Dotknięcie: obrót tego trybu pod znacznik, potem włączenie.
+                            interacting = true
+                            val id = ++gesture[0]
+                            scope.launch {
+                                try {
+                                    rotation.animateTo(rotationFor(index, rotation.value), spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow))
+                                    currentOnSelect(mode)
+                                } finally {
+                                    if (gesture[0] == id) interacting = false
+                                }
+                            }
+                        }
                         .semantics { contentDescription = "Tryb ${mode.name}${if (isActive) ", aktywny" else ""}" },
                 ) {
-                    ModeBadge(mode, size = badge)
+                    // Na tarczy zawsze koła — kwadrat w okrągłej ramce wyglądał na "ucięty".
+                    ModeBadge(mode, size = badge, shape = CircleShape)
                 }
             }
 
-            // Środek: tworzenie nowego trybu.
+            // Znacznik ▲ pod górnym trybem: "to się włączy".
+            Text(
+                "▲",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 12.sp,
+                modifier = Modifier.offset(y = -(radius - badge / 2 - 12.dp)),
+            )
+
+            // Środek (piasta spinnera): tworzenie nowego trybu + nazwa trybu pod znacznikiem.
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(badge * 1.25f)
+                        .size(badge * 1.1f)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary)
                         .clickable(enabled = enabled, onClick = onNewMode)
                         .semantics { contentDescription = "Stwórz tryb" },
                 ) {
-                    Text("+", color = MaterialTheme.colorScheme.onPrimary, fontSize = 30.sp, fontWeight = FontWeight.Light)
+                    Text("+", color = MaterialTheme.colorScheme.onPrimary, fontSize = 28.sp, fontWeight = FontWeight.Light)
                 }
                 if (side > 200.dp) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        modes.firstOrNull { it.id == activeId }?.name.orEmpty(),
+                        modes.getOrNull(topIndex(rot))?.name.orEmpty(),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
+                        maxLines = 1,
                     )
                 }
             }
@@ -252,7 +628,9 @@ fun GlanceWidget(
     event: GlanceEvent?,
     hasCalendar: Boolean,
     alarmAt: Long?,
+    alarmApp: String?,
     weather: Weather?,
+    hasWeatherPermission: Boolean,
     callbacks: GlanceCallbacks?, // null = tryb edycji układu (bez reakcji na dotyk)
 ) {
     val now = rememberCurrentMinute()
@@ -261,6 +639,88 @@ fun GlanceWidget(
 
     WidgetSurface(onClick = null) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
+            val gSize = widgetSizeOf(maxWidth + 16.dp, maxHeight + 8.dp) // + marginesy WidgetSurface = rozmiar kratki
+            // 1×1: sam zegar.
+            if (gSize == WidgetSize.TINY) {
+                Box(Modifier.fillMaxSize().tap("Otwórz zegar", callbacks?.onClock), contentAlignment = Alignment.Center) {
+                    FitText(time.format(HourMinute), Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                }
+                return@BoxWithConstraints
+            }
+            // 2×2: mała pogoda, zegar, data DD.MM i same ikonki budzika / kalendarza, gdy jest coś ustawione.
+            if (gSize == WidgetSize.SMALL) {
+                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    weather?.let { wth ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(0.3f).tap("Otwórz pogodę", callbacks?.onWeather)) {
+                            Icon(
+                                painter = painterResource(WeatherCodes.icon(wth.code, wth.isDay)),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.fillMaxHeight().aspectRatio(1f),
+                            )
+                            FitText("${wth.temperature}°", maxSize = 12.sp, fontWeight = FontWeight.Normal)
+                        }
+                    }
+                    FitText(
+                        time.format(HourMinute),
+                        Modifier.fillMaxWidth().weight(0.45f).tap("Otwórz zegar", callbacks?.onClock),
+                        textAlign = TextAlign.Center,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(0.25f)) {
+                        FitText(
+                            time.format(DayMonth),
+                            Modifier.tap("Otwórz kalendarz", callbacks?.onDate),
+                            maxSize = 12.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (alarmAt != null) {
+                            Icon(
+                                painterResource(R.drawable.ic_w_alarm),
+                                contentDescription = "Budzik " + describeAlarm(alarmAt, now),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp).fillMaxHeight().aspectRatio(1f).tap("Budzik", callbacks?.onAlarm),
+                            )
+                        }
+                        if (event != null) {
+                            Icon(
+                                painterResource(R.drawable.ic_w_calendar),
+                                contentDescription = "Wydarzenie: " + event.title,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 4.dp).fillMaxHeight().aspectRatio(1f)
+                                    .tap("Otwórz wydarzenie", callbacks?.let { cb -> { cb.onEvent(event) } }),
+                            )
+                        }
+                    }
+                }
+                return@BoxWithConstraints
+            }
+            // Pasek jednej linii: godzina · data · pogoda · budzik — tekst maleje, zamiast się zawijać.
+            if (gSize == WidgetSize.STRIP) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
+                    FitText(time.format(HourMinute), Modifier.weight(0.3f).tap("Otwórz zegar", callbacks?.onClock), maxSize = 32.sp)
+                    Spacer(Modifier.width(8.dp))
+                    FitText(
+                        time.format(ShortDate).replaceFirstChar { it.uppercase() },
+                        Modifier.weight(0.34f).tap("Otwórz kalendarz", callbacks?.onDate),
+                        maxSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                    )
+                    weather?.let {
+                        FitText("${it.temperature}°", Modifier.weight(0.14f).tap("Otwórz pogodę", callbacks?.onWeather), maxSize = 16.sp)
+                    }
+                    if (alarmAt != null) {
+                        FitText(
+                            "⏰" + describeAlarm(alarmAt, now),
+                            Modifier.weight(0.22f).tap("Budzik", callbacks?.onAlarm),
+                            maxSize = 13.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                return@BoxWithConstraints
+            }
             val timeSize = (maxHeight.value / 2.6f).coerceIn(30f, 72f).sp
             Row(Modifier.fillMaxSize()) {
                 // Lewa kolumna: godzina, data, wydarzenie.
@@ -330,16 +790,27 @@ fun GlanceWidget(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {
-                            Text("Pogoda", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            // Jak przy kalendarzu: od razu widać, co zrobić, zamiast samego słowa "Pogoda".
+                            Text(
+                                if (hasWeatherPermission) "Wczytywanie\npogody…" else "Dotknij, aby\npokazać pogodę",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.End,
+                            )
                         }
                     }
                     if (alarmAt != null) {
-                        Text(
-                            "⏰ " + describeAlarm(alarmAt, now),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.tap("Budziki", callbacks?.onAlarm),
-                        )
+                        Column(horizontalAlignment = Alignment.End, modifier = Modifier.tap("Budzik", callbacks?.onAlarm)) {
+                            Text(
+                                "⏰ " + describeAlarm(alarmAt, now),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            // Alarm ustawiony nie przez Zegar (np. przypomnienie z Kalendarza) — podpisujemy, skąd jest.
+                            alarmApp?.let {
+                                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            }
+                        }
                     }
                 }
             }
