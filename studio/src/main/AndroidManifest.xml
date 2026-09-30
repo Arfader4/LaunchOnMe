@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Model ML Kit do wycinania obiektów pobierze się razem z instalacją (zamiast przy pierwszym użyciu). -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="subject_segment" />
+
+        <!-- StickOnMe: własna ikona i nazwa w szufladzie (osobne zadanie w "ostatnich aplikacjach"),
+             ale to ta sama instalacja co LaunchOnMe. -->
+        <activity
+            android:name=".StudioActivity"
+            android:exported="true"
+            android:label="@string/stickonme_name"
+            android:icon="@mipmap/ic_stickonme"
+            android:roundIcon="@mipmap/ic_stickonme"
+            android:taskAffinity="pl.rafal.stickonme"
+            android:theme="@style/Theme.StickOnMe"
+            android:windowSoftInputMode="adjustResize"
+            android:enableOnBackInvokedCallback="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode">
+            <!-- configChanges: obrót ekranu / zmiana motywu nie przerywa edycji (zdjęcie i maska zostają w pamięci). -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Udostępnianie naklejek (WhatsApp, Messenger…): tymczasowy link content:// do pliku z biblioteki. -->
+        <provider
+            android:name=".StickerFileProvider"
+            android:authorities="${applicationId}.stickonme"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/stickonme_paths" />
+        </provider>
+    </application>
+</manifest>
