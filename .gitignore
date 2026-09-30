@@ -19,3 +19,6 @@ local.properties
 *.keystore
 keystore.properties
 /app/release
+
+# Pamięć podręczna kompilatora Kotlina
+.kotlin/

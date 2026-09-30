@@ -1,4 +1,4 @@
-# Context Launcher
+# LaunchOnMe
 
 **Launcher na Androida, który zmienia się razem z sytuacją.** Zamiast przewijanych stron ekranu głównego masz *tryby* — Praca, Dom, Podróż, Studia, Trening albo własne. Każdy tryb ma swoją kartę z widżetami i aplikacjami, swoje „Pod ręką” (bilety, faktury, notatki), swoje ustawienia telefonu, tapetę i blokady aplikacji. Launcher sam podpowiada — albo sam włącza — tryb, który pasuje do chwili.
 
@@ -59,7 +59,7 @@ Logika decyzyjna (siatka karty, silnik sugestii, dopasowanie aplikacji do szablo
 ## Uruchomienie
 
 1. Otwórz projekt w aktualnym Android Studio i uruchom na telefonie lub emulatorze z Androidem 10+.
-2. Po instalacji naciśnij Home i wybierz **Context Launcher** jako domyślny ekran główny (albo: Ustawienia → Aplikacje → Domyślne → Ekran główny).
+2. Po instalacji naciśnij Home i wybierz **LaunchOnMe** jako domyślny ekran główny (albo: Ustawienia → Aplikacje → Domyślne → Ekran główny).
 3. Kreator zaproponuje tryby z szablonów. Uprawnienia launcher prosi dopiero wtedy, gdy są potrzebne; ich stan widać w Ustawieniach → Uprawnienia.
 
 ## Uprawnienia i prywatność
