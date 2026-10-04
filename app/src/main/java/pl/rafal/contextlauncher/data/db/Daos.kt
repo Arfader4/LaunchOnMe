@@ -161,6 +161,10 @@ interface SuggestionDao {
     @Query("DELETE FROM launch_stats")
     suspend fun clearStats()
 
+    // Ostatnio uruchamiane (ze wszystkich trybów) — do inteligentnego paska wyszukiwania.
+    @Query("SELECT * FROM launch_stats ORDER BY lastLaunched DESC LIMIT 24")
+    fun observeRecent(): Flow<List<LaunchStatEntity>>
+
     @Insert
     suspend fun insertRule(rule: SuggestionRuleEntity): Long
 

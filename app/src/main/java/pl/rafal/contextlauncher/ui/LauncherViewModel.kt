@@ -576,6 +576,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // --- Najczęściej używane w trybie ---
 
     // Liczba uruchomień w aktywnym trybie, po kluczu aplikacji (do sortowania folderów "najczęściej używane").
+    // Pasek wyszukiwania w trybie czuwania: ostatnio uruchamiane aplikacje (klucze jak AppInfo.key + czas).
+    val recentLaunches: StateFlow<List<Pair<String, Long>>> =
+        suggestionDao.observeRecent()
+            .map { stats ->
+                stats.map { "${android.content.ComponentName(it.packageName, it.className).flattenToString()}#${it.userSerial}" to it.lastLaunched }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // Bateria (ładowanie, procent) co minutę — pasek podpowiada, gdy jest słaba. Odczyt bez nasłuchu (sticky broadcast).
+    val battery: StateFlow<Pair<Boolean, Int>?> =
+        minuteTicker
+            .map { signalsReader.batteryState() }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val launchCounts: StateFlow<Map<String, Int>> =
         activeMode
             .flatMapLatest { mode -> if (mode == null) flowOf(emptyList()) else suggestionDao.observeTop(mode.id, 500) }

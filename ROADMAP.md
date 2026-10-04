@@ -176,12 +176,14 @@ Kolejność ustalona 04.10: paczka 1 → paczka 2 → tłumaczenie → duże tem
 - [x] Lista trybów (dotknięcie klawisza ON): przytrzymaj tryb i przesuń, żeby zmienić kolejność.
 
 ### Paczka 2 — klawisz ON i wyszukiwarka
-- [ ] Klawisz ON: bardziej organiczny wygląd, animacja; lista trybów jako owalne „klawisze”, OnHand i Ustawienia
-      jako mniejsze przyciski pod spodem.
-- [ ] Przytrzymanie klawisza: zamiast etykiety pod kciukiem — przygaszona karta, duży znaczek i nazwa trybu na środku.
-- [ ] Pasek wyszukiwania w trybie czuwania: przewija ostatnio używane aplikacje (np. z ostatniej godziny),
-      nieprzeczytane powiadomienia, propozycję zmiany trybu (zamiast okienka nad menu), najbliższe wydarzenie,
-      budzik, niską baterię. Dotknięcie lupy = klawiatura i wyszukiwanie.
+- [x] Klawisz ON: superelipsa („squircle”) zamiast kwadratu, sprężyste powiększenie przy dotyku, fala w kolorze
+      trybu po zmianie trybu. Lista trybów: osobne owalne klawisze z cieniem, pojawiające się falą; pod nimi
+      mniejsze przyciski (+ Nowy tryb, OnHand, Ustawienia…).
+- [x] Przytrzymanie klawisza: przygaszony ekran, duży znaczek i nazwa trybu pod palcem na środku.
+- [x] Pasek wyszukiwania w trybie czuwania (`ui/SmartSearchBar.kt`): co 5 s kolejno ostatnio używane aplikacje
+      (ostatnia godzina), nowe powiadomienia (po jednej aplikacji), najbliższe wydarzenie (do 3 h), budzik (do 12 h),
+      słaba bateria. Propozycja / komunikat zmiany trybu jest przypięta w pasku (✓ / ✕) zamiast okienka nad menu.
+      Lupa = wyszukiwarka z klawiaturą. Przewijanie tylko, gdy launcher jest widoczny.
 
 ### Paczka 3 — tłumaczenie
 - [ ] Wszystkie teksty do zasobów (res/values = angielski, res/values-pl = polski). Fundament gotowy:

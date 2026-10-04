@@ -634,6 +634,101 @@ private fun LauncherContent(
         drawerOpen = true
     }
 
+    // --- Pasek wyszukiwania w trybie czuwania ---
+    // Przypięta propozycja: komunikat automatu (✓ zostaw / ✕ cofnij) albo sugestia trybu (✓ przełącz / ✕ odrzuć).
+    val smartPrompt: SmartItem.Prompt? = run {
+        val notice = autoNotice
+        val noticeMode = notice?.let { n -> modes.firstOrNull { it.id == n.modeId } }
+        val current = suggestion
+        when {
+            notice != null && noticeMode != null -> {
+                val previous = modes.firstOrNull { it.id == notice.previousModeId }
+                SmartItem.Prompt(
+                    key = "auto:${noticeMode.id}",
+                    color = noticeMode.color,
+                    title = "Włączono: ${noticeMode.name}",
+                    subtitle = notice.reason.replaceFirstChar { it.uppercase() } + (previous?.let { " · ✕ wraca do ${it.name}" } ?: ""),
+                    acceptLabel = "Zostaw tryb",
+                    onAccept = viewModel::keepAutoSwitch,
+                    rejectLabel = "Cofnij",
+                    onReject = viewModel::undoAutoSwitch,
+                )
+            }
+            current is pl.rafal.contextlauncher.suggest.Suggestion.SwitchTo -> modes.firstOrNull { it.id == current.modeId }?.let { m ->
+                SmartItem.Prompt(
+                    key = "switch:${m.id}",
+                    color = m.color,
+                    title = "Włączyć ${m.name}?",
+                    subtitle = listOfNotNull(current.reason.replaceFirstChar { it.uppercase() }, autoStatus).joinToString(" · "),
+                    acceptLabel = "Przełącz",
+                    onAccept = { viewModel.acceptSuggestion(current) },
+                    rejectLabel = "Odrzuć sugestię",
+                    onReject = { viewModel.dismissSuggestion(current) },
+                )
+            }
+            current is pl.rafal.contextlauncher.suggest.Suggestion.EndMode -> modes.firstOrNull { it.id == current.backToModeId }?.let { m ->
+                SmartItem.Prompt(
+                    key = "end:${m.id}",
+                    color = m.color,
+                    title = "Zakończyć ${activeMode?.name.orEmpty()}?",
+                    subtitle = listOfNotNull("Reguły już nie pasują · wróć do ${m.name}", autoStatus).joinToString(" · "),
+                    acceptLabel = "Przełącz",
+                    onAccept = { viewModel.acceptSuggestion(current) },
+                    rejectLabel = "Odrzuć sugestię",
+                    onReject = { viewModel.dismissSuggestion(current) },
+                )
+            }
+            else -> null
+        }
+    }
+    // Przewijane podpowiedzi: ostatnio używane (godzina), nowe powiadomienia, najbliższe wydarzenie, budzik, słaba bateria.
+    val recentLaunches by viewModel.recentLaunches.collectAsState()
+    val battery by viewModel.battery.collectAsState()
+    val notifiedNow by pl.rafal.contextlauncher.system.NotificationDotsService.packages.collectAsState()
+    // Zegar co pełną minutę: "Za 12 min" odlicza się, a "ostatnia godzina" wygasa.
+    val minuteNow by androidx.compose.runtime.produceState(System.currentTimeMillis()) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000 - System.currentTimeMillis() % 60_000)
+            value = System.currentTimeMillis()
+        }
+    }
+    val smartItems: List<SmartItem> = remember(minuteNow, recentLaunches, notifiedNow, glance, battery, appsByKey, installedApps) {
+        val now = minuteNow
+        buildList {
+            val recent = recentLaunches
+                .filter { (_, time) -> now - time < 60 * 60_000L }
+                .mapNotNull { (key, _) -> appsByKey[key] }
+                .distinctBy { it.packageName }
+                .take(3)
+            if (recent.isNotEmpty()) add(SmartItem.Recent(recent))
+            notifiedNow
+                .mapNotNull { pkg -> installedApps.firstOrNull { it.packageName == pkg } }
+                .take(5)
+                .forEach { add(SmartItem.Notification(it)) }
+            glance.event?.let { e ->
+                val minutes = (e.begin - now) / 60_000L
+                val text = when {
+                    e.allDay -> null
+                    e.begin <= now && e.end > now -> "Teraz: ${e.title}"
+                    minutes in 0..59 -> "Za $minutes min: ${e.title}"
+                    minutes in 60..180 -> "O ${formatClock(e.begin)}: ${e.title}"
+                    else -> null
+                }
+                if (text != null) add(SmartItem.Info("event:${e.id}", "📅", text) { startActivitySafely(GlanceActions.event(e)) })
+            }
+            glance.alarmAt?.let { at ->
+                if (at - now in 0..12 * 60 * 60_000L) {
+                    add(SmartItem.Info("alarm:$at", "⏰", "Budzik ${formatClock(at)}") {
+                        if (!viewModel.openAlarmSource()) startActivitySafely(GlanceActions.clock(context))
+                    })
+                }
+            }
+            battery?.let { (charging, percent) ->
+                if (!charging && percent in 0..20) add(SmartItem.Info("battery", "🔋", "Bateria $percent% — podłącz ładowarkę", null))
+            }
+        }
+    }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -688,34 +783,16 @@ private fun LauncherContent(
                     }
                 }
             },
-            prompt = {
-                // Sugestie i komunikaty automatu jako pływający pasek nad dolnym rzędem — nie zabierają miejsca karcie.
-                val notice = autoNotice
-                val noticeMode = notice?.let { n -> modes.firstOrNull { it.id == n.modeId } }
-                val current = suggestion
-                val promptModifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(8.dp, RoundedCornerShape(24.dp))
-                when {
-                    editing -> Unit
-                    noticeMode != null -> AutoSwitchPrompt(
-                        mode = noticeMode,
-                        previous = modes.firstOrNull { it.id == notice?.previousModeId },
-                        reason = notice?.reason.orEmpty(),
-                        onKeep = viewModel::keepAutoSwitch,
-                        onUndo = viewModel::undoAutoSwitch,
-                        modifier = promptModifier,
-                    )
-                    current != null -> SuggestionPrompt(
-                        suggestion = current,
-                        modes = modes,
-                        activeMode = activeMode,
-                        onAccept = { viewModel.acceptSuggestion(current) },
-                        onDismiss = { viewModel.dismissSuggestion(current) },
-                        autoStatus = autoStatus,
-                        modifier = promptModifier,
-                    )
-                }
+            // Propozycje trybu są teraz w pasku wyszukiwania (nie zasłaniają menu nad dolnym rzędem).
+            prompt = {},
+            searchBar = { barModifier ->
+                SmartSearchBar(
+                    items = smartItems,
+                    pinned = if (editing) null else smartPrompt,
+                    onSearch = { openDrawer(true) },
+                    onLaunch = { app -> viewModel.launch(app) },
+                    modifier = barModifier,
+                )
             },
             modeSwitcher = {
                 ModeSwitcherButton(
@@ -1782,6 +1859,7 @@ private fun ModeCard(
     editing: Boolean,
     header: @Composable () -> Unit, // slot: miejsce na dowolny komponent (jak ContentPresenter w XAML)
     prompt: @Composable () -> Unit, // pływająca podpowiedź nad dolnym paskiem
+    searchBar: @Composable (Modifier) -> Unit, // pasek "Szukaj" w trybie czuwania (SmartSearchBar)
     modeSwitcher: @Composable () -> Unit,
     leftHanded: Boolean,
     elements: List<CardElement>, // wszystkie strony; każda strona bierze swoje (item.page)
@@ -2127,26 +2205,7 @@ private fun ModeCard(
                     DrawerButton { onOpenDrawer(false) }
                     Spacer(Modifier.width(8.dp))
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .clickable { onOpenDrawer(true) }
-                        .padding(horizontal = 20.dp),
-                ) {
-                    Text("⌕", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        "Szukaj aplikacji",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                searchBar(Modifier.weight(1f))
                 if (!leftHanded) {
                     Spacer(Modifier.width(8.dp))
                     DrawerButton { onOpenDrawer(false) }

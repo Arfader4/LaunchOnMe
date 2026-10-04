@@ -6,6 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -206,6 +208,65 @@ private fun ArcContent(state: ModeArcState, modes: List<ModeEntity>, activeId: L
     }
     fun eased(x: Float) = androidx.compose.animation.core.FastOutSlowInEasing.transform(x.coerceIn(0f, 1f))
 
+    // Cały ekran przygasa, a na środku duży znaczek i nazwa trybu pod palcem — nic nie chowa się pod kciukiem.
+    // Jedna lekka warstwa (bez bitmap i rozmycia), więc nie obciąża pamięci; znika razem z łukiem.
+    Popup(
+        popupPositionProvider = FullWindow,
+        properties = PopupProperties(focusable = false, clippingEnabled = false),
+    ) {
+        val selectedMode = modes.getOrNull(state.selected)?.takeIf { state.active }
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = eased(unfold.value / 0.6f) }
+                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f)),
+        ) {
+            androidx.compose.animation.AnimatedContent(
+                targetState = selectedMode,
+                contentKey = { it?.id ?: -1L },
+                transitionSpec = {
+                    (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(180)) +
+                        androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(220), initialScale = 0.8f)) togetherWith
+                        (androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140)) +
+                            androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(160), targetScale = 1.1f))
+                },
+                label = "tryb pod palcem",
+                contentAlignment = Alignment.Center,
+            ) { mode ->
+                androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (mode != null) {
+                        ModeBadge(mode, size = 112.dp, shape = CircleShape)
+                        androidx.compose.foundation.layout.Spacer(Modifier.size(16.dp))
+                        Text(
+                            mode.name,
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = androidx.compose.ui.graphics.Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            if (mode.id == activeId) "To jest aktywny tryb" else "Puść, aby włączyć",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+                        )
+                    } else {
+                        Text(
+                            "Przesuń palec na tryb",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = androidx.compose.ui.graphics.Color.White,
+                        )
+                        Text(
+                            "Puść na klawiszu = anuluj",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     Popup(
         popupPositionProvider = CenteredOnAnchor,
         properties = PopupProperties(focusable = false, clippingEnabled = false),
@@ -314,28 +375,14 @@ private fun ArcContent(state: ModeArcState, modes: List<ModeEntity>, activeId: L
                 }
                 }
             }
-            // Nazwa wybranego trybu: w środku łuku (między klawiszem a znaczkami).
-            val label = modes.getOrNull(state.selected)?.name?.takeIf { state.active } ?: "Puść na klawiszu = anuluj"
-            val mid = Math.toRadians((if (state.opensLeft) 225.0 else 315.0))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .offset {
-                        IntOffset(
-                            (radiusPx * 0.5f * cos(mid)).roundToInt(),
-                            (radiusPx * 0.5f * sin(mid)).roundToInt(),
-                        )
-                    }
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
         }
     }
+}
+
+// Popup na całe okno (lewy górny róg okna) — tło i podpowiedź na środku ekranu.
+private val FullWindow = object : PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset =
+        IntOffset.Zero
 }
 
 // Popup wyśrodkowany na klawiszu (środek łuku = środek klawisza).
