@@ -74,6 +74,9 @@ import pl.rafal.contextlauncher.data.AppInfo
 import pl.rafal.contextlauncher.data.FolderApp
 import pl.rafal.contextlauncher.data.FolderTree
 import pl.rafal.contextlauncher.data.db.FolderEntity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 
 // Wszystko, co przeglądarka folderów może zlecić na zewnątrz. Klasa z polami-funkcjami
 // zamiast dziesięciu osobnych parametrów (jak obiekt z delegatami w C#).
@@ -116,19 +119,20 @@ fun FolderBrowser(
     var sizeFor by remember { mutableStateOf<FolderEntity?>(null) }
     var pickAppsOpen by remember { mutableStateOf(false) }
     var appToMove by remember { mutableStateOf<FolderApp?>(null) }
+    val context = LocalContext.current
 
     // Te same opcje w menu ⋮ bieżącego folderu i po przytrzymaniu kafelka podfolderu.
     fun menuFor(folder: FolderEntity): List<MenuAction> = buildList { // buildList ≈ new List<T> { ... } z warunkami
-        add(MenuAction("Zmień nazwę") { renameFor = folder })
-        add(MenuAction("Wygląd (symbol i kolor)…") { lookFor = folder })
+        add(MenuAction(context.getString(R.string.common_rename)) { renameFor = folder })
+        add(MenuAction(context.getString(R.string.folder_menu_look)) { lookFor = folder })
         if (callbacks.onPlaceOnCard != null) {
             val onCard = callbacks.sizeOnCard(folder.id) != null
-            add(MenuAction(if (onCard) "Rozmiar na karcie…" else "Na kartę ${callbacks.modeName}…") { sizeFor = folder })
+            add(MenuAction(if (onCard) context.getString(R.string.folder_menu_size_on_card) else context.getString(R.string.folder_menu_place_on_card, callbacks.modeName)) { sizeFor = folder })
         }
         callbacks.onCopyToCard?.let { copy ->
-            add(MenuAction("Kopia na kartę (tylko ${callbacks.modeName})") { copy(folder.id) })
+            add(MenuAction(context.getString(R.string.folder_menu_copy_to_card, callbacks.modeName)) { copy(folder.id) })
         }
-        add(MenuAction("Usuń folder") { deleteFor = folder })
+        add(MenuAction(context.getString(R.string.folder_menu_delete_folder)) { deleteFor = folder })
     }
 
     // Wstecz = poziom wyżej, dopóki nie wrócimy do folderu startowego.
@@ -147,7 +151,7 @@ fun FolderBrowser(
             // Gdy zaczynamy od konkretnego folderu (np. z widżetu), ścieżka zaczyna się od niego.
             val visible = if (startFolderId == null) path else path.dropWhile { it.id != startFolderId }
             if (startFolderId == null) {
-                Crumb("Foldery", isLast = visible.isEmpty()) { currentId = null }
+                Crumb(stringResource(R.string.folder_root_crumb), isLast = visible.isEmpty()) { currentId = null }
             }
             visible.forEachIndexed { index, folder ->
                 if (index > 0 || startFolderId == null) {
@@ -164,16 +168,16 @@ fun FolderBrowser(
             modifier = Modifier.fillMaxWidth(),
         ) {
             if (current != null) FolderBadge(current, tree.previewApps(current.id), 32.dp, Modifier.clickable { lookFor = current })
-            AssistChip(onClick = { newFolderOpen = true }, label = { Text(if (current == null) "+ Folder" else "+ Podfolder") })
+            AssistChip(onClick = { newFolderOpen = true }, label = { Text(if (current == null) stringResource(R.string.folder_add_folder_chip) else stringResource(R.string.folder_add_subfolder_chip)) })
             if (current != null) {
-                AssistChip(onClick = { pickAppsOpen = true }, label = { Text("+ Aplikacje") })
+                AssistChip(onClick = { pickAppsOpen = true }, label = { Text(stringResource(R.string.folder_add_apps_button)) })
                 Spacer(Modifier.weight(1f))
                 OverflowMenu(menuFor(current))
             }
         }
         if (dragOut != null && current == null && tree.folders.isNotEmpty()) {
             Text(
-                "Przytrzymaj folder, żeby zobaczyć opcje — albo przeciągnij go na kartę.",
+                stringResource(R.string.folder_browser_drag_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -186,8 +190,8 @@ fun FolderBrowser(
 
         if (subfolders.isEmpty() && apps.isEmpty()) {
             Text(
-                if (current == null) "Nie masz jeszcze folderów. Utwórz pierwszy przyciskiem „+ Folder”."
-                else "Pusty folder. Dodaj aplikacje albo podfolder.",
+                if (current == null) stringResource(R.string.folder_browser_no_folders)
+                else stringResource(R.string.folder_browser_empty),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -224,9 +228,9 @@ fun FolderBrowser(
                     app = folderApp.app,
                     onClick = { callbacks.onLaunch(folderApp.app) },
                     menu = listOf(
-                        MenuAction("Przenieś do…") { appToMove = folderApp },
-                        MenuAction("Usuń z folderu") { callbacks.onRemoveApp(folderApp) },
-                        MenuAction("Informacje o aplikacji") { callbacks.onAppInfo(folderApp.app) },
+                        MenuAction(stringResource(R.string.folder_menu_move_to)) { appToMove = folderApp },
+                        MenuAction(stringResource(R.string.folder_menu_remove_from_folder)) { callbacks.onRemoveApp(folderApp) },
+                        MenuAction(stringResource(R.string.folder_menu_app_info)) { callbacks.onAppInfo(folderApp.app) },
                     ),
                     dragOut = dragOut, // aplikację z folderu też można wyciągnąć na kartę
                 )
@@ -236,9 +240,9 @@ fun FolderBrowser(
 
     if (newFolderOpen) {
         TextInputDialog(
-            title = if (current == null) "Nowy folder" else "Nowy podfolder w „${current.name}”",
+            title = if (current == null) stringResource(R.string.folder_new_folder) else stringResource(R.string.folder_new_subfolder_in_title, current.name),
             initial = "",
-            confirmLabel = "Utwórz",
+            confirmLabel = stringResource(R.string.common_create),
             onConfirm = { name ->
                 callbacks.onCreateFolder(currentId, name)
                 newFolderOpen = false
@@ -249,9 +253,9 @@ fun FolderBrowser(
 
     renameFor?.let { folder ->
         TextInputDialog(
-            title = "Zmień nazwę",
+            title = stringResource(R.string.common_rename),
             initial = folder.name,
-            confirmLabel = "Zapisz",
+            confirmLabel = stringResource(R.string.common_save),
             onConfirm = { name ->
                 callbacks.onRenameFolder(folder, name)
                 renameFor = null
@@ -264,17 +268,17 @@ fun FolderBrowser(
         AlertDialog(
             onDismissRequest = { deleteFor = null },
             containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("Usunąć folder „${folder.name}”?") },
-            text = { Text("Znikną też jego podfoldery. Same aplikacje zostaną w telefonie.") },
+            title = { Text(stringResource(R.string.folder_delete_title, folder.name)) },
+            text = { Text(stringResource(R.string.folder_delete_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     // Usuwamy folder, w którym właśnie jesteśmy (albo jego przodka)? Najpierw z niego wychodzimy.
                     if (tree.path(currentId).any { it.id == folder.id }) currentId = folder.parentId
                     callbacks.onDeleteFolder(folder)
                     deleteFor = null
-                }) { Text("Usuń") }
+                }) { Text(stringResource(R.string.common_delete)) }
             },
-            dismissButton = { TextButton(onClick = { deleteFor = null }) { Text("Anuluj") } },
+            dismissButton = { TextButton(onClick = { deleteFor = null }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 
@@ -283,7 +287,7 @@ fun FolderBrowser(
             allApps = allApps,
             alreadySelected = tree.apps(current.id).map { it.app.key }.toSet(),
             suggestions = suggestedApps(allApps, tree.apps(current.id).map { it.app }, current.name),
-            title = "Dodaj do „${current.name}”",
+            title = stringResource(R.string.folder_add_to_title, current.name),
             onConfirm = { chosen ->
                 callbacks.onAddApps(current.id, chosen)
                 pickAppsOpen = false
@@ -323,7 +327,7 @@ fun FolderBrowser(
     appToMove?.let { folderApp ->
         FolderPickerDialog(
             tree = tree,
-            title = "Przenieś „${folderApp.app.label}” do…",
+            title = stringResource(R.string.folder_move_app_title, folderApp.app.label),
             onPick = { target ->
                 callbacks.onMoveApp(folderApp, target.id)
                 appToMove = null
@@ -430,6 +434,7 @@ fun FolderTile(
 @Composable
 private fun OverflowMenu(actions: List<MenuAction>) {
     var open by remember { mutableStateOf(false) }
+    val moreDesc = stringResource(R.string.folder_more_options_desc)
     Box {
         Box(
             contentAlignment = Alignment.Center,
@@ -437,7 +442,7 @@ private fun OverflowMenu(actions: List<MenuAction>) {
                 .size(48.dp)
                 .clip(CircleShape)
                 .clickable { open = true }
-                .semantics { contentDescription = "Więcej opcji folderu" },
+                .semantics { contentDescription = moreDesc },
         ) { Text("⋮", style = MaterialTheme.typography.titleLarge) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             actions.forEach { action ->
@@ -468,7 +473,7 @@ fun TextInputDialog(
         confirmButton = {
             TextButton(enabled = text.isNotBlank(), onClick = { onConfirm(text) }) { Text(confirmLabel) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -480,7 +485,7 @@ fun AppMultiPickerDialog(
     onConfirm: (List<AppInfo>) -> Unit,
     onDismiss: () -> Unit,
     suggestions: List<AppInfo> = emptyList(),
-    title: String = "Wybierz aplikacje",
+    title: String = stringResource(R.string.folder_pick_apps_title),
 ) = AppGridPickerDialog(allApps, title, single = false, alreadySelected, suggestions, onConfirm, onDismiss)
 
 // Wybór aplikacji w układzie szuflady (siatka ikon, a nie długa lista), z wyszukiwarką i filtrami-tagami:
@@ -524,7 +529,7 @@ fun AppGridPickerDialog(
                 OutlinedTextField(
                     value = filter,
                     onValueChange = { filter = it },
-                    placeholder = { Text("Szukaj") },
+                    placeholder = { Text(stringResource(R.string.folder_search)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -536,16 +541,16 @@ fun AppGridPickerDialog(
                         .padding(vertical = 6.dp),
                 ) {
                     if (suggestions.isNotEmpty()) {
-                        FilterChip(selected = tag == -1, onClick = { tag = -1 }, label = { Text("Proponowane (${suggestions.size})") })
+                        FilterChip(selected = tag == -1, onClick = { tag = -1 }, label = { Text(stringResource(R.string.folder_pick_suggested, suggestions.size)) })
                     }
-                    FilterChip(selected = tag == null, onClick = { tag = null }, label = { Text("Wszystkie") })
+                    FilterChip(selected = tag == null, onClick = { tag = null }, label = { Text(stringResource(R.string.folder_pick_all)) })
                     CategoryLabels.filterKeys { it in presentCategories }.forEach { (cat, name) ->
                         FilterChip(selected = tag == cat, onClick = { tag = cat }, label = { Text(name) })
                     }
                 }
                 if (shown.isEmpty()) {
                     Text(
-                        "Nic tu nie pasuje. Wybierz „Wszystkie” albo zmień wyszukiwanie.",
+                        stringResource(R.string.folder_pick_no_match),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 16.dp),
                     )
@@ -603,13 +608,13 @@ fun AppGridPickerDialog(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = onDismiss) { Text("Anuluj") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
                     if (!single) {
                         Spacer(Modifier.width(8.dp))
                         Button(
                             enabled = selected.isNotEmpty(),
                             onClick = { onConfirm(allApps.filter { it.key in selected }) },
-                        ) { Text("Dodaj (${selected.size})") }
+                        ) { Text(stringResource(R.string.folder_pick_add_count, selected.size)) }
                     }
                 }
             }
@@ -640,18 +645,18 @@ fun FolderPickerDialog(
                         OutlinedTextField(
                             value = newName,
                             onValueChange = { newName = it },
-                            placeholder = { Text("Nowy folder") },
+                            placeholder = { Text(stringResource(R.string.folder_new_folder)) },
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                         )
-                        TextButton(enabled = newName.isNotBlank(), onClick = { onCreateNew(newName) }) { Text("Utwórz") }
+                        TextButton(enabled = newName.isNotBlank(), onClick = { onCreateNew(newName) }) { Text(stringResource(R.string.common_create)) }
                     }
                     Spacer(Modifier.height(8.dp))
                 }
                 if (entries.isEmpty()) {
                     Text(
-                        if (onCreateNew != null) "Nie masz jeszcze folderów. Wpisz nazwę pierwszego."
-                        else "Nie masz jeszcze folderów. Utwórz je w szufladzie aplikacji → Foldery.",
+                        if (onCreateNew != null) stringResource(R.string.folder_picker_none_type_name)
+                        else stringResource(R.string.folder_picker_none_drawer),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
@@ -660,7 +665,7 @@ fun FolderPickerDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 

@@ -12,19 +12,24 @@ import android.net.wifi.WifiManager
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import androidx.annotation.StringRes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 
 // Przełączniki widżetu. Część zmieniamy sami (latarka, DND, dźwięk, obrót),
 // a Wi-Fi i Bluetooth Android pozwala zmienić tylko w panelu systemowym — wtedy zwracamy Intent.
-enum class QuickToggle(val label: String) {
-    TORCH("Latarka"),
-    DND("Nie przeszk."),
-    RINGER("Dźwięk"),
-    ROTATION("Obrót"),
-    INTERNET("Internet"),
-    BLUETOOTH("Bluetooth"),
+enum class QuickToggle(@StringRes private val labelRes: Int) {
+    TORCH(R.string.sys_quick_torch),
+    DND(R.string.sys_quick_dnd),
+    RINGER(R.string.sys_quick_ringer),
+    ROTATION(R.string.sys_quick_rotation),
+    INTERNET(R.string.sys_quick_internet),
+    BLUETOOTH(R.string.sys_quick_bluetooth);
+
+    val label: String get() = AppText.get(labelRes)
 }
 
 enum class RingerState { NORMAL, VIBRATE, SILENT }

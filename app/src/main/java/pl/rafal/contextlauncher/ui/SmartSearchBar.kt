@@ -46,6 +46,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.AppInfo
 
 // Co pasek wyszukiwania pokazuje w trybie czuwania. sealed interface ≈ zamknięta hierarchia klas
@@ -113,6 +115,7 @@ fun SmartSearchBar(
     }
     val current: SmartItem? = pinned ?: items.getOrNull(index % count.coerceAtLeast(1))
     val border = pinned?.let { Color(it.color).copy(alpha = 0.7f) }
+    val searchLabel = stringResource(R.string.search_apps)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -132,7 +135,7 @@ fun SmartSearchBar(
                     .size(44.dp)
                     .clip(CircleShape)
                     .clickable(onClick = onSearch)
-                    .semantics { contentDescription = "Szukaj aplikacji" },
+                    .semantics { contentDescription = searchLabel },
             ) { Text("⌕", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             Spacer(Modifier.width(4.dp))
         } else {
@@ -151,7 +154,7 @@ fun SmartSearchBar(
             Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize()) {
                 when (item) {
                     null -> Text(
-                        "Szukaj aplikacji",
+                        searchLabel,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -198,7 +201,7 @@ fun SmartSearchBar(
                         }
                         Spacer(Modifier.width(10.dp))
                         Column {
-                            Text("Nowe powiadomienie", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.search_new_notification), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
                                 item.app.label,
                                 style = MaterialTheme.typography.bodyMedium,

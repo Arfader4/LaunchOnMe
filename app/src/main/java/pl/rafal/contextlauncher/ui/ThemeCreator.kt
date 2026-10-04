@@ -31,15 +31,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.ui.theme.CustomColors
 
 // Gotowe punkty wyjścia — potem każdy kolor można zmienić (także na dowolny z palety).
 private val ThemeStarters = listOf(
-    "Mięta" to CustomColors(0xFF10151A, 0xFF1A2229, 0xFF4DF5CD, 0xFFE8EEF0),
-    "Granat" to CustomColors(0xFF0B1220, 0xFF141E33, 0xFF6EA8FE, 0xFFE6ECF7),
-    "Bordo" to CustomColors(0xFF1A0E12, 0xFF2A161C, 0xFFE0736B, 0xFFF3E6E8),
-    "Papier" to CustomColors(0xFFF5F1E8, 0xFFFFFFFF, 0xFF8B5A2B, 0xFF2A2118),
-    "Śnieg" to CustomColors(0xFFF7F9FC, 0xFFFFFFFF, 0xFF2563EB, 0xFF111827),
+    R.string.look_starter_mint to CustomColors(0xFF10151A, 0xFF1A2229, 0xFF4DF5CD, 0xFFE8EEF0),
+    R.string.look_starter_navy to CustomColors(0xFF0B1220, 0xFF141E33, 0xFF6EA8FE, 0xFFE6ECF7),
+    R.string.look_starter_burgundy to CustomColors(0xFF1A0E12, 0xFF2A161C, 0xFFE0736B, 0xFFF3E6E8),
+    R.string.look_starter_paper to CustomColors(0xFFF5F1E8, 0xFFFFFFFF, 0xFF8B5A2B, 0xFF2A2118),
+    R.string.look_starter_snow to CustomColors(0xFFF7F9FC, 0xFFFFFFFF, 0xFF2563EB, 0xFF111827),
 )
 
 private val BackgroundPresets = listOf(0xFF000000, 0xFF0F1012, 0xFF10151A, 0xFF0B1220, 0xFF1A0E12, 0xFF14120F, 0xFFF5F1E8, 0xFFF7F9FC, 0xFFFFFFFF)
@@ -54,37 +56,37 @@ fun ThemeCreatorDialog(initial: CustomColors, onSave: (CustomColors) -> Unit, on
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Własny schemat") },
+        title = { Text(stringResource(R.string.look_custom_scheme)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ThemePreview(colors)
-                Text("Na start", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.look_starters), style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 4.dp)) {
                     ThemeStarters.forEach { (name, c) ->
-                        TextButton(onClick = { colors = c }) { Text(name) }
+                        TextButton(onClick = { colors = c }) { Text(stringResource(name)) }
                     }
                 }
-                Text("Tło", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.look_background), style = MaterialTheme.typography.labelLarge)
                 ColorSwatches(BackgroundPresets, colors.background, { it?.let { c -> colors = colors.copy(background = c) } })
-                Text("Karty i okna", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.look_surfaces), style = MaterialTheme.typography.labelLarge)
                 ColorSwatches(SurfacePresets, colors.surface, { it?.let { c -> colors = colors.copy(surface = c) } })
-                Text("Akcent", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.look_accent), style = MaterialTheme.typography.labelLarge)
                 ColorSwatches(ModeColors, colors.accent, { it?.let { c -> colors = colors.copy(accent = c) } })
-                Text("Tekst", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.look_text), style = MaterialTheme.typography.labelLarge)
                 ColorSwatches(TextPresets, colors.text, { it?.let { c -> colors = colors.copy(text = c) } })
                 val bgLight = Color(colors.background).luminance() > 0.5f
                 val textLight = Color(colors.text).luminance() > 0.5f
                 if (bgLight == textLight) {
                     Text(
-                        "Tekst i tło są podobnie jasne — napisy mogą być słabo widoczne.",
+                        stringResource(R.string.look_low_contrast),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(colors) }) { Text("Zapisz i użyj") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        confirmButton = { TextButton(onClick = { onSave(colors) }) { Text(stringResource(R.string.look_save_and_use)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -105,8 +107,8 @@ private fun ThemePreview(c: CustomColors) {
                 .background(Color(c.surface))
                 .padding(12.dp),
         ) {
-            Text("Praca", color = Color(c.text), fontWeight = FontWeight.SemiBold)
-            Text("Spotkanie o 10:30", color = Color(c.text).copy(alpha = 0.65f), style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.look_preview_mode), color = Color(c.text), fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.look_preview_event), color = Color(c.text).copy(alpha = 0.65f), style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
             Row {
                 Box(
@@ -116,7 +118,7 @@ private fun ThemePreview(c: CustomColors) {
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                 ) {
                     Text(
-                        "✓ Włącz",
+                        stringResource(R.string.look_preview_button),
                         color = if (Color(c.accent).luminance() > 0.5f) Color(0xFF111111) else Color.White,
                         style = MaterialTheme.typography.labelLarge,
                     )

@@ -34,6 +34,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.AppInfo
 
 // Wybór skrótu aplikacji (np. "Nowa wiadomość", czat z konkretną osobą, "Skanuj kod").
@@ -74,8 +76,7 @@ fun ShortcutPickerDialog(
                 Spacer(Modifier.height(8.dp))
                 if (!hasAccess) {
                     Text(
-                        "Skróty aplikacji system udostępnia tylko domyślnemu ekranowi głównemu. " +
-                            "Ustaw LaunchOnMe jako domyślny launcher (Ustawienia telefonu → Aplikacje → Aplikacje domyślne → Ekran główny).",
+                        stringResource(R.string.shortcut_no_access),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
                     )
@@ -83,13 +84,13 @@ fun ShortcutPickerDialog(
                     OutlinedTextField(
                         value = filter,
                         onValueChange = { filter = it },
-                        placeholder = { Text("Szukaj aplikacji albo skrótu") },
+                        placeholder = { Text(stringResource(R.string.shortcut_search_hint)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     if (groups.isEmpty()) {
                         Text(
-                            "Brak skrótów. Nie każda aplikacja je udostępnia — sprawdź przytrzymując jej ikonę w innym launcherze.",
+                            stringResource(R.string.shortcut_empty),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 16.dp),
                         )
@@ -123,7 +124,7 @@ fun ShortcutPickerDialog(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = onDismiss) { Text("Zamknij") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) }
                 }
             }
         }

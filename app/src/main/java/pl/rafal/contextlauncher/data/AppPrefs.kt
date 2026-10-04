@@ -2,12 +2,19 @@ package pl.rafal.contextlauncher.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.annotation.StringRes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 
 // Jak długo ukrywać odrzuconą sugestię.
-enum class DismissDuration(val label: String) { ONE_HOUR("1 godz."), THREE_HOURS("3 godz."), UNTIL_TOMORROW("Do jutra") }
+enum class DismissDuration(@StringRes private val labelRes: Int) {
+    ONE_HOUR(R.string.data_dismiss_one_hour), THREE_HOURS(R.string.data_dismiss_three_hours), UNTIL_TOMORROW(R.string.data_dismiss_until_tomorrow);
+
+    val label: String get() = AppText.get(labelRes)
+}
 
 // Ogólne ustawienia launchera (ekran Ustawienia). Każde ustawienie to StateFlow, więc UI odświeża się samo.
 // Jedna instancja na proces (singleton): kafelek, skróty i automat muszą widzieć te same wartości co ekran.

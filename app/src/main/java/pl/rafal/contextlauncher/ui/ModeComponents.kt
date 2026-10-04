@@ -32,10 +32,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.ModeEntity
 
 // Kolory do wyboru dla nowego trybu (te same co w makiecie).
@@ -95,12 +97,13 @@ fun ModePickerSheet(
     ) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
             Text(
-                "Tryby",
+                stringResource(R.string.mode_picker_title),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(start = 12.dp, bottom = 8.dp),
             )
             modes.forEach { mode ->
                 val isActive = mode.id == activeId
+                val manageDescription = stringResource(R.string.mode_manage_cd, mode.name)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -115,7 +118,7 @@ fun ModePickerSheet(
                     Spacer(Modifier.width(12.dp))
                     Text(mode.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     if (isActive) {
-                        Text("aktywny", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        Text(stringResource(R.string.mode_active), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     }
                     // Ustawienia trybu: reguły sugestii, nazwa, usuwanie.
                     Box(
@@ -124,12 +127,12 @@ fun ModePickerSheet(
                             .size(48.dp)
                             .clip(CircleShape)
                             .clickable { onManage(mode) }
-                            .semantics { contentDescription = "Ustawienia trybu ${mode.name}" },
+                            .semantics { contentDescription = manageDescription },
                     ) { Text("⋮", style = MaterialTheme.typography.titleLarge) }
                 }
             }
             TextButton(onClick = onNewMode, modifier = Modifier.padding(top = 8.dp)) {
-                Text("+ Nowy tryb")
+                Text(stringResource(R.string.mode_new_button))
             }
         }
     }
@@ -145,13 +148,13 @@ fun NewModeDialog(onConfirm: (name: String, color: Long, icon: String) -> Unit, 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Nowy tryb") },
+        title = { Text(stringResource(R.string.mode_new_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Nazwa") },
+                    label = { Text(stringResource(R.string.mode_name_label)) },
                     singleLine = true,
                 )
                 IconPicker(selected = icon, color = color, onSelect = { icon = it })
@@ -160,11 +163,11 @@ fun NewModeDialog(onConfirm: (name: String, color: Long, icon: String) -> Unit, 
         },
         confirmButton = {
             TextButton(enabled = name.isNotBlank(), onClick = { onConfirm(name.trim(), color, icon.key) }) {
-                Text("Utwórz")
+                Text(stringResource(R.string.common_create))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Anuluj") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
         },
     )
 }

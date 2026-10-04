@@ -61,9 +61,12 @@ data class Layer(
         const val FRAME_FILM = "film"         // czarny pasek kliszy z perforacją
 
         // Ramki do wyboru (tablica i edytor naklejki) — kolejność = kolejność czipów.
-        val FRAMES = listOf(
-            FRAME_NONE to "Bez ramki", FRAME_OUTLINE to "Kontur", FRAME_SHADOW to "Cień", FRAME_STAMP to "Znaczek",
-            FRAME_INSTAX to "Instax", FRAME_POLAROID to "Polaroid", FRAME_FILM to "Klisza", FRAME_TAPE to "Taśma",
+        // Getter: etykiety czytane przy każdym użyciu (zmiana języka bez restartu).
+        val FRAMES: List<Pair<String, String>> get() = listOf(
+            FRAME_NONE to StudioText.get(R.string.som_frame_none), FRAME_OUTLINE to StudioText.get(R.string.som_frame_outline),
+            FRAME_SHADOW to StudioText.get(R.string.som_frame_shadow), FRAME_STAMP to StudioText.get(R.string.som_frame_stamp),
+            FRAME_INSTAX to "Instax", FRAME_POLAROID to "Polaroid",
+            FRAME_FILM to StudioText.get(R.string.som_frame_film), FRAME_TAPE to StudioText.get(R.string.som_frame_tape),
         )
         // Ramki, w których kolor ma znaczenie (cień i klisza mają własny).
         fun hasColor(frame: String) = frame != FRAME_NONE && frame != FRAME_SHADOW && frame != FRAME_FILM
@@ -95,7 +98,7 @@ data class Layer(
 
 data class Board(
     val id: String = UUID.randomUUID().toString(),
-    val name: String = "Tablica",
+    val name: String = StudioText.get(R.string.som_board_default_name),
     val width: Int,
     val height: Int,
     val bgType: String = BG_TRANSPARENT,
@@ -145,12 +148,12 @@ fun boardPresets(context: Context): List<BoardPreset> {
     // Wysokość ekranu z paskami (displayMetrics bywa bez paska nawigacji) — dla tapety bierzemy proporcje 9:19,5 jako minimum.
     val screenH = maxOf(metrics.widthPixels, metrics.heightPixels, (screenW * 19.5f / 9f).toInt())
     return listOf(
-        BoardPreset("Naklejka (przezroczysta)", 1024, 1024, transparent = true),
-        BoardPreset("Tapeta telefonu", screenW, screenH),
-        BoardPreset("Kwadrat 1:1", 1080, 1080),
-        BoardPreset("Pion 4:5", 1080, 1350),
-        BoardPreset("Relacja 9:16", 1080, 1920),
-        BoardPreset("A4 do druku", 2480, 3508),
+        BoardPreset(context.getString(R.string.som_board_preset_sticker), 1024, 1024, transparent = true),
+        BoardPreset(context.getString(R.string.som_board_preset_wallpaper), screenW, screenH),
+        BoardPreset(context.getString(R.string.som_board_preset_square), 1080, 1080),
+        BoardPreset(context.getString(R.string.som_board_preset_portrait), 1080, 1350),
+        BoardPreset(context.getString(R.string.som_board_preset_story), 1080, 1920),
+        BoardPreset(context.getString(R.string.som_board_preset_a4), 2480, 3508),
     )
 }
 

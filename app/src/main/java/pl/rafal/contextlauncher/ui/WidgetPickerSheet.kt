@@ -37,6 +37,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.CustomWidgetKind
 import pl.rafal.contextlauncher.data.widgets.WidgetProvider
 
@@ -80,14 +82,14 @@ fun WidgetPickerSheet(
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
         Text(
-            "Dodaj widżet",
+            stringResource(R.string.picker_title),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(start = 28.dp, bottom = 8.dp),
         )
         OutlinedTextField(
             value = filter,
             onValueChange = { filter = it },
-            placeholder = { Text("Szukaj widżetu lub aplikacji") },
+            placeholder = { Text(stringResource(R.string.picker_search_hint)) },
             singleLine = true,
             shape = RoundedCornerShape(28.dp),
             colors = OutlinedTextFieldDefaults.colors(
@@ -134,7 +136,7 @@ fun WidgetPickerSheet(
             }
             if (providers.isEmpty()) {
                 item(key = "loading") {
-                    Text("Wczytywanie widżetów aplikacji…", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp))
+                    Text(stringResource(R.string.picker_loading), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp))
                 }
             }
             groups.forEach { (groupKey, list) ->

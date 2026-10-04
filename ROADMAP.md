@@ -186,8 +186,9 @@ Kolejność ustalona 04.10: paczka 1 → paczka 2 → tłumaczenie → duże tem
       Lupa = wyszukiwarka z klawiaturą. Przewijanie tylko, gdy launcher jest widoczny.
 
 ### Paczka 3 — tłumaczenie
-- [ ] Wszystkie teksty do zasobów (res/values = angielski, res/values-pl = polski). Fundament gotowy:
-      `LaunchOnMeApp`, `AppText`, `StudioText`. Kolejne języki potem = po jednym pliku.
+- [x] Wszystkie teksty do zasobów: `res/values` = angielski (domyślny), `res/values-pl` = polski — launcher ok. 1100,
+      StickOnMe ok. 150 tekstów, też etykiety w manifeście. Daty i nazwy miast z pogody w języku telefonu.
+      Kolejne języki = po jednym pliku `values-xx/strings.xml` na moduł.
 
 ### Duże tematy (osobne czaty, kolejno)
 - [ ] OnHand jako pełne notatki: przyjmowanie z „Udostępnij” (Keep, Samsung Notes…), wysyłanie do nich, eksport do pliku.

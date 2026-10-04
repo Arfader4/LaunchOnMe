@@ -44,7 +44,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import pl.rafal.contextlauncher.R
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -86,6 +89,7 @@ private fun WidgetStackBody(
     content: @Composable (Int) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val offset = remember { Animatable(0f) } // przesunięcie palcem w pikselach (w pionie)
     var shown by remember { mutableIntStateOf(index.coerceIn(0, count - 1)) }
     val lastReported = remember { intArrayOf(-1) } // ostatni numer wysłany do bazy (jego "echo" pomijamy)
@@ -238,8 +242,8 @@ private fun WidgetStackBody(
                         },
                     )
                     .semantics {
-                        contentDescription = "Uchwyt stosu: przesuń w pionie albo dotknij (${shown + 1} z $count)"
-                        onClick(label = "Następny widżet") {
+                        contentDescription = context.getString(R.string.stack_handle_desc, shown + 1, count)
+                        onClick(label = context.getString(R.string.stack_next_widget)) {
                             scope.launch { settle(1) }
                             true
                         }
@@ -293,21 +297,21 @@ fun StackDialog(
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { androidx.compose.material3.Text("Stos widżetów") },
+        title = { androidx.compose.material3.Text(stringResource(R.string.stack_dialog_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 androidx.compose.material3.Text(
-                    "Na karcie przesuwasz stos palcem w górę i w dół. Dotknij nazwy, aby pokazać ten widżet na wierzchu.",
+                    stringResource(R.string.stack_dialog_intro),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 // Gdzie przesunięcie zmienia widżet. Uchwyt z kropkami działa zawsze, dwa palce też.
-                androidx.compose.material3.Text("Przełączanie palcem", style = MaterialTheme.typography.labelLarge)
+                androidx.compose.material3.Text(stringResource(R.string.stack_swipe_label), style = MaterialTheme.typography.labelLarge)
                 androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(
-                        pl.rafal.contextlauncher.data.StackData.SWIPE_AUTO to "Auto",
-                        pl.rafal.contextlauncher.data.StackData.SWIPE_ANYWHERE to "Cały widżet",
-                        pl.rafal.contextlauncher.data.StackData.SWIPE_HANDLE to "Tylko uchwyt",
+                        pl.rafal.contextlauncher.data.StackData.SWIPE_AUTO to stringResource(R.string.stack_swipe_auto),
+                        pl.rafal.contextlauncher.data.StackData.SWIPE_ANYWHERE to stringResource(R.string.stack_swipe_anywhere),
+                        pl.rafal.contextlauncher.data.StackData.SWIPE_HANDLE to stringResource(R.string.stack_swipe_handle),
                     ).forEach { (value, label) ->
                         androidx.compose.material3.FilterChip(
                             selected = swipe == value,
@@ -318,9 +322,9 @@ fun StackDialog(
                 }
                 androidx.compose.material3.Text(
                     when (swipe) {
-                        pl.rafal.contextlauncher.data.StackData.SWIPE_ANYWHERE -> "Przesunięcie w dowolnym miejscu zmienia widżet (listy w stosie się nie przewiną)."
-                        pl.rafal.contextlauncher.data.StackData.SWIPE_HANDLE -> "Widżet zmieniasz tylko uchwytem z kropkami przy prawej krawędzi (albo dwoma palcami)."
-                        else -> "Widżety z listą (zakupy, poczta, kalendarz) przewijają treść — zmieniasz je uchwytem; pozostałe przesunięciem w dowolnym miejscu."
+                        pl.rafal.contextlauncher.data.StackData.SWIPE_ANYWHERE -> stringResource(R.string.stack_swipe_anywhere_desc)
+                        pl.rafal.contextlauncher.data.StackData.SWIPE_HANDLE -> stringResource(R.string.stack_swipe_handle_desc)
+                        else -> stringResource(R.string.stack_swipe_auto_desc)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -343,16 +347,16 @@ fun StackDialog(
                                 .padding(vertical = 10.dp),
                         )
                         // Ciasno: same symbole (▲ ▼ ⚙ ⇱) z opisem dla czytnika ekranu.
-                        StackIconButton("▲", "Wyżej", enabled = i > 0) { onMove(member, -1) }
-                        StackIconButton("▼", "Niżej", enabled = i < members.lastIndex) { onMove(member, 1) }
-                        onSettings(member)?.let { open -> StackIconButton("⚙", "Ustawienia widżetu", enabled = true, onClick = open) }
-                        StackIconButton("⇱", "Wyjmij na kartę", enabled = true) { onTakeOut(member) }
+                        StackIconButton("▲", stringResource(R.string.stack_move_up), enabled = i > 0) { onMove(member, -1) }
+                        StackIconButton("▼", stringResource(R.string.stack_move_down), enabled = i < members.lastIndex) { onMove(member, 1) }
+                        onSettings(member)?.let { open -> StackIconButton("⚙", stringResource(R.string.stack_widget_settings), enabled = true, onClick = open) }
+                        StackIconButton("⇱", stringResource(R.string.stack_take_out), enabled = true) { onTakeOut(member) }
                     }
                 }
             }
         },
-        confirmButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { androidx.compose.material3.Text("Gotowe") } },
-        dismissButton = { androidx.compose.material3.TextButton(onClick = onDissolve) { androidx.compose.material3.Text("Rozdziel stos") } },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { androidx.compose.material3.Text(stringResource(R.string.common_done)) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDissolve) { androidx.compose.material3.Text(stringResource(R.string.stack_dissolve)) } },
     )
 }
 

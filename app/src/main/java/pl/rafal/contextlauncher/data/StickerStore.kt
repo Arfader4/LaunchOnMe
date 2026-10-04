@@ -3,6 +3,8 @@ package pl.rafal.contextlauncher.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -20,7 +22,7 @@ object StickerStore {
         if (source.scheme == "file") {
             val library = File(context.filesDir, "stickers/library").canonicalPath
             val path = File(source.path.orEmpty()).canonicalPath
-            require(path.startsWith("$library/")) { "Niedozwolony plik" }
+            require(path.startsWith("$library/")) { AppText.get(R.string.data_file_not_allowed) }
         }
         // Plik z biblioteki StickOnMe (file://) nie ma typu MIME — bierzemy go z rozszerzenia.
         val mime = if (source.scheme == "file") "image/" + source.lastPathSegment.orEmpty().substringAfterLast('.', "png")
@@ -32,7 +34,7 @@ object StickerStore {
             else -> "jpg"
         }
         val target = File(folder(context), "${UUID.randomUUID()}.$extension")
-        val input = context.contentResolver.openInputStream(source) ?: error("Nie udało się odczytać obrazka")
+        val input = context.contentResolver.openInputStream(source) ?: error(AppText.get(R.string.data_image_read_failed))
         input.use { inp -> target.outputStream().use { out -> inp.copyTo(out) } }
         target.absolutePath
     }

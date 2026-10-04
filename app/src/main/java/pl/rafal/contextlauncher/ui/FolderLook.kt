@@ -1,6 +1,7 @@
 package pl.rafal.contextlauncher.ui
 
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,93 +38,98 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import pl.rafal.contextlauncher.AppText
 import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.AppInfo
 import pl.rafal.contextlauncher.data.db.FolderEntity
 
 // Symbole folderów. Celowo WYPEŁNIONE kształty i inne motywy niż ikony trybów (te są konturami),
 // żeby na karcie od razu było widać, co jest trybem, a co folderem.
-enum class FolderIcon(val key: String, @DrawableRes val res: Int, val label: String, val extra: Boolean = false) {
-    FOLDER("folder", R.drawable.ic_folder_folder, "Folder"),
-    CHAT("chat", R.drawable.ic_folder_chat, "Komunikatory"),
-    PEOPLE("people", R.drawable.ic_folder_people, "Ludzie"),
-    PHOTO("photo", R.drawable.ic_folder_photo, "Zdjęcia"),
-    VIDEO("video", R.drawable.ic_folder_video, "Wideo"),
-    HEADSET("headset", R.drawable.ic_folder_headset, "Audio"),
-    DOC("doc", R.drawable.ic_folder_doc, "Dokumenty"),
-    BOOKMARK("bookmark", R.drawable.ic_folder_bookmark, "Zakładka"),
-    CARD("card", R.drawable.ic_folder_card, "Finanse"),
-    TOOLS("tools", R.drawable.ic_folder_tools, "Narzędzia"),
-    CODE("code", R.drawable.ic_folder_code, "Kod"),
-    CLOUD("cloud", R.drawable.ic_folder_cloud, "Chmura"),
-    PIN("pin", R.drawable.ic_folder_pin, "Miejsca"),
-    SHIELD("shield", R.drawable.ic_folder_shield, "Bezpieczeństwo"),
-    BOLT("bolt", R.drawable.ic_folder_bolt, "Energia"),
-    GIFT("gift", R.drawable.ic_folder_gift, "Prezent"),
+enum class FolderIcon(val key: String, @DrawableRes val res: Int, @StringRes private val labelRes: Int, val extra: Boolean = false) {
+    FOLDER("folder", R.drawable.ic_folder_folder, R.string.folder_icon_folder),
+    CHAT("chat", R.drawable.ic_folder_chat, R.string.folder_icon_chat),
+    PEOPLE("people", R.drawable.ic_folder_people, R.string.folder_icon_people),
+    PHOTO("photo", R.drawable.ic_folder_photo, R.string.folder_icon_photo),
+    VIDEO("video", R.drawable.ic_folder_video, R.string.folder_icon_video),
+    HEADSET("headset", R.drawable.ic_folder_headset, R.string.folder_icon_headset),
+    DOC("doc", R.drawable.ic_folder_doc, R.string.folder_icon_doc),
+    BOOKMARK("bookmark", R.drawable.ic_folder_bookmark, R.string.folder_icon_bookmark),
+    CARD("card", R.drawable.ic_folder_card, R.string.folder_icon_card),
+    TOOLS("tools", R.drawable.ic_folder_tools, R.string.folder_icon_tools),
+    CODE("code", R.drawable.ic_folder_code, R.string.folder_icon_code),
+    CLOUD("cloud", R.drawable.ic_folder_cloud, R.string.folder_icon_cloud),
+    PIN("pin", R.drawable.ic_folder_pin, R.string.folder_icon_pin),
+    SHIELD("shield", R.drawable.ic_folder_shield, R.string.folder_icon_shield),
+    BOLT("bolt", R.drawable.ic_folder_bolt, R.string.folder_icon_bolt),
+    GIFT("gift", R.drawable.ic_folder_gift, R.string.folder_icon_gift),
     // Rozszerzony zestaw — widoczny po rozwinięciu "Więcej symboli", żeby okno nie było przeładowane.
     // Najpierw pieniądze i zakupy, potem reszta.
-    X_DOLLAR("dollar", R.drawable.ic_folder_dollar, "Dolar", extra = true),
-    X_EURO("euro", R.drawable.ic_folder_euro, "Euro", extra = true),
-    X_COINS("coins", R.drawable.ic_folder_coins, "Monety", extra = true),
-    X_BANKNOTE("banknote", R.drawable.ic_folder_banknote, "Gotówka", extra = true),
-    X_PIGGY("piggy", R.drawable.ic_folder_piggy, "Oszczędności", extra = true),
-    X_RECEIPT("receipt", R.drawable.ic_folder_receipt, "Rachunki", extra = true),
-    X_TAG("tag", R.drawable.ic_folder_tag, "Promocje", extra = true),
-    X_TREND("trend", R.drawable.ic_folder_trend, "Inwestycje", extra = true),
-    X_STORE("store", R.drawable.ic_folder_store, "Sklep", extra = true),
-    X_FUEL("fuel", R.drawable.ic_folder_fuel, "Paliwo", extra = true),
-    X_CLAPPER("clapper", R.drawable.ic_folder_clapper, "Filmy", extra = true),
-    X_WIFI("wifi", R.drawable.ic_folder_wifi, "Sieć", extra = true),
-    X_HOME("home", R.drawable.ic_folder_home, "Dom", extra = true),
-    X_WORK("work", R.drawable.ic_folder_work, "Praca", extra = true),
-    X_SCHOOL("school", R.drawable.ic_folder_school, "Nauka", extra = true),
-    X_BOOK("book", R.drawable.ic_folder_book, "Książki", extra = true),
-    X_MUSIC("music", R.drawable.ic_folder_music, "Muzyka", extra = true),
-    X_MIC("mic", R.drawable.ic_folder_mic, "Podcasty", extra = true),
-    X_TV("tv", R.drawable.ic_folder_tv, "Telewizja", extra = true),
-    X_CAMERA("camera", R.drawable.ic_folder_camera, "Aparat", extra = true),
-    X_GAMEPAD("gamepad", R.drawable.ic_folder_gamepad, "Gry", extra = true),
-    X_FITNESS("fitness", R.drawable.ic_folder_fitness, "Trening", extra = true),
-    X_HEART("heart", R.drawable.ic_folder_heart, "Serce", extra = true),
-    X_HEALTH("health", R.drawable.ic_folder_health, "Zdrowie", extra = true),
-    X_FOOD("food", R.drawable.ic_folder_food, "Jedzenie", extra = true),
-    X_CAFE("cafe", R.drawable.ic_folder_cafe, "Kawa", extra = true),
-    X_CART("cart", R.drawable.ic_folder_cart, "Zakupy", extra = true),
-    X_BAG("bag", R.drawable.ic_folder_bag, "Sklepy", extra = true),
-    X_WALLET("wallet", R.drawable.ic_folder_wallet, "Portfel", extra = true),
-    X_BANK("bank", R.drawable.ic_folder_bank, "Bank", extra = true),
-    X_CHART("chart", R.drawable.ic_folder_chart, "Statystyki", extra = true),
-    X_FLIGHT("flight", R.drawable.ic_folder_flight, "Podróże", extra = true),
-    X_CAR("car", R.drawable.ic_folder_car, "Auto", extra = true),
-    X_BUS("bus", R.drawable.ic_folder_bus, "Komunikacja", extra = true),
-    X_MAIL("mail", R.drawable.ic_folder_mail, "Poczta", extra = true),
-    X_PHONE("phone", R.drawable.ic_folder_phone, "Telefon", extra = true),
-    X_EVENT("event", R.drawable.ic_folder_event, "Kalendarz", extra = true),
-    X_BELL("bell", R.drawable.ic_folder_bell, "Powiadomienia", extra = true),
-    X_BULB("bulb", R.drawable.ic_folder_bulb, "Pomysły", extra = true),
-    X_EDIT("edit", R.drawable.ic_folder_edit, "Notatki", extra = true),
-    X_SEARCH("search", R.drawable.ic_folder_search, "Szukanie", extra = true),
-    X_DOWNLOAD("download", R.drawable.ic_folder_download, "Pobrane", extra = true),
-    X_KEY("key", R.drawable.ic_folder_key, "Hasła", extra = true),
-    X_LOCK("lock", R.drawable.ic_folder_lock, "Prywatne", extra = true),
-    X_APPS("apps", R.drawable.ic_folder_apps, "Aplikacje", extra = true),
-    X_SMILE("smile", R.drawable.ic_folder_smile, "Rozrywka", extra = true),
-    X_MOON("moon", R.drawable.ic_folder_moon, "Noc", extra = true),
-    X_ECO("eco", R.drawable.ic_folder_eco, "Natura", extra = true),
-    X_FLAG("flag", R.drawable.ic_folder_flag, "Cele", extra = true),
-    X_STAR("star", R.drawable.ic_folder_star, "Ulubione", extra = true),
-    X_CIRCLE("circle", R.drawable.ic_folder_circle, "Koło", extra = true),
-    X_SQUARE("square", R.drawable.ic_folder_square, "Kwadrat", extra = true),
-    X_TRIANGLE("triangle", R.drawable.ic_folder_triangle, "Trójkąt", extra = true),
-    X_HEXAGON("hexagon", R.drawable.ic_folder_hexagon, "Sześciokąt", extra = true),
-    X_DIAMOND("diamond", R.drawable.ic_folder_diamond, "Romb", extra = true),
+    X_DOLLAR("dollar", R.drawable.ic_folder_dollar, R.string.folder_icon_dollar, extra = true),
+    X_EURO("euro", R.drawable.ic_folder_euro, R.string.folder_icon_euro, extra = true),
+    X_COINS("coins", R.drawable.ic_folder_coins, R.string.folder_icon_coins, extra = true),
+    X_BANKNOTE("banknote", R.drawable.ic_folder_banknote, R.string.folder_icon_banknote, extra = true),
+    X_PIGGY("piggy", R.drawable.ic_folder_piggy, R.string.folder_icon_piggy, extra = true),
+    X_RECEIPT("receipt", R.drawable.ic_folder_receipt, R.string.folder_icon_receipt, extra = true),
+    X_TAG("tag", R.drawable.ic_folder_tag, R.string.folder_icon_tag, extra = true),
+    X_TREND("trend", R.drawable.ic_folder_trend, R.string.folder_icon_trend, extra = true),
+    X_STORE("store", R.drawable.ic_folder_store, R.string.folder_icon_store, extra = true),
+    X_FUEL("fuel", R.drawable.ic_folder_fuel, R.string.folder_icon_fuel, extra = true),
+    X_CLAPPER("clapper", R.drawable.ic_folder_clapper, R.string.folder_icon_clapper, extra = true),
+    X_WIFI("wifi", R.drawable.ic_folder_wifi, R.string.folder_icon_wifi, extra = true),
+    X_HOME("home", R.drawable.ic_folder_home, R.string.folder_icon_home, extra = true),
+    X_WORK("work", R.drawable.ic_folder_work, R.string.folder_icon_work, extra = true),
+    X_SCHOOL("school", R.drawable.ic_folder_school, R.string.folder_icon_school, extra = true),
+    X_BOOK("book", R.drawable.ic_folder_book, R.string.folder_icon_book, extra = true),
+    X_MUSIC("music", R.drawable.ic_folder_music, R.string.folder_icon_music, extra = true),
+    X_MIC("mic", R.drawable.ic_folder_mic, R.string.folder_icon_mic, extra = true),
+    X_TV("tv", R.drawable.ic_folder_tv, R.string.folder_icon_tv, extra = true),
+    X_CAMERA("camera", R.drawable.ic_folder_camera, R.string.folder_icon_camera, extra = true),
+    X_GAMEPAD("gamepad", R.drawable.ic_folder_gamepad, R.string.folder_icon_gamepad, extra = true),
+    X_FITNESS("fitness", R.drawable.ic_folder_fitness, R.string.folder_icon_fitness, extra = true),
+    X_HEART("heart", R.drawable.ic_folder_heart, R.string.folder_icon_heart, extra = true),
+    X_HEALTH("health", R.drawable.ic_folder_health, R.string.folder_icon_health, extra = true),
+    X_FOOD("food", R.drawable.ic_folder_food, R.string.folder_icon_food, extra = true),
+    X_CAFE("cafe", R.drawable.ic_folder_cafe, R.string.folder_icon_cafe, extra = true),
+    X_CART("cart", R.drawable.ic_folder_cart, R.string.folder_icon_cart, extra = true),
+    X_BAG("bag", R.drawable.ic_folder_bag, R.string.folder_icon_bag, extra = true),
+    X_WALLET("wallet", R.drawable.ic_folder_wallet, R.string.folder_icon_wallet, extra = true),
+    X_BANK("bank", R.drawable.ic_folder_bank, R.string.folder_icon_bank, extra = true),
+    X_CHART("chart", R.drawable.ic_folder_chart, R.string.folder_icon_chart, extra = true),
+    X_FLIGHT("flight", R.drawable.ic_folder_flight, R.string.folder_icon_flight, extra = true),
+    X_CAR("car", R.drawable.ic_folder_car, R.string.folder_icon_car, extra = true),
+    X_BUS("bus", R.drawable.ic_folder_bus, R.string.folder_icon_bus, extra = true),
+    X_MAIL("mail", R.drawable.ic_folder_mail, R.string.folder_icon_mail, extra = true),
+    X_PHONE("phone", R.drawable.ic_folder_phone, R.string.folder_icon_phone, extra = true),
+    X_EVENT("event", R.drawable.ic_folder_event, R.string.folder_icon_event, extra = true),
+    X_BELL("bell", R.drawable.ic_folder_bell, R.string.folder_icon_bell, extra = true),
+    X_BULB("bulb", R.drawable.ic_folder_bulb, R.string.folder_icon_bulb, extra = true),
+    X_EDIT("edit", R.drawable.ic_folder_edit, R.string.folder_icon_edit, extra = true),
+    X_SEARCH("search", R.drawable.ic_folder_search, R.string.folder_icon_search, extra = true),
+    X_DOWNLOAD("download", R.drawable.ic_folder_download, R.string.folder_icon_download, extra = true),
+    X_KEY("key", R.drawable.ic_folder_key, R.string.folder_icon_key, extra = true),
+    X_LOCK("lock", R.drawable.ic_folder_lock, R.string.folder_icon_lock, extra = true),
+    X_APPS("apps", R.drawable.ic_folder_apps, R.string.folder_icon_apps, extra = true),
+    X_SMILE("smile", R.drawable.ic_folder_smile, R.string.folder_icon_smile, extra = true),
+    X_MOON("moon", R.drawable.ic_folder_moon, R.string.folder_icon_moon, extra = true),
+    X_ECO("eco", R.drawable.ic_folder_eco, R.string.folder_icon_eco, extra = true),
+    X_FLAG("flag", R.drawable.ic_folder_flag, R.string.folder_icon_flag, extra = true),
+    X_STAR("star", R.drawable.ic_folder_star, R.string.folder_icon_star, extra = true),
+    X_CIRCLE("circle", R.drawable.ic_folder_circle, R.string.folder_icon_circle, extra = true),
+    X_SQUARE("square", R.drawable.ic_folder_square, R.string.folder_icon_square, extra = true),
+    X_TRIANGLE("triangle", R.drawable.ic_folder_triangle, R.string.folder_icon_triangle, extra = true),
+    X_HEXAGON("hexagon", R.drawable.ic_folder_hexagon, R.string.folder_icon_hexagon, extra = true),
+    X_DIAMOND("diamond", R.drawable.ic_folder_diamond, R.string.folder_icon_diamond, extra = true),
     ;
+
+    val label: String get() = AppText.get(labelRes)
 
     companion object {
         // null = brak symbolu, czyli miniatura z ikon aplikacji (domyślny wygląd).
@@ -248,18 +254,19 @@ fun FolderLookDialog(
     var customText by remember { mutableStateOf(folder.icon?.takeIf { it.startsWith(TEXT_ICON) }?.removePrefix(TEXT_ICON).orEmpty()) }
     var appPickOpen by remember { mutableStateOf(false) }
     val lookup = LocalAppLookup.current
+    val context = LocalContext.current
 
     fun label(key: String?): String = when {
-        key == null -> "Miniatura aplikacji"
-        key.startsWith(TEXT_ICON) -> "Napis „${key.removePrefix(TEXT_ICON)}”"
-        key.startsWith(APP_ICON) -> lookup(key.removePrefix(APP_ICON))?.label ?: "Ikona aplikacji"
+        key == null -> context.getString(R.string.folder_look_app_thumbnail)
+        key.startsWith(TEXT_ICON) -> context.getString(R.string.folder_look_text_label, key.removePrefix(TEXT_ICON))
+        key.startsWith(APP_ICON) -> lookup(key.removePrefix(APP_ICON))?.label ?: context.getString(R.string.folder_look_app_icon)
         else -> FolderIcon.of(key)?.label ?: key
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Wygląd „${folder.name}”") },
+        title = { Text(stringResource(R.string.folder_look_title, folder.name)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -268,15 +275,15 @@ fun FolderLookDialog(
                     Text(label(icon), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.height(16.dp))
-                Text("Symbol", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.folder_look_symbol), style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(8.dp))
                 // null na początku = "bez symbolu" (miniatura z ikon aplikacji).
                 BadgeGrid(listOf<String?>(null) + FolderIcon.entries.filter { !it.extra }.map { it.key }, icon, color, preview) { icon = it }
 
-                SectionToggle("Więcej symboli (${FolderIcon.entries.count { it.extra }})", moreOpen) { moreOpen = !moreOpen }
+                SectionToggle(stringResource(R.string.folder_look_more_symbols, FolderIcon.entries.count { it.extra }), moreOpen) { moreOpen = !moreOpen }
                 if (moreOpen) BadgeGrid(FolderIcon.entries.filter { it.extra }.map { it.key }, icon, color, preview) { icon = it }
 
-                SectionToggle("Własny napis (do 3 znaków)", lettersOpen) { lettersOpen = !lettersOpen }
+                SectionToggle(stringResource(R.string.folder_look_custom_text), lettersOpen) { lettersOpen = !lettersOpen }
                 if (lettersOpen) {
                     OutlinedTextField(
                         value = customText,
@@ -285,7 +292,7 @@ fun FolderLookDialog(
                             customText = v.replace("\n", "").take(3)
                             icon = if (customText.isBlank()) null else TEXT_ICON + customText
                         },
-                        placeholder = { Text("np. zł, VIP, 24h") },
+                        placeholder = { Text(stringResource(R.string.folder_look_custom_text_hint)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -297,23 +304,23 @@ fun FolderLookDialog(
                 }
 
                 if (allApps.isNotEmpty()) {
-                    SectionToggle("Ikona aplikacji…", false) { appPickOpen = true }
+                    SectionToggle(stringResource(R.string.folder_look_app_icon_more), false) { appPickOpen = true }
                 }
 
                 Spacer(Modifier.height(16.dp))
-                Text("Kolor tła", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.folder_look_bg_color), style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(8.dp))
                 ColorSwatches(colors = FolderColors, selected = color, onSelect = { color = it }, allowNone = true)
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(icon, color) }) { Text("Zapisz") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        confirmButton = { TextButton(onClick = { onSave(icon, color) }) { Text(stringResource(R.string.common_save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 
     if (appPickOpen) {
         AppGridPickerDialog(
             allApps = allApps,
-            title = "Ikona aplikacji dla folderu",
+            title = stringResource(R.string.folder_look_app_icon_title),
             single = true,
             onConfirm = { chosen ->
                 chosen.firstOrNull()?.let { icon = APP_ICON + it.key }
@@ -343,6 +350,7 @@ private fun SectionToggle(label: String, open: Boolean, onClick: () -> Unit) {
 // Siatka znaczków do wyboru; liczba kolumn dopasowuje się do szerokości okna.
 @Composable
 private fun BadgeGrid(keys: List<String?>, selected: String?, color: Long?, preview: List<AppInfo>, onSelect: (String?) -> Unit) {
+    val thumbnailDesc = stringResource(R.string.folder_look_app_thumbnail)
     BoxWithConstraints {
         val columns = ((maxWidth + 6.dp) / 44.dp).toInt().coerceIn(4, 8)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -362,7 +370,7 @@ private fun BadgeGrid(keys: List<String?>, selected: String?, color: Long?, prev
                                     shape = RoundedCornerShape(12.dp),
                                 )
                                 .clickable { onSelect(key) }
-                                .semantics { contentDescription = key ?: "Miniatura aplikacji" },
+                                .semantics { contentDescription = key ?: thumbnailDesc },
                         )
                     }
                 }
@@ -372,15 +380,15 @@ private fun BadgeGrid(keys: List<String?>, selected: String?, color: Long?, prev
 }
 
 // Rozmiary widżetu folderu w komórkach siatki (8 kolumn). Opis mówi, co widać w danym rozmiarze.
-private data class FolderSizeOption(val w: Int, val h: Int, val label: String, val hint: String)
+private data class FolderSizeOption(val w: Int, val h: Int, @StringRes val label: Int, @StringRes val hint: Int)
 
 private val FolderSizes = listOf(
-    FolderSizeOption(1, 1, "Mini", "sam symbol"),
-    FolderSizeOption(2, 2, "Jak ikona", "symbol i nazwa"),
-    FolderSizeOption(4, 2, "Pasek", "symbol + rząd aplikacji"),
-    FolderSizeOption(4, 4, "Średni", "siatka aplikacji i podfolderów"),
-    FolderSizeOption(8, 4, "Szeroki", "więcej aplikacji w rzędzie"),
-    FolderSizeOption(8, 6, "Duży", "cała zawartość na widoku"),
+    FolderSizeOption(1, 1, R.string.folder_size_mini, R.string.folder_size_mini_hint),
+    FolderSizeOption(2, 2, R.string.folder_size_icon, R.string.folder_size_icon_hint),
+    FolderSizeOption(4, 2, R.string.folder_size_bar, R.string.folder_size_bar_hint),
+    FolderSizeOption(4, 4, R.string.folder_size_medium, R.string.folder_size_medium_hint),
+    FolderSizeOption(8, 4, R.string.folder_size_wide, R.string.folder_size_wide_hint),
+    FolderSizeOption(8, 6, R.string.folder_size_large, R.string.folder_size_large_hint),
 )
 
 // Wybór rozmiaru folderu na karcie aktywnego trybu. current = obecny rozmiar, jeśli folder już tam leży.
@@ -395,7 +403,7 @@ fun FolderSizeDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text(if (current == null) "„$folderName” na kartę $modeName" else "Rozmiar „$folderName” na karcie") },
+        title = { Text(if (current == null) stringResource(R.string.folder_size_title_place, folderName, modeName) else stringResource(R.string.folder_size_title_resize, folderName)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 FolderSizes.forEach { option ->
@@ -412,20 +420,20 @@ fun FolderSizeDialog(
                         SizeGlyph(option.w, option.h)
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("${option.label}  ${option.w}×${option.h}", fontWeight = FontWeight.SemiBold)
+                            Text("${stringResource(option.label)}  ${option.w}×${option.h}", fontWeight = FontWeight.SemiBold)
                             Text(
-                                option.hint,
+                                stringResource(option.hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        if (isCurrent) Text("teraz", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        if (isCurrent) Text(stringResource(R.string.folder_size_current), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 

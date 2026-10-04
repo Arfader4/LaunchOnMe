@@ -1,5 +1,6 @@
 package pl.rafal.contextlauncher.ui.widgets
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -38,22 +39,26 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
 // Kształt, do którego przycinamy obrazek naklejki. square = kształt ma sens tylko w kwadracie (koło, serce…).
-enum class StickerShape(val label: String, val square: Boolean) {
-    NONE("Bez", false),
-    ROUNDED("Zaokrąglony", false),
-    CIRCLE("Koło", true),
-    OVAL("Owal", false),
-    HEART("Serce", true),
-    STAR("Gwiazda", true),
-    HEXAGON("Sześciokąt", true),
-    FLOWER("Kwiatek", true),
-    ARCH("Łuk", false),
+enum class StickerShape(@StringRes private val labelRes: Int, val square: Boolean) {
+    NONE(R.string.w_shape_none, false),
+    ROUNDED(R.string.w_shape_rounded, false),
+    CIRCLE(R.string.w_shape_circle, true),
+    OVAL(R.string.w_shape_oval, false),
+    HEART(R.string.w_shape_heart, true),
+    STAR(R.string.w_shape_star, true),
+    HEXAGON(R.string.w_shape_hexagon, true),
+    FLOWER(R.string.w_shape_flower, true),
+    ARCH(R.string.w_shape_arch, false),
     ;
+
+    val label: String get() = AppText.get(labelRes)
 
     companion object {
         fun of(name: String?) = entries.firstOrNull { it.name == name } ?: NONE
@@ -61,16 +66,18 @@ enum class StickerShape(val label: String, val square: Boolean) {
 }
 
 // Ramka / styl naklejki.
-enum class StickerFrame(val label: String) {
-    NONE("Bez"),
-    OUTLINE("Biały kontur"), // jak wycięta naklejka winylowa — kontur idzie po kształcie obrazka
-    SHADOW("Cień"),
-    STAMP("Znaczek"),        // ząbkowany brzeg jak znaczek pocztowy
-    INSTAX("Instax"),        // biała ramka z szerszym dołem, pionowa
-    POLAROID("Polaroid"),    // kwadratowe zdjęcie w ramce z grubym dołem
-    FILM("Klisza"),          // czarny pasek z perforacją
-    TAPE("Taśma"),           // przyklejona taśmą washi w rogach
+enum class StickerFrame(@StringRes private val labelRes: Int) {
+    NONE(R.string.w_frame_none),
+    OUTLINE(R.string.w_frame_outline), // jak wycięta naklejka winylowa — kontur idzie po kształcie obrazka
+    SHADOW(R.string.w_frame_shadow),
+    STAMP(R.string.w_frame_stamp),        // ząbkowany brzeg jak znaczek pocztowy
+    INSTAX(R.string.w_frame_instax),        // biała ramka z szerszym dołem, pionowa
+    POLAROID(R.string.w_frame_polaroid),    // kwadratowe zdjęcie w ramce z grubym dołem
+    FILM(R.string.w_frame_film),          // czarny pasek z perforacją
+    TAPE(R.string.w_frame_tape),           // przyklejona taśmą washi w rogach
     ;
+
+    val label: String get() = AppText.get(labelRes)
 
     companion object {
         fun of(name: String?) = entries.firstOrNull { it.name == name } ?: NONE

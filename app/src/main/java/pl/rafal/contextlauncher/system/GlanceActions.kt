@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.AlarmClock
 import android.provider.CalendarContract
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.GlanceEvent
 
 // Dokąd prowadzą poszczególne części widżetu "W skrócie".
@@ -36,7 +37,7 @@ object GlanceActions {
     // Pogoda → pierwsza zainstalowana znana aplikacja pogodowa, a gdy żadnej nie ma — wyszukiwarka.
     fun weather(context: Context): Intent =
         WEATHER_APPS.firstNotNullOfOrNull { context.packageManager.getLaunchIntentForPackage(it) }
-            ?: Intent(Intent.ACTION_WEB_SEARCH).putExtra("query", "pogoda")
+            ?: Intent(Intent.ACTION_WEB_SEARCH).putExtra("query", context.getString(R.string.sys_weather_search_query))
 
     private val WEATHER_APPS = listOf(
         "com.sec.android.daemonapp",          // Samsung Pogoda

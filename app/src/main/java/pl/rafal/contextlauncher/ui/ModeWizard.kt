@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.AppInfo
 import pl.rafal.contextlauncher.data.ModePlan
 import pl.rafal.contextlauncher.data.WizardPurpose
@@ -54,7 +56,7 @@ import pl.rafal.contextlauncher.data.db.SuggestionRuleEntity
 import pl.rafal.contextlauncher.suggest.SuggestionEngine
 import pl.rafal.contextlauncher.suggest.toRule
 
-private val WizardSteps = listOf("Do czego?", "Jaka karta?", "Wygląd", "Podgląd")
+private val WizardSteps = listOf(R.string.wiz_step_purpose, R.string.wiz_step_card, R.string.wiz_step_look, R.string.wiz_step_preview)
 
 // Kreator nowego trybu: 4 krótkie kroki zamiast pustego okna "nazwa + kolor".
 // 1) cel (praca, auto, wieczór…), 2) ile rzeczy na karcie i jak duże ikony, 3) nazwa, ikona, kolor,
@@ -82,7 +84,7 @@ fun ModeWizardDialog(
                 .padding(20.dp),
         ) {
             // Nagłówek: numer kroku i kreski postępu.
-            Text("Nowy tryb · ${WizardSteps[step]}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.wiz_header, stringResource(WizardSteps[step])), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 WizardSteps.indices.forEach { i ->
@@ -128,7 +130,7 @@ fun ModeWizardDialog(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                TextButton(onClick = { if (step > 0) step-- else onDismiss() }) { Text(if (step > 0) "Wstecz" else "Anuluj") }
+                TextButton(onClick = { if (step > 0) step-- else onDismiss() }) { Text(if (step > 0) stringResource(R.string.common_back) else stringResource(R.string.common_cancel)) }
                 Spacer(Modifier.weight(1f))
                 val current = plan
                 when {
@@ -136,11 +138,11 @@ fun ModeWizardDialog(
                     step < WizardSteps.lastIndex -> Button(
                         onClick = { step++ },
                         enabled = current != null && current.name.isNotBlank() && current.name.trim().lowercase() !in existingNames,
-                    ) { Text("Dalej") }
+                    ) { Text(stringResource(R.string.common_next)) }
                     current != null -> Button(onClick = {
                         val apps = current.suggestApps(installedApps).filter { it.key !in removed }
                         onCreate(current.copy(name = current.name.trim()), apps)
-                    }) { Text("Utwórz tryb") }
+                    }) { Text(stringResource(R.string.wiz_create_mode)) }
                 }
             }
         }
@@ -150,7 +152,7 @@ fun ModeWizardDialog(
 // Krok 1: kafelki celów (2 kolumny), każdy z krótkim opisem z szablonu.
 @Composable
 private fun PurposeStep(selected: WizardPurpose?, onPick: (WizardPurpose) -> Unit) {
-    Text("Do czego ma służyć ten tryb?", style = MaterialTheme.typography.bodyLarge)
+    Text(stringResource(R.string.wiz_purpose_question), style = MaterialTheme.typography.bodyLarge)
     WizardPurpose.entries.chunked(2).forEach { row ->
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             row.forEach { purpose ->
@@ -170,7 +172,7 @@ private fun PurposeStep(selected: WizardPurpose?, onPick: (WizardPurpose) -> Uni
 // Krok 2: ile rzeczy na karcie, rozmiar ikon i czy podpowiadać tryb.
 @Composable
 private fun StyleStep(plan: ModePlan, onChange: (ModePlan) -> Unit) {
-    Text("Ile ma być na karcie?", style = MaterialTheme.typography.bodyLarge)
+    Text(stringResource(R.string.wiz_style_question), style = MaterialTheme.typography.bodyLarge)
     WizardStyle.entries.forEach { style ->
         OptionCard(
             title = style.label,
@@ -180,9 +182,13 @@ private fun StyleStep(plan: ModePlan, onChange: (ModePlan) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         )
     }
-    Text("Ikony aplikacji", style = MaterialTheme.typography.bodyLarge)
+    Text(stringResource(R.string.wiz_app_icons), style = MaterialTheme.typography.bodyLarge)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(null to "Jak w Ustawieniach", 2 to "Duże", 1 to "Małe").forEach { (cells, label) ->
+        listOf(
+            null to stringResource(R.string.wiz_icons_default),
+            2 to stringResource(R.string.wiz_icons_large),
+            1 to stringResource(R.string.wiz_icons_small),
+        ).forEach { (cells, label) ->
             FilterChip(selected = plan.iconCells == cells, onClick = { onChange(plan.copy(iconCells = cells)) }, label = { Text(label) })
         }
     }
@@ -200,7 +206,7 @@ private fun StyleStep(plan: ModePlan, onChange: (ModePlan) -> Unit) {
                 .padding(vertical = 6.dp),
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Podpowiadaj ten tryb", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.wiz_suggest_mode), style = MaterialTheme.typography.bodyLarge)
                 Text(rules.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = plan.useRules, onCheckedChange = { onChange(plan.copy(useRules = it)) })
@@ -215,10 +221,10 @@ private fun LookStep(plan: ModePlan, existingNames: Set<String>, onChange: (Mode
     OutlinedTextField(
         value = plan.name,
         onValueChange = { onChange(plan.copy(name = it.take(24))) },
-        label = { Text("Nazwa") },
+        label = { Text(stringResource(R.string.mode_name_label)) },
         singleLine = true,
         isError = taken,
-        supportingText = if (taken) ({ Text("Taki tryb już jest — wybierz inną nazwę") }) else null,
+        supportingText = if (taken) ({ Text(stringResource(R.string.wiz_name_taken)) }) else null,
         modifier = Modifier.fillMaxWidth(),
     )
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -242,16 +248,16 @@ private fun PreviewStep(plan: ModePlan, installedApps: List<AppInfo>, removed: S
         }
     }
     val widgets = plan.widgets
-    Text("Widżety", style = MaterialTheme.typography.labelLarge)
+    Text(stringResource(R.string.wiz_widgets), style = MaterialTheme.typography.labelLarge)
     Text(
-        if (widgets.isEmpty()) "Bez widżetów — dodasz je w edycji układu (+ Widżet)."
+        if (widgets.isEmpty()) stringResource(R.string.wiz_no_widgets)
         else widgets.joinToString("\n") { "• ${it.kind.title}" },
         style = MaterialTheme.typography.bodyMedium,
     )
     val apps = remember(plan.purpose, plan.style, installedApps) { plan.suggestApps(installedApps) }
-    Text("Aplikacje (dotknij, aby pominąć)", style = MaterialTheme.typography.labelLarge)
+    Text(stringResource(R.string.wiz_apps_title), style = MaterialTheme.typography.labelLarge)
     if (apps.isEmpty()) {
-        Text("Brak — przeciągniesz je z szuflady.", style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.wiz_no_apps), style = MaterialTheme.typography.bodyMedium)
     } else {
         BoxWithConstraints {
             val columns = ((maxWidth + 8.dp) / 72.dp).toInt().coerceIn(3, 6)
@@ -260,6 +266,7 @@ private fun PreviewStep(plan: ModePlan, installedApps: List<AppInfo>, removed: S
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEach { app ->
                             val skipped = app.key in removed
+                            val appDescription = if (skipped) stringResource(R.string.wiz_app_skipped_cd, app.label) else app.label
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
@@ -268,7 +275,7 @@ private fun PreviewStep(plan: ModePlan, installedApps: List<AppInfo>, removed: S
                                     .clickable { onToggle(app.key) }
                                     .alpha(if (skipped) 0.35f else 1f)
                                     .padding(4.dp)
-                                    .semantics { contentDescription = app.label + if (skipped) ", pominięta" else "" },
+                                    .semantics { contentDescription = appDescription },
                             ) {
                                 Box {
                                     Image(app.icon, contentDescription = null, modifier = Modifier.size(44.dp))
@@ -292,8 +299,8 @@ private fun PreviewStep(plan: ModePlan, installedApps: List<AppInfo>, removed: S
         }
     }
     Text(
-        if (plan.useRules && plan.purpose.template.rules.isNotEmpty()) "Tryb będzie podpowiadany automatycznie — reguły zmienisz w ustawieniach trybu."
-        else "Tryb włączasz sam (przełącznik trybów albo tarcza).",
+        if (plan.useRules && plan.purpose.template.rules.isNotEmpty()) stringResource(R.string.wiz_rules_auto)
+        else stringResource(R.string.wiz_rules_manual),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

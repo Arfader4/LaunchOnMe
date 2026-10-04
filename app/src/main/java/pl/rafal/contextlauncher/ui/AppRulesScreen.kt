@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -54,32 +55,35 @@ import pl.rafal.contextlauncher.data.AppInfo
 import pl.rafal.contextlauncher.data.appKey
 import pl.rafal.contextlauncher.data.db.AppRestrictionEntity.Companion.KIND_BLOCK
 import pl.rafal.contextlauncher.data.db.AppRestrictionEntity.Companion.KIND_HIDE
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
+import androidx.annotation.StringRes
 
 // Grupy do szybkiego zaznaczania. Kategoria pochodzi z samej aplikacji (sklep), a listy pakietów
 // łatają te, które kategorii nie podają (np. Instagram nie zawsze deklaruje "społecznościowa").
-private enum class AppGroup(val label: String, val category: Int?, val packages: List<String>) {
+private enum class AppGroup(@StringRes val labelRes: Int, val category: Int?, val packages: List<String>) {
     SOCIAL(
-        "Społecznościowe", ApplicationInfo.CATEGORY_SOCIAL,
+        R.string.rules_group_social, ApplicationInfo.CATEGORY_SOCIAL,
         listOf("com.facebook.katana", "com.instagram.android", "com.zhiliaoapp.musically", "com.twitter.android",
             "com.snapchat.android", "com.reddit.frontpage", "com.pinterest", "com.linkedin.android", "com.bereal.ft"),
     ),
     MESSAGING(
-        "Komunikatory", null,
+        R.string.rules_group_messaging, null,
         listOf("com.whatsapp", "com.facebook.orca", "org.telegram.messenger", "org.thoughtcrime.securesms",
             "com.discord", "com.viber.voip", "com.snapchat.android"),
     ),
     VIDEO(
-        "Wideo", ApplicationInfo.CATEGORY_VIDEO,
+        R.string.rules_group_video, ApplicationInfo.CATEGORY_VIDEO,
         listOf("com.google.android.youtube", "com.netflix.mediaclient", "com.amazon.avod.thirdpartyclient",
             "com.disney.disneyplus", "com.hbo.hbonow", "com.wbd.stream", "pl.tvn.player", "tv.twitch.android.app"),
     ),
-    GAMES("Gry", ApplicationInfo.CATEGORY_GAME, emptyList()),
+    GAMES(R.string.rules_group_games, ApplicationInfo.CATEGORY_GAME, emptyList()),
     SHOPPING(
-        "Zakupy", null,
+        R.string.rules_group_shopping, null,
         listOf("pl.allegro", "com.amazon.mShop.android.shopping", "com.einnovation.temu", "com.zzkko",
             "com.alibaba.aliexpresshd", "pl.tablica", "fr.vinted", "de.zalando.mobile"),
     ),
-    NEWS("Wiadomości", ApplicationInfo.CATEGORY_NEWS, emptyList());
+    NEWS(R.string.rules_group_news, ApplicationInfo.CATEGORY_NEWS, emptyList());
 
     fun matches(app: AppInfo) = app.category == category || packages.any { app.packageName.startsWith(it) }
 }
@@ -101,7 +105,8 @@ fun AppRulesScreen(
     val restrictions by viewModel.restrictions.collectAsState()
     val newModeDefaults by viewModel.settings.newModeRestrictions.flow.collectAsState()
 
-    val scopes = listOf(Scope(null, "Nowe tryby")) + modes.map { Scope(it.id, it.name) }
+    val context = LocalContext.current
+    val scopes = listOf(Scope(null, stringResource(R.string.rules_new_modes))) + modes.map { Scope(it.id, it.name) }
     var scopeId by remember { mutableStateOf(initialModeId ?: modes.firstOrNull()?.id) }
     var filter by remember { mutableStateOf("") }
     var onlyRestricted by remember { mutableStateOf(false) }
@@ -125,6 +130,7 @@ fun AppRulesScreen(
     }
     val selectedApps = apps.filter { it.appKey in selected }
 
+    val backCd = stringResource(R.string.rules_back_cd)
     BackHandler(onBack = onClose)
 
     Column(
@@ -140,15 +146,14 @@ fun AppRulesScreen(
                     .size(48.dp)
                     .clip(CircleShape)
                     .clickable(onClick = onClose)
-                    .semantics { contentDescription = "Wróć" },
+                    .semantics { contentDescription = backCd },
             ) { Text("←", style = MaterialTheme.typography.titleLarge) }
-            Text("Blokowanie i ukrywanie", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.rules_title), style = MaterialTheme.typography.titleLarge)
         }
 
         Column(Modifier.padding(horizontal = 16.dp)) {
             Text(
-                "🔒 Zablokowana: launcher zapyta przed otwarciem i da 5 s do namysłu.  " +
-                    "Ukryta: znika z szuflady i wyszukiwania w tym trybie.",
+                stringResource(R.string.rules_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -168,7 +173,7 @@ fun AppRulesScreen(
             OutlinedTextField(
                 value = filter,
                 onValueChange = { filter = it },
-                placeholder = { Text("Szukaj aplikacji") },
+                placeholder = { Text(stringResource(R.string.rules_search)) },
                 singleLine = true,
                 shape = RoundedCornerShape(28.dp),
                 modifier = Modifier
@@ -178,11 +183,11 @@ fun AppRulesScreen(
 
             // Szybkie zaznaczanie grup + filtr "tylko z blokadą".
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                FilterChip(selected = onlyRestricted, onClick = { onlyRestricted = !onlyRestricted }, label = { Text("Tylko zmienione") })
+                FilterChip(selected = onlyRestricted, onClick = { onlyRestricted = !onlyRestricted }, label = { Text(stringResource(R.string.rules_only_changed)) })
                 AppGroup.entries.forEach { group ->
                     AssistChip(
                         onClick = { selected = selected + apps.filter(group::matches).map { it.appKey } },
-                        label = { Text("+ ${group.label}") },
+                        label = { Text("+ ${stringResource(group.labelRes)}") },
                     )
                 }
             }
@@ -198,7 +203,7 @@ fun AppRulesScreen(
                 // Gdzie jeszcze aplikacja jest zablokowana/ukryta — przegląd bez przełączania zakresów.
                 val elsewhere = restrictions
                     .filter { appKey(it.packageName, it.userSerial) == app.appKey && it.modeId != scopeId }
-                    .mapNotNull { r -> modes.firstOrNull { it.id == r.modeId }?.name?.let { name -> if (r.kind == KIND_BLOCK) "🔒 $name" else "ukryta: $name" } }
+                    .mapNotNull { r -> modes.firstOrNull { it.id == r.modeId }?.name?.let { name -> if (r.kind == KIND_BLOCK) "🔒 $name" else context.getString(R.string.rules_hidden_in, name) } }
                 AppRuleRow(
                     app = app,
                     kind = kind,
@@ -219,21 +224,21 @@ fun AppRulesScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Zaznaczono: ${selected.size} · ${scopes.firstOrNull { it.modeId == scopeId }?.label.orEmpty()}",
+                        stringResource(R.string.rules_selected, selected.size, scopes.firstOrNull { it.modeId == scopeId }?.label.orEmpty()),
                         style = MaterialTheme.typography.labelLarge,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { multiScopeOpen = true }) { Text("W wielu trybach…") }
-                    TextButton(onClick = { selected = emptySet() }) { Text("Odznacz") }
+                    TextButton(onClick = { multiScopeOpen = true }) { Text(stringResource(R.string.rules_in_multiple_modes)) }
+                    TextButton(onClick = { selected = emptySet() }) { Text(stringResource(R.string.rules_deselect)) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     fun applyKind(kind: String?) {
                         viewModel.setRestriction(selectedApps, listOf(scopeId), kind)
                         selected = emptySet()
                     }
-                    FilledTonalButton(onClick = { applyKind(KIND_BLOCK) }, modifier = Modifier.weight(1f)) { Text("Zablokuj") }
-                    FilledTonalButton(onClick = { applyKind(KIND_HIDE) }, modifier = Modifier.weight(1f)) { Text("Ukryj") }
-                    FilledTonalButton(onClick = { applyKind(null) }, modifier = Modifier.weight(1f)) { Text("Przywróć") }
+                    FilledTonalButton(onClick = { applyKind(KIND_BLOCK) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.rules_block)) }
+                    FilledTonalButton(onClick = { applyKind(KIND_HIDE) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.rules_hide)) }
+                    FilledTonalButton(onClick = { applyKind(null) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_restore)) }
                 }
             }
         }
@@ -281,8 +286,8 @@ private fun AppRuleRow(app: AppInfo, kind: String?, elsewhere: String, checked: 
             }
         }
         when (kind) {
-            KIND_BLOCK -> StatusPill("🔒 Zablokowana", MaterialTheme.colorScheme.error)
-            KIND_HIDE -> StatusPill("Ukryta", MaterialTheme.colorScheme.primary)
+            KIND_BLOCK -> StatusPill(stringResource(R.string.rules_status_blocked), MaterialTheme.colorScheme.error)
+            KIND_HIDE -> StatusPill(stringResource(R.string.rules_status_hidden), MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -312,12 +317,12 @@ private fun MultiScopeDialog(
 ) {
     var chosen by remember { mutableStateOf(initial) }
     var kind by remember { mutableStateOf<String?>(KIND_BLOCK) }
-    val kinds = listOf<Pair<String?, String>>(KIND_BLOCK to "Zablokuj", KIND_HIDE to "Ukryj", null to "Przywróć")
+    val kinds = listOf<Pair<String?, String>>(KIND_BLOCK to stringResource(R.string.rules_block), KIND_HIDE to stringResource(R.string.rules_hide), null to stringResource(R.string.common_restore))
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Aplikacje: $count") },
+        title = { Text(stringResource(R.string.rules_apps_count, count)) },
         text = {
             Column {
                 kinds.forEach { (value, label) ->
@@ -333,10 +338,10 @@ private fun MultiScopeDialog(
                 }
                 Spacer(Modifier.heightIn(min = 8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("W trybach", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.rules_in_modes), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                     TextButton(onClick = {
                         chosen = if (chosen.size == scopes.size) emptySet() else scopes.map { it.modeId }.toSet()
-                    }) { Text(if (chosen.size == scopes.size) "Żaden" else "Wszystkie") }
+                    }) { Text(if (chosen.size == scopes.size) stringResource(R.string.rules_select_none) else stringResource(R.string.rules_select_all)) }
                 }
                 LazyColumn(Modifier.heightIn(max = 280.dp)) {
                     items(scopes, key = { it.modeId ?: -1L }) { scope ->
@@ -355,9 +360,9 @@ private fun MultiScopeDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(chosen, kind) }, enabled = chosen.isNotEmpty()) { Text("Zastosuj") }
+            TextButton(onClick = { onConfirm(chosen, kind) }, enabled = chosen.isNotEmpty()) { Text(stringResource(R.string.common_apply)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -382,17 +387,17 @@ fun BlockedLaunchDialog(
         onDismissRequest = onCancel,
         containerColor = MaterialTheme.colorScheme.surface,
         icon = { Image(bitmap = app.icon, contentDescription = null, modifier = Modifier.size(48.dp)) },
-        title = { Text("${app.label} jest zablokowana w trybie $modeName") },
+        title = { Text(stringResource(R.string.rules_blocked_title, app.label, modeName)) },
         text = {
             Column {
-                Text("Na pewno teraz? Możesz ją otworzyć, ale daj sobie chwilę do namysłu.")
-                TextButton(onClick = onUnblock) { Text("Odblokuj w tym trybie na stałe") }
+                Text(stringResource(R.string.rules_blocked_text))
+                TextButton(onClick = onUnblock) { Text(stringResource(R.string.rules_unblock)) }
             }
         },
-        confirmButton = { TextButton(onClick = onCancel) { Text("Nie otwieraj") } },
+        confirmButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.rules_dont_open)) } },
         dismissButton = {
             TextButton(onClick = onOpenAnyway, enabled = secondsLeft == 0) {
-                Text(if (secondsLeft > 0) "Otwórz mimo to ($secondsLeft)" else "Otwórz mimo to")
+                Text(if (secondsLeft > 0) stringResource(R.string.rules_open_anyway_countdown, secondsLeft) else stringResource(R.string.rules_open_anyway))
             }
         },
     )

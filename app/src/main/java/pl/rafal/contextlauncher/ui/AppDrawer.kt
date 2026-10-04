@@ -59,6 +59,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.AppInfo
 
 // Szuflada z dwiema zakładkami: wszystkie aplikacje (z wyszukiwarką) i foldery.
@@ -146,11 +148,11 @@ fun AppDrawer(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         ) {
-            FilterChip(selected = !showFolders, onClick = { showFolders = false }, label = { Text("Wszystkie") })
-            FilterChip(selected = showFolders, onClick = { showFolders = true }, label = { Text("Foldery") })
+            FilterChip(selected = !showFolders, onClick = { showFolders = false }, label = { Text(stringResource(R.string.drawer_tab_all)) })
+            FilterChip(selected = showFolders, onClick = { showFolders = true }, label = { Text(stringResource(R.string.drawer_tab_folders)) })
             Spacer(Modifier.weight(1f))
             if (onOpenAppSettings != null) {
-                AssistChip(onClick = onOpenAppSettings, label = { Text("⚙ Aplikacje") })
+                AssistChip(onClick = onOpenAppSettings, label = { Text(stringResource(R.string.drawer_app_settings)) })
             }
         }
 
@@ -215,7 +217,7 @@ private fun AllAppsTab(
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
-            placeholder = { Text("Szukaj aplikacji") },
+            placeholder = { Text(stringResource(R.string.drawer_search_hint)) },
             singleLine = true,
             shape = RoundedCornerShape(28.dp),
             colors = OutlinedTextFieldDefaults.colors(
@@ -252,7 +254,7 @@ private fun AllAppsTab(
                         modifier = Modifier.animateItem().staggerIn(index, openedAt),
                     )
                 }
-                item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel("Wszystkie aplikacje") }
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel(stringResource(R.string.drawer_all_apps)) }
             }
             // animateItem: przy wpisywaniu w wyszukiwarkę ikony płynnie przesuwają się na nowe miejsca.
             itemsIndexed(apps, key = { _, a -> a.key }) { index, app ->
@@ -265,7 +267,7 @@ private fun AllAppsTab(
             if (query.isBlank() && hiddenApps.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     TextButton(onClick = { showHidden = !showHidden }) {
-                        Text(if (showHidden) "Schowaj ukryte" else "Pokaż ukryte w tym trybie (${hiddenApps.size})")
+                        Text(if (showHidden) stringResource(R.string.drawer_hide_hidden) else stringResource(R.string.drawer_show_hidden, hiddenApps.size))
                     }
                 }
                 if (showHidden) {

@@ -10,7 +10,9 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.core.graphics.drawable.toBitmap
+import pl.rafal.contextlauncher.AppText
 import pl.rafal.contextlauncher.ModeShortcutActivity
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.ModeEntity
 import pl.rafal.contextlauncher.ui.ModeIcon
 
@@ -23,7 +25,7 @@ object ModeShortcuts {
             val shortcuts = modes.take(max).mapIndexed { index, mode ->
                 ShortcutInfoCompat.Builder(context, "mode_${mode.id}")
                     .setShortLabel(mode.name)
-                    .setLongLabel("Włącz tryb ${mode.name}")
+                    .setLongLabel(AppText.get(R.string.mshort_enable_mode, mode.name))
                     .setIcon(IconCompat.createWithBitmap(iconBitmap(context, mode)))
                     .setIntent(
                         Intent(context, ModeShortcutActivity::class.java)

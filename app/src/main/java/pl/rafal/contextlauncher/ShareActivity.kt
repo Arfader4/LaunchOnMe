@@ -43,7 +43,7 @@ class ShareActivity : ComponentActivity() {
                 val ok = runCatching { addSticker(modeId, Uri.fromFile(java.io.File(path))) }.isSuccess
                 Toast.makeText(
                     this@ShareActivity,
-                    if (ok) "Dodano naklejkę do trybu $name" else "Nie udało się dodać naklejki (brak miejsca?)",
+                    if (ok) getString(R.string.act_share_sticker_added, name) else getString(R.string.act_share_sticker_failed),
                     Toast.LENGTH_SHORT,
                 ).show()
                 if (ok) finish()
@@ -68,7 +68,7 @@ class ShareActivity : ComponentActivity() {
 
         val content = readSharedContent(intent)
         if (content == null) {
-            Toast.makeText(this, "Nie rozpoznano udostępnionej treści", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.act_share_unrecognized), Toast.LENGTH_SHORT).show()
             finish()
             return
         }
@@ -91,7 +91,7 @@ class ShareActivity : ComponentActivity() {
                                 val temp = runCatching { StickerStore.import(applicationContext, content.uri) }.getOrNull()
                                 if (temp == null) {
                                     pendingModeId = null
-                                    Toast.makeText(this@ShareActivity, "Nie udało się odczytać obrazka", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(this@ShareActivity, getString(R.string.act_share_image_read_failed), Toast.LENGTH_SHORT).show()
                                 } else {
                                     pendingModeName = mode.name
                                     pendingTemp = temp
@@ -108,8 +108,8 @@ class ShareActivity : ComponentActivity() {
                                 }
                             }
                             val message = when {
-                                result.isFailure -> "Nie udało się przypiąć"
-                                else -> "Przypięto do trybu ${mode.name}"
+                                result.isFailure -> getString(R.string.act_share_pin_failed)
+                                else -> getString(R.string.act_share_pinned, mode.name)
                             }
                             Toast.makeText(this@ShareActivity, message, Toast.LENGTH_SHORT).show()
                             if (result.isSuccess) finish()
@@ -130,7 +130,7 @@ class ShareActivity : ComponentActivity() {
         val maxPages = pl.rafal.contextlauncher.data.AppPrefs.get(applicationContext).maxPages.value
         if (placeCustomWidget(dao, modeId, CustomWidgetKind.STICKER, config, page = 0, maxPages = maxPages) == null) {
             StickerStore.delete(path)
-            error("Brak miejsca na karcie")
+            error(getString(R.string.act_share_no_space))
         }
     }
 

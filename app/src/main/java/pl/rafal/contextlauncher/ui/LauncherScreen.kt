@@ -83,6 +83,8 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -302,7 +304,7 @@ private fun LauncherContent(
     // Uprawnienia do nowych reguł: po zgodzie od razu otwieramy właściwe okno.
     val bluetoothPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) addingBluetoothRule = true
-        else Toast.makeText(context, "Bez zgody na urządzenia w pobliżu reguła Bluetooth nie zadziała", Toast.LENGTH_LONG).show()
+        else Toast.makeText(context, context.getString(R.string.ls_toast_bluetooth_permission), Toast.LENGTH_LONG).show()
     }
     var pendingLocationDialog by remember { mutableStateOf<String?>(null) } // "wifi" albo "place"
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -312,7 +314,7 @@ private fun LauncherContent(
                 "place" -> addingPlaceRule = true
             }
         } else {
-            Toast.makeText(context, "Nazwa sieci i miejsce wymagają zgody na lokalizację", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, context.getString(R.string.ls_toast_location_permission), Toast.LENGTH_LONG).show()
         }
         pendingLocationDialog = null
     }
@@ -321,7 +323,7 @@ private fun LauncherContent(
         try {
             context.startActivity(intent)
         } catch (e: Exception) { // brak ekranu albo brak uprawnienia (np. Bluetooth)
-            Toast.makeText(context, "Brak aplikacji, która to otworzy", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.ls_toast_no_app_to_open), Toast.LENGTH_SHORT).show()
         }
     }
     var renamingMode by remember(settingsModeId) { mutableStateOf(false) }
@@ -332,7 +334,7 @@ private fun LauncherContent(
     val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         viewModel.onCalendarPermissionResult()
         if (!granted) {
-            Toast.makeText(context, "Bez dostępu do kalendarza nie pokażę wydarzeń ani reguł kalendarza", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, context.getString(R.string.ls_toast_calendar_permission), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -424,17 +426,17 @@ private fun LauncherContent(
         when (action) {
             is TapAction.OpenApp -> installedApps.firstOrNull { it.matches(action.packageName, action.className, action.userSerial) }
                 ?.let { viewModel.launch(it) }
-                ?: Toast.makeText(context, "Nie ma już aplikacji ${action.appLabel}", Toast.LENGTH_SHORT).show()
+                ?: Toast.makeText(context, context.getString(R.string.ls_toast_app_gone, action.appLabel), Toast.LENGTH_SHORT).show()
             is TapAction.Dial -> startActivitySafely(GlanceActions.dial(action.number))
             is TapAction.Sms -> startActivitySafely(GlanceActions.sms(action.number))
             is TapAction.Toggle -> viewModel.quickToggle(action.toggle)?.let(::startActivitySafely)
             is TapAction.SwitchMode -> modes.firstOrNull { it.id == action.modeId }?.let(viewModel::selectMode)
-                ?: Toast.makeText(context, "Tryb ${action.modeName} został usunięty", Toast.LENGTH_SHORT).show()
+                ?: Toast.makeText(context, context.getString(R.string.ls_toast_mode_deleted, action.modeName), Toast.LENGTH_SHORT).show()
             is TapAction.OpenLink -> startActivitySafely(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(action.url)))
             is TapAction.OpenShortcut -> shortcuts.firstOrNull {
                 it.packageName == action.packageName && it.shortcutId == action.shortcutId && it.userSerial == action.userSerial
             }?.let { viewModel.launch(it) }
-                ?: Toast.makeText(context, "Skrót „${action.name}” jest niedostępny", Toast.LENGTH_SHORT).show()
+                ?: Toast.makeText(context, context.getString(R.string.ls_toast_shortcut_unavailable, action.name), Toast.LENGTH_SHORT).show()
             is TapAction.System -> when (action.action) {
                 SystemAction.NOTIFICATIONS -> pl.rafal.contextlauncher.system.StatusBar.expandNotifications(context)
                 SystemAction.QUICK_SETTINGS -> pl.rafal.contextlauncher.system.StatusBar.expandQuickSettings(context)
@@ -460,7 +462,7 @@ private fun LauncherContent(
         try {
             context.startActivity(intent)
         } catch (e: ActivityNotFoundException) {
-            Toast.makeText(context, "Brak aplikacji, która to otworzy", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.ls_toast_no_app_to_open), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -494,7 +496,7 @@ private fun LauncherContent(
         // Kopia: folder na karcie żyje dalej sam (zmiany nie wracają do szuflady) — jak "Zapisz jako" w edytorze.
         onCopyToCard = { folderId ->
             viewModel.copyDrawerFolderToCard(folderId)
-            Toast.makeText(context, "Skopiowano folder na kartę ${activeMode?.name.orEmpty()}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.ls_toast_folder_copied, activeMode?.name.orEmpty()), Toast.LENGTH_SHORT).show()
         },
     )
 
@@ -595,7 +597,7 @@ private fun LauncherContent(
                             folder != null && folder.kind == CustomWidgetKind.CARD_FOLDER -> viewModel.addToCardFolder(folder, listOf(app))
                             folder != null -> {
                                 viewModel.addAppsToFolder(folder.config.optLong("folderId", -1), listOf(app))
-                                Toast.makeText(context, "Dodano ${app.label} do folderu", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.ls_toast_added_to_folder, app.label), Toast.LENGTH_SHORT).show()
                             }
                             target.mergeWith != null -> viewModel.mergeIntoCardFolder(target.mergeWith, app, null)
                             else -> viewModel.addToActiveModeAt(app, target.rect.x, target.rect.y)
@@ -615,17 +617,17 @@ private fun LauncherContent(
     // Akcje karty (dawniej menu ⋯ w nagłówku) — teraz w menu przełącznika trybów i w widżecie "Tryby".
     val cardActions: List<MenuAction> = buildList {
         manualTasks.forEach { task -> add(MenuAction("⚙ ${task.label}") { startActivitySafely(viewModel.intentFor(task)) }) }
-        if (manualTasks.isNotEmpty()) add(MenuAction("Ukryj przypomnienia") { viewModel.dismissManualTasks() })
+        if (manualTasks.isNotEmpty()) add(MenuAction(stringResource(R.string.ls_menu_hide_reminders)) { viewModel.dismissManualTasks() })
         if (timedUntil > 0) {
-            add(MenuAction("Przedłuż o 30 min") { viewModel.extendTimed(30 * 60_000L) })
-            add(MenuAction("Zakończ tryb na czas") { viewModel.endTimedNow() })
+            add(MenuAction(stringResource(R.string.ls_menu_extend_30)) { viewModel.extendTimed(30 * 60_000L) })
+            add(MenuAction(stringResource(R.string.ls_menu_end_timed)) { viewModel.endTimedNow() })
         }
         // Widżety, układ i foldery są teraz pod przytrzymaniem karty (edycja) i w szufladzie — tu zostaje reszta.
         add(MenuAction("OnHand") { handyOpen = true })
-        add(MenuAction("Ustawienia") { settingsOpen = true })
+        add(MenuAction(stringResource(R.string.common_settings)) { settingsOpen = true })
     }
     val modeMenuHeader = activeMode?.let { mode ->
-        mode.name + if (timedUntil > 0) " · do ${formatClock(timedUntil)}" else ""
+        mode.name + if (timedUntil > 0) " · " + stringResource(R.string.ls_until_time, formatClock(timedUntil)) else ""
     }
 
     fun openDrawer(focusSearch: Boolean) {
@@ -646,11 +648,11 @@ private fun LauncherContent(
                 SmartItem.Prompt(
                     key = "auto:${noticeMode.id}",
                     color = noticeMode.color,
-                    title = "Włączono: ${noticeMode.name}",
-                    subtitle = notice.reason.replaceFirstChar { it.uppercase() } + (previous?.let { " · ✕ wraca do ${it.name}" } ?: ""),
-                    acceptLabel = "Zostaw tryb",
+                    title = stringResource(R.string.ls_prompt_switched_on, noticeMode.name),
+                    subtitle = notice.reason.replaceFirstChar { it.uppercase() } + (previous?.let { " · " + stringResource(R.string.ls_prompt_back_to, it.name) } ?: ""),
+                    acceptLabel = stringResource(R.string.ls_prompt_keep_mode),
                     onAccept = viewModel::keepAutoSwitch,
-                    rejectLabel = "Cofnij",
+                    rejectLabel = stringResource(R.string.common_undo),
                     onReject = viewModel::undoAutoSwitch,
                 )
             }
@@ -658,11 +660,11 @@ private fun LauncherContent(
                 SmartItem.Prompt(
                     key = "switch:${m.id}",
                     color = m.color,
-                    title = "Włączyć ${m.name}?",
+                    title = stringResource(R.string.ls_prompt_switch_question, m.name),
                     subtitle = listOfNotNull(current.reason.replaceFirstChar { it.uppercase() }, autoStatus).joinToString(" · "),
-                    acceptLabel = "Przełącz",
+                    acceptLabel = stringResource(R.string.ls_prompt_switch),
                     onAccept = { viewModel.acceptSuggestion(current) },
-                    rejectLabel = "Odrzuć sugestię",
+                    rejectLabel = stringResource(R.string.ls_prompt_dismiss_suggestion),
                     onReject = { viewModel.dismissSuggestion(current) },
                 )
             }
@@ -670,11 +672,11 @@ private fun LauncherContent(
                 SmartItem.Prompt(
                     key = "end:${m.id}",
                     color = m.color,
-                    title = "Zakończyć ${activeMode?.name.orEmpty()}?",
-                    subtitle = listOfNotNull("Reguły już nie pasują · wróć do ${m.name}", autoStatus).joinToString(" · "),
-                    acceptLabel = "Przełącz",
+                    title = stringResource(R.string.ls_prompt_end_question, activeMode?.name.orEmpty()),
+                    subtitle = listOfNotNull(stringResource(R.string.ls_prompt_rules_no_longer_match, m.name), autoStatus).joinToString(" · "),
+                    acceptLabel = stringResource(R.string.ls_prompt_switch),
                     onAccept = { viewModel.acceptSuggestion(current) },
-                    rejectLabel = "Odrzuć sugestię",
+                    rejectLabel = stringResource(R.string.ls_prompt_dismiss_suggestion),
                     onReject = { viewModel.dismissSuggestion(current) },
                 )
             }
@@ -709,22 +711,22 @@ private fun LauncherContent(
                 val minutes = (e.begin - now) / 60_000L
                 val text = when {
                     e.allDay -> null
-                    e.begin <= now && e.end > now -> "Teraz: ${e.title}"
-                    minutes in 0..59 -> "Za $minutes min: ${e.title}"
-                    minutes in 60..180 -> "O ${formatClock(e.begin)}: ${e.title}"
+                    e.begin <= now && e.end > now -> context.getString(R.string.ls_smart_now, e.title)
+                    minutes in 0..59 -> context.getString(R.string.ls_smart_in_minutes, minutes, e.title)
+                    minutes in 60..180 -> context.getString(R.string.ls_smart_at_time, formatClock(e.begin), e.title)
                     else -> null
                 }
                 if (text != null) add(SmartItem.Info("event:${e.id}", "📅", text) { startActivitySafely(GlanceActions.event(e)) })
             }
             glance.alarmAt?.let { at ->
                 if (at - now in 0..12 * 60 * 60_000L) {
-                    add(SmartItem.Info("alarm:$at", "⏰", "Budzik ${formatClock(at)}") {
+                    add(SmartItem.Info("alarm:$at", "⏰", context.getString(R.string.ls_smart_alarm, formatClock(at))) {
                         if (!viewModel.openAlarmSource()) startActivitySafely(GlanceActions.clock(context))
                     })
                 }
             }
             battery?.let { (charging, percent) ->
-                if (!charging && percent in 0..20) add(SmartItem.Info("battery", "🔋", "Bateria $percent% — podłącz ładowarkę", null))
+                if (!charging && percent in 0..20) add(SmartItem.Info("battery", "🔋", context.getString(R.string.ls_smart_battery_low, percent), null))
             }
         }
     }
@@ -755,19 +757,19 @@ private fun LauncherContent(
                         Row(Modifier.weight(1f)) {
                             val pad = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)
                             TextButton(onClick = { addAppsOpen = true }, contentPadding = pad, modifier = Modifier.weight(1f)) {
-                                pl.rafal.contextlauncher.ui.widgets.FitText("+ Aplikacje", maxSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                                pl.rafal.contextlauncher.ui.widgets.FitText(stringResource(R.string.ls_edit_add_apps), maxSize = 14.sp, color = MaterialTheme.colorScheme.primary)
                             }
                             TextButton(onClick = {
                                 viewModel.loadWidgetProviders()
                                 widgetPickerOpen = true
                             }, contentPadding = pad, modifier = Modifier.weight(1f)) {
-                                pl.rafal.contextlauncher.ui.widgets.FitText("+ Widżet", maxSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                                pl.rafal.contextlauncher.ui.widgets.FitText(stringResource(R.string.ls_edit_add_widget), maxSize = 14.sp, color = MaterialTheme.colorScheme.primary)
                             }
                             TextButton(onClick = { addShortcutOpen = true }, contentPadding = pad, modifier = Modifier.weight(1f)) {
-                                pl.rafal.contextlauncher.ui.widgets.FitText("+ Skrót", maxSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                                pl.rafal.contextlauncher.ui.widgets.FitText(stringResource(R.string.ls_edit_add_shortcut), maxSize = 14.sp, color = MaterialTheme.colorScheme.primary)
                             }
                         }
-                        RoundIconButton(MaterialTheme.colorScheme.onSurfaceVariant, "Ustawienia", { settingsOpen = true }) {
+                        RoundIconButton(MaterialTheme.colorScheme.onSurfaceVariant, stringResource(R.string.common_settings), { settingsOpen = true }) {
                             Icon(
                                 painterResource(pl.rafal.contextlauncher.R.drawable.ic_settings),
                                 contentDescription = null,
@@ -775,11 +777,11 @@ private fun LauncherContent(
                                 modifier = Modifier.size(22.dp),
                             )
                         }
-                        RoundAction("✕", MaterialTheme.colorScheme.error, "Anuluj zmiany", {
+                        RoundAction("✕", MaterialTheme.colorScheme.error, stringResource(R.string.ls_edit_cancel_changes), {
                             viewModel.cancelEdit()
                             editing = false
                         })
-                        RoundAction("✓", AcceptColor, "Zapisz układ", { editing = false }, filled = true)
+                        RoundAction("✓", AcceptColor, stringResource(R.string.ls_edit_save_layout), { editing = false }, filled = true)
                     }
                 }
             },
@@ -834,9 +836,9 @@ private fun LauncherContent(
             onLaunch = { viewModel.launch(it.app) },
             menuFor = { item ->
                 listOf(
-                    MenuAction("Usuń z karty") { viewModel.removeFromMode(item) },
-                    MenuAction("Informacje o aplikacji") { viewModel.openAppInfo(item.app) },
-                ) + if (item.app.isShortcut) emptyList() else listOf(MenuAction("Odinstaluj") { uninstall(item.app) })
+                    MenuAction(context.getString(R.string.ls_menu_remove_from_card)) { viewModel.removeFromMode(item) },
+                    MenuAction(context.getString(R.string.ls_menu_app_info)) { viewModel.openAppInfo(item.app) },
+                ) + if (item.app.isShortcut) emptyList() else listOf(MenuAction(context.getString(R.string.ls_menu_uninstall)) { uninstall(item.app) })
             },
             onLayout = viewModel::applyLayout,
             onRemove = viewModel::removeFromMode,
@@ -878,10 +880,10 @@ private fun LauncherContent(
                     viewModel.addToCardFolder(folder, listOf(app.app), app.item.id)
                 } else if (app.app.isShortcut) {
                     // Foldery szuflady trzymają tylko aplikacje (bez id skrótu) — skrót by tam przepadł.
-                    Toast.makeText(context, "Skróty można wrzucać tylko do folderów na karcie", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.ls_toast_shortcuts_card_folders_only), Toast.LENGTH_SHORT).show()
                 } else if (folderTree.folder(folder.config.optLong("folderId", -1)) != null) {
                     viewModel.moveCardAppIntoFolder(app, folder)
-                    Toast.makeText(context, "Przeniesiono ${app.app.label} do folderu", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.ls_toast_moved_to_folder, app.app.label), Toast.LENGTH_SHORT).show()
                 }
             },
             customWidget = { widget, enabled ->
@@ -957,7 +959,7 @@ private fun LauncherContent(
                         enabled = enabled,
                         onSelect = viewModel::selectMode,
                         onNewMode = { newModeOpen = true },
-                        subtitle = if (timedUntil > 0) "do ${formatClock(timedUntil)}" else null,
+                        subtitle = if (timedUntil > 0) stringResource(R.string.ls_until_time, formatClock(timedUntil)) else null,
                         badge = manualTasks.isNotEmpty(),
                         // Małe rozmiary widżetu: po dotknięciu to samo menu co przycisk trybu na dole.
                         menu = { expanded, onDismiss ->
@@ -1086,15 +1088,15 @@ private fun LauncherContent(
                             closeDrawer()
                         }
                     } + listOf(
-                        MenuAction("Dodaj do trybu $modeName") { viewModel.addToActiveMode(app) },
-                        MenuAction("Dodaj do folderu…") { appToFile = app },
-                        if (blocked) MenuAction("Odblokuj w trybie $modeName") { viewModel.setRestriction(listOf(app), scope, null) }
-                        else MenuAction("Zablokuj w trybie $modeName") { viewModel.setRestriction(listOf(app), scope, AppRestrictionEntity.KIND_BLOCK) },
-                        if (hidden) MenuAction("Pokaż w trybie $modeName") { viewModel.setRestriction(listOf(app), scope, null) }
-                        else MenuAction("Ukryj w trybie $modeName") { viewModel.setRestriction(listOf(app), scope, AppRestrictionEntity.KIND_HIDE) },
-                        MenuAction("Blokowanie i ukrywanie…") { openAppRules(activeMode?.id) },
-                        MenuAction("Informacje o aplikacji") { viewModel.openAppInfo(app) },
-                        MenuAction("Odinstaluj") { uninstall(app) },
+                        MenuAction(context.getString(R.string.ls_menu_add_to_mode, modeName)) { viewModel.addToActiveMode(app) },
+                        MenuAction(context.getString(R.string.ls_menu_add_to_folder)) { appToFile = app },
+                        if (blocked) MenuAction(context.getString(R.string.ls_menu_unblock_in_mode, modeName)) { viewModel.setRestriction(listOf(app), scope, null) }
+                        else MenuAction(context.getString(R.string.ls_menu_block_in_mode, modeName)) { viewModel.setRestriction(listOf(app), scope, AppRestrictionEntity.KIND_BLOCK) },
+                        if (hidden) MenuAction(context.getString(R.string.ls_menu_show_in_mode, modeName)) { viewModel.setRestriction(listOf(app), scope, null) }
+                        else MenuAction(context.getString(R.string.ls_menu_hide_in_mode, modeName)) { viewModel.setRestriction(listOf(app), scope, AppRestrictionEntity.KIND_HIDE) },
+                        MenuAction(context.getString(R.string.ls_menu_block_and_hide)) { openAppRules(activeMode?.id) },
+                        MenuAction(context.getString(R.string.ls_menu_app_info)) { viewModel.openAppInfo(app) },
+                        MenuAction(context.getString(R.string.ls_menu_uninstall)) { uninstall(app) },
                     )
                 },
                 foldersContent = {
@@ -1107,7 +1109,7 @@ private fun LauncherContent(
                     )
                 },
                 frequent = frequentApps,
-                frequentLabel = "Często w trybie ${activeMode?.name.orEmpty()}",
+                frequentLabel = stringResource(R.string.ls_frequent_in_mode, activeMode?.name.orEmpty()),
                 autoFocusSearch = drawerFocus,
                 hiddenApps = hiddenApps,
                 dragOut = drawerDrag,
@@ -1276,7 +1278,7 @@ private fun LauncherContent(
             appRulesSummary = restrictions.filter { it.modeId == mode.id }.let { list ->
                 val b = list.count { it.kind == AppRestrictionEntity.KIND_BLOCK }
                 val h = list.size - b
-                if (list.isEmpty()) "Nic nie jest zablokowane ani ukryte" else "Zablokowane: $b · ukryte: $h"
+                if (list.isEmpty()) stringResource(R.string.ls_rules_summary_none) else stringResource(R.string.ls_rules_summary, b, h)
             },
             onManageApps = {
                 settingsModeId = null
@@ -1362,9 +1364,9 @@ private fun LauncherContent(
 
         if (renamingMode) {
             TextInputDialog(
-                title = "Nazwa trybu",
+                title = stringResource(R.string.ls_mode_name_title),
                 initial = mode.name,
-                confirmLabel = "Zapisz",
+                confirmLabel = stringResource(R.string.common_save),
                 onConfirm = { name ->
                     viewModel.renameMode(mode, name)
                     renamingMode = false
@@ -1377,16 +1379,16 @@ private fun LauncherContent(
             AlertDialog(
                 onDismissRequest = { deletingMode = false },
                 containerColor = MaterialTheme.colorScheme.surface,
-                title = { Text("Usunąć tryb ${mode.name}?") },
-                text = { Text("Znikną jego karta, OnHand i reguły. Aplikacje i foldery zostaną.") },
+                title = { Text(stringResource(R.string.ls_delete_mode_title, mode.name)) },
+                text = { Text(stringResource(R.string.ls_delete_mode_text)) },
                 confirmButton = {
                     TextButton(onClick = {
                         viewModel.deleteMode(mode)
                         deletingMode = false
                         settingsModeId = null
-                    }) { Text("Usuń") }
+                    }) { Text(stringResource(R.string.common_delete)) }
                 },
-                dismissButton = { TextButton(onClick = { deletingMode = false }) { Text("Anuluj") } },
+                dismissButton = { TextButton(onClick = { deletingMode = false }) { Text(stringResource(R.string.common_cancel)) } },
             )
         }
     }
@@ -1436,7 +1438,7 @@ private fun LauncherContent(
             shortcuts = shortcuts,
             apps = installedApps,
             hasAccess = remember { viewModel.hasShortcutAccess() },
-            title = "Skrót na kartę ${activeMode?.name.orEmpty()}",
+            title = stringResource(R.string.ls_shortcut_to_card_title, activeMode?.name.orEmpty()),
             onPick = { sc ->
                 viewModel.addAppsToActiveMode(listOf(sc))
                 addShortcutOpen = false
@@ -1487,7 +1489,7 @@ private fun LauncherContent(
         NoteDialog(
             initialTitle = "",
             initialText = "",
-            confirmLabel = "Przypnij",
+            confirmLabel = stringResource(R.string.ls_pin),
             onConfirm = { title, text ->
                 viewModel.pinNote(title, text)
                 newNoteOpen = false
@@ -1501,7 +1503,7 @@ private fun LauncherContent(
         NoteDialog(
             initialTitle = note.title,
             initialText = note.text.orEmpty(),
-            confirmLabel = "Zapisz",
+            confirmLabel = stringResource(R.string.common_save),
             onConfirm = { title, text ->
                 viewModel.updateNote(note, title, text)
                 editedNote = null
@@ -1590,7 +1592,7 @@ private fun LauncherContent(
             labelOf = { member ->
                 when (member) {
                     is CardCustomWidget -> member.kind.title
-                    is CardWidget -> widgets.info(member.appWidgetId)?.loadLabel(context.packageManager) ?: "Widżet"
+                    is CardWidget -> widgets.info(member.appWidgetId)?.loadLabel(context.packageManager) ?: context.getString(R.string.ls_widget_fallback)
                     is CardApp -> member.app.label
                 }
             },
@@ -1664,9 +1666,9 @@ private fun LauncherContent(
 
     customWidget(checklistRename)?.let { widget ->
         TextInputDialog(
-            title = "Nazwa listy",
+            title = stringResource(R.string.ls_list_name_title),
             initial = Checklist.parse(widget.config).title,
-            confirmLabel = "Zapisz",
+            confirmLabel = stringResource(R.string.common_save),
             onConfirm = { name ->
                 updateChecklist(widget) { it.copy(title = name) }
                 checklistRename = null
@@ -1709,7 +1711,7 @@ private fun LauncherContent(
     if (addingFolderWidget) {
         FolderPickerDialog(
             tree = folderTree,
-            title = "Który folder położyć na karcie?",
+            title = stringResource(R.string.ls_folder_widget_pick_title),
             onPick = { folder ->
                 addFolderWidget(folder.id)
                 addingFolderWidget = false
@@ -1725,7 +1727,7 @@ private fun LauncherContent(
     appToFile?.let { app ->
         FolderPickerDialog(
             tree = folderTree,
-            title = "Dodaj „${app.label}” do folderu",
+            title = stringResource(R.string.ls_add_app_to_folder_title, app.label),
             onPick = { folder ->
                 viewModel.addAppsToFolder(folder.id, listOf(app))
                 appToFile = null
@@ -1809,9 +1811,9 @@ private fun LauncherContent(
                     CustomWidgetKind.DUAL_CLOCK -> addingClock = true         // najpierw wybór strefy
                     CustomWidgetKind.FOLDER -> addingFolderWidget = true      // najpierw wybór folderu
                     // Pusty folder tylko dla tego trybu; "keep" = nie znika sam, gdy zostanie w nim jedna aplikacja.
-                    CustomWidgetKind.CARD_FOLDER -> viewModel.addCustomWidget(kind, CardFolderData("Folder", null, null, emptyList(), keep = true).toJson())
+                    CustomWidgetKind.CARD_FOLDER -> viewModel.addCustomWidget(kind, CardFolderData(context.getString(R.string.ls_default_folder_name), null, null, emptyList(), keep = true).toJson())
                     // Nowa lista i odliczanie od razu z sensownym stanem początkowym.
-                    CustomWidgetKind.CHECKLIST -> viewModel.addCustomWidget(kind, Checklist.of("Lista"))
+                    CustomWidgetKind.CHECKLIST -> viewModel.addCustomWidget(kind, Checklist.of(context.getString(R.string.ls_default_list_name)))
                     CustomWidgetKind.COUNTDOWN -> viewModel.addCustomWidget(kind, Countdown.of(""))
                     CustomWidgetKind.STICKER -> pickFromStudio.launch(pl.rafal.stickonme.StickOnMe.pickIntent(context)) // wybór albo nowa w StickOnMe
                     else -> viewModel.addCustomWidget(kind)
@@ -1826,6 +1828,7 @@ private fun LauncherContent(
 @Composable
 private fun CardMenuButton(actions: List<MenuAction>) {
     var open by remember { mutableStateOf(false) }
+    val menuDescription = stringResource(R.string.ls_card_menu)
     Box {
         Box(
             contentAlignment = Alignment.Center,
@@ -1833,7 +1836,7 @@ private fun CardMenuButton(actions: List<MenuAction>) {
                 .size(48.dp)
                 .clip(CircleShape)
                 .clickable { open = true }
-                .semantics { contentDescription = "Menu karty" },
+                .semantics { contentDescription = menuDescription },
         ) {
             Text("⋯", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
         }
@@ -2049,9 +2052,9 @@ private fun ModeCard(
                         if (onPage.isEmpty()) {
                             Text(
                                 text = when {
-                                    p > 0 && editing -> "Pusta strona.\nPrzeciągnij tu element (przytrzymaj go przy krawędzi poprzedniej strony) albo dodaj coś przyciskami na dole."
+                                    p > 0 && editing -> stringResource(R.string.ls_empty_page)
                                     p > 0 -> ""
-                                    else -> "Tryb ${modeName.orEmpty()} jest pusty.\nPrzeciągnij aplikacje z szuflady albo przytrzymaj puste miejsce, aby dodać widżet."
+                                    else -> stringResource(R.string.ls_empty_mode, modeName.orEmpty())
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2126,6 +2129,7 @@ private fun ModeCard(
             if (pageCount > 1) {
                 val dotSlot = 22.dp
                 val slotPx = with(LocalDensity.current) { dotSlot.toPx() }
+                val pagesDescription = stringResource(R.string.ls_page_dots, shown + 1, pageCount)
                 fun goTo(i: Int) {
                     val target = i.coerceIn(0, lastPage)
                     // Porównujemy z docelową stroną (VM), nie z "shown", które dogania ją dopiero po animacji.
@@ -2152,7 +2156,7 @@ private fun ModeCard(
                                     }
                                 },
                         )
-                        .semantics { contentDescription = "Strona ${shown + 1} z $pageCount — dotknij kropki, aby zmienić" },
+                        .semantics { contentDescription = pagesDescription },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     repeat(pageCount) { i ->
@@ -2220,6 +2224,7 @@ private fun ModeCard(
 // Okrągły przycisk szuflady (wszystkie aplikacje) — bez klawiatury, od razu lista.
 @Composable
 private fun DrawerButton(onClick: () -> Unit) {
+    val allAppsDescription = stringResource(R.string.ls_all_apps)
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -2227,7 +2232,7 @@ private fun DrawerButton(onClick: () -> Unit) {
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "Wszystkie aplikacje" },
+            .semantics { contentDescription = allAppsDescription },
     ) {
         Image(
             painter = painterResource(pl.rafal.contextlauncher.R.drawable.ic_apps),

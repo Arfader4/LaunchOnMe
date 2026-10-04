@@ -11,21 +11,26 @@ import android.nfc.NfcAdapter
 import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.annotation.StringRes
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.ModePhoneSettings
 import pl.rafal.contextlauncher.data.RingerSetting
 import kotlin.math.roundToInt
 
 // Przełącznik, którego Android nie pozwala zmienić aplikacji: pokazujemy przypomnienie i otwieramy panel.
-enum class ManualToggle(val label: String) {
-    WIFI("Wi-Fi"),
-    BLUETOOTH("Bluetooth"),
-    NFC("NFC"),
-    MOBILE_DATA("Dane komórkowe"),
-    BATTERY_SAVER("Oszczędzanie energii"),
+enum class ManualToggle(@StringRes private val labelRes: Int) {
+    WIFI(R.string.sys_toggle_wifi),
+    BLUETOOTH(R.string.sys_toggle_bluetooth),
+    NFC(R.string.sys_toggle_nfc),
+    MOBILE_DATA(R.string.sys_toggle_mobile_data),
+    BATTERY_SAVER(R.string.sys_toggle_battery_saver);
+
+    val label: String get() = AppText.get(labelRes)
 }
 
 data class ManualTask(val toggle: ManualToggle, val turnOn: Boolean) {
-    val label: String get() = "${toggle.label}: ${if (turnOn) "włącz" else "wyłącz"}"
+    val label: String get() = AppText.get(if (turnOn) R.string.sys_manual_task_on else R.string.sys_manual_task_off, toggle.label)
 }
 
 // Wykonuje ustawienia trybu. Wszystko w runCatching: brak zgody albo nietypowy telefon nie może wywrócić launchera.

@@ -42,9 +42,9 @@ class ModeTileService : TileService() {
             val showPicker = {
                 val names = modes.map { if (it.id == active?.id) "${it.name}  ✓" else it.name }.toTypedArray()
                 val dialog = AlertDialog.Builder(this@ModeTileService, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("Wybierz tryb")
+                    .setTitle(getString(R.string.act_tile_pick_mode))
                     .setItems(names) { _, which -> select(modes[which]) }
-                    .setNegativeButton("Anuluj", null)
+                    .setNegativeButton(getString(R.string.common_cancel), null)
                     .create()
                 showDialog(dialog) // specjalna metoda kafelka: okno nad panelem szybkich ustawień
             }
@@ -66,13 +66,13 @@ class ModeTileService : TileService() {
         val active = modeDao.getAll().maxByOrNull { it.lastActiveAt }
         if (active == null) {
             tile.state = Tile.STATE_UNAVAILABLE
-            tile.label = "Tryb"
+            tile.label = getString(R.string.act_tile_label)
         } else {
             tile.state = Tile.STATE_ACTIVE
             tile.label = active.name
-            tile.subtitle = "Tryb" // podpis pod nazwą (Android 10+)
+            tile.subtitle = getString(R.string.act_tile_label) // podpis pod nazwą (Android 10+)
             tile.icon = Icon.createWithResource(this, ModeIcon.of(active.icon).res)
-            tile.contentDescription = "Tryb ${active.name}"
+            tile.contentDescription = getString(R.string.act_tile_description, active.name)
         }
         tile.updateTile()
     }

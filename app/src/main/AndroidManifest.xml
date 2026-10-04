@@ -94,7 +94,7 @@
         <activity
             android:name=".ShareActivity"
             android:exported="true"
-            android:label="Przypnij do trybu"
+            android:label="@string/manifest_share_label"
             android:excludeFromRecents="true"
             android:taskAffinity=""
             android:theme="@style/Theme.ContextLauncher"
@@ -127,7 +127,7 @@
             android:name=".ModeTileService"
             android:exported="true"
             android:icon="@drawable/ic_mode_star"
-            android:label="Tryb"
+            android:label="@string/manifest_tile_label"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
@@ -138,7 +138,7 @@
         <service
             android:name=".system.NotificationDotsService"
             android:exported="false"
-            android:label="Kropki powiadomień (LaunchOnMe)"
+            android:label="@string/manifest_dots_label"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import pl.rafal.contextlauncher.AppText
 import pl.rafal.contextlauncher.R
 import java.net.HttpURLConnection
 import java.net.URL
@@ -73,7 +74,7 @@ class WeatherRepository(private val context: Context) {
     // Nazwa miejscowości z współrzędnych (Geocoder systemu; potrzebuje internetu, bywa niedostępny).
     @Suppress("DEPRECATION")
     private fun placeName(location: Location): String? = runCatching {
-        Geocoder(context, Locale("pl")).getFromLocation(location.latitude, location.longitude, 1)
+        Geocoder(context, Locale.getDefault()).getFromLocation(location.latitude, location.longitude, 1)
             ?.firstOrNull()?.locality
     }.getOrNull()
 
@@ -116,17 +117,17 @@ class WeatherRepository(private val context: Context) {
 // Kody pogody WMO → polski opis i ikona.
 object WeatherCodes {
     fun describe(code: Int): String = when (code) {
-        0 -> "Bezchmurnie"
-        1 -> "Przeważnie słonecznie"
-        2 -> "Częściowe zachmurzenie"
-        3 -> "Pochmurno"
-        45, 48 -> "Mgła"
-        in 51..57 -> "Mżawka"
-        in 61..67 -> "Deszcz"
-        in 71..77 -> "Śnieg"
-        in 80..82 -> "Przelotne opady"
-        85, 86 -> "Przelotny śnieg"
-        in 95..99 -> "Burza"
+        0 -> AppText.get(R.string.weather_clear)
+        1 -> AppText.get(R.string.weather_mostly_sunny)
+        2 -> AppText.get(R.string.weather_partly_cloudy)
+        3 -> AppText.get(R.string.weather_cloudy)
+        45, 48 -> AppText.get(R.string.weather_fog)
+        in 51..57 -> AppText.get(R.string.weather_drizzle)
+        in 61..67 -> AppText.get(R.string.weather_rain)
+        in 71..77 -> AppText.get(R.string.weather_snow)
+        in 80..82 -> AppText.get(R.string.weather_showers)
+        85, 86 -> AppText.get(R.string.weather_snow_showers)
+        in 95..99 -> AppText.get(R.string.weather_thunderstorm)
         else -> "—"
     }
 

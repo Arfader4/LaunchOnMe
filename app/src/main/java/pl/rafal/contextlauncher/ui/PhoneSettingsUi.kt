@@ -48,6 +48,9 @@ import pl.rafal.contextlauncher.data.RingerSetting
 import pl.rafal.contextlauncher.system.ManualTask
 import pl.rafal.contextlauncher.system.PairedDevice
 import kotlin.math.roundToInt
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
+import androidx.compose.ui.res.pluralStringResource
 
 // --- Sekcja "Ustawienia telefonu" w ustawieniach trybu ---
 
@@ -62,9 +65,9 @@ fun PhoneSettingsSection(
     onGrantWrite: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Ustawienia telefonu w tym trybie", style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.phone_title), style = MaterialTheme.typography.titleSmall)
         Text(
-            "Zmieniane przy włączeniu trybu. „—” = nie zmieniaj.",
+            stringResource(R.string.phone_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -73,40 +76,40 @@ fun PhoneSettingsSection(
         val needsDnd = settings.dnd != null || settings.ringer == RingerSetting.SILENT
         val needsWrite = settings.brightness != null || settings.autoRotate != null || settings.screenTimeoutSec != null
         if (needsDnd && !hasDndAccess) {
-            AccessHint("Nie przeszkadzać i cisza wymagają zgody „Dostęp do trybu Nie przeszkadzać”.", onGrantDnd)
+            AccessHint(stringResource(R.string.phone_dnd_access_hint), onGrantDnd)
         }
         if (needsWrite && !canWriteSettings) {
-            AccessHint("Jasność, wygaszanie i obracanie wymagają zgody „Modyfikowanie ustawień systemu”.", onGrantWrite)
+            AccessHint(stringResource(R.string.phone_write_access_hint), onGrantWrite)
         }
 
-        SectionLabel2("Automatycznie")
-        TriState("Nie przeszkadzać", settings.dnd) { onChange(settings.copy(dnd = it)) }
+        SectionLabel2(stringResource(R.string.phone_section_auto))
+        TriState(stringResource(R.string.phone_dnd), settings.dnd) { onChange(settings.copy(dnd = it)) }
         ChoiceRow(
-            label = "Tryb dźwięku",
+            label = stringResource(R.string.phone_ringer),
             options = listOf(null) + RingerSetting.entries,
             selected = settings.ringer,
             labelOf = { it?.label ?: "—" },
             onSelect = { onChange(settings.copy(ringer = it)) },
         )
-        PercentSetting("Multimedia", settings.mediaVolume) { onChange(settings.copy(mediaVolume = it)) }
-        PercentSetting("Dzwonek", settings.ringVolume) { onChange(settings.copy(ringVolume = it)) }
-        PercentSetting("Alarm", settings.alarmVolume) { onChange(settings.copy(alarmVolume = it)) }
-        PercentSetting("Jasność ekranu", settings.brightness) { onChange(settings.copy(brightness = it)) }
-        TriState("Autoobracanie", settings.autoRotate) { onChange(settings.copy(autoRotate = it)) }
+        PercentSetting(stringResource(R.string.phone_media), settings.mediaVolume) { onChange(settings.copy(mediaVolume = it)) }
+        PercentSetting(stringResource(R.string.phone_ring), settings.ringVolume) { onChange(settings.copy(ringVolume = it)) }
+        PercentSetting(stringResource(R.string.phone_alarm), settings.alarmVolume) { onChange(settings.copy(alarmVolume = it)) }
+        PercentSetting(stringResource(R.string.phone_brightness), settings.brightness) { onChange(settings.copy(brightness = it)) }
+        TriState(stringResource(R.string.phone_autorotate), settings.autoRotate) { onChange(settings.copy(autoRotate = it)) }
         ChoiceRow(
-            label = "Wygaszanie ekranu",
+            label = stringResource(R.string.phone_screen_timeout),
             options = listOf(null, 30, 60, 120, 300, 600),
             selected = settings.screenTimeoutSec,
             labelOf = { sec -> when { sec == null -> "—"; sec < 60 -> "$sec s"; else -> "${sec / 60} min" } },
             onSelect = { onChange(settings.copy(screenTimeoutSec = it)) },
         )
 
-        SectionLabel2("Przypomnienie z przyciskiem (Android nie pozwala przełączać ich aplikacjom)")
+        SectionLabel2(stringResource(R.string.phone_section_reminder))
         TriState("Wi-Fi", settings.wifi) { onChange(settings.copy(wifi = it)) }
         TriState("Bluetooth", settings.bluetooth) { onChange(settings.copy(bluetooth = it)) }
-        TriState("Dane komórkowe", settings.mobileData) { onChange(settings.copy(mobileData = it)) }
+        TriState(stringResource(R.string.phone_mobile_data), settings.mobileData) { onChange(settings.copy(mobileData = it)) }
         TriState("NFC", settings.nfc) { onChange(settings.copy(nfc = it)) }
-        TriState("Oszczędzanie energii", settings.batterySaver) { onChange(settings.copy(batterySaver = it)) }
+        TriState(stringResource(R.string.phone_battery_saver), settings.batterySaver) { onChange(settings.copy(batterySaver = it)) }
     }
 }
 
@@ -131,18 +134,20 @@ private fun AccessHint(text: String, onGrant: () -> Unit) {
             .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
     ) {
         Text(text, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-        TextButton(onClick = onGrant) { Text("Nadaj") }
+        TextButton(onClick = onGrant) { Text(stringResource(R.string.phone_grant)) }
     }
 }
 
 // Trzy stany: nie zmieniaj / włącz / wyłącz.
 @Composable
 private fun TriState(label: String, value: Boolean?, onChange: (Boolean?) -> Unit) {
+    val onLabel = stringResource(R.string.phone_on)
+    val offLabel = stringResource(R.string.phone_off)
     ChoiceRow(
         label = label,
         options = listOf(null, true, false),
         selected = value,
-        labelOf = { when (it) { null -> "—"; true -> "Wł."; false -> "Wył." } },
+        labelOf = { when (it) { null -> "—"; true -> onLabel; false -> offLabel } },
         onSelect = onChange,
     )
 }
@@ -203,6 +208,7 @@ fun ManualTasksCard(
     onTask: (ManualTask) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val hideCd = stringResource(R.string.phone_hide_reminder_cd)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -213,7 +219,7 @@ fun ManualTasksCard(
             .padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Tryb $modeName prosi o:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.phone_manual_title, modeName), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                 tasks.forEach { task -> AssistChip(onClick = { onTask(task) }, label = { Text(task.label) }) }
             }
@@ -224,7 +230,7 @@ fun ManualTasksCard(
                 .size(44.dp)
                 .clip(CircleShape)
                 .clickable(onClick = onDismiss)
-                .semantics { contentDescription = "Ukryj przypomnienie" },
+                .semantics { contentDescription = hideCd },
         ) { Text("×", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.titleMedium) }
     }
 }
@@ -236,10 +242,10 @@ fun BluetoothRuleDialog(devices: List<PairedDevice>, onPick: (PairedDevice) -> U
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Urządzenie Bluetooth") },
+        title = { Text(stringResource(R.string.phone_bt_title)) },
         text = {
             if (devices.isEmpty()) {
-                Text("Brak sparowanych urządzeń albo brak zgody na Bluetooth. Sparuj urządzenie w ustawieniach telefonu.")
+                Text(stringResource(R.string.phone_bt_empty))
             } else {
                 LazyColumn(Modifier.heightIn(max = 400.dp)) {
                     items(devices, key = { it.address }) { device ->
@@ -258,7 +264,7 @@ fun BluetoothRuleDialog(devices: List<PairedDevice>, onPick: (PairedDevice) -> U
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -268,19 +274,19 @@ fun WifiRuleDialog(currentSsid: String?, onConfirm: (String) -> Unit, onDismiss:
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Sieć Wi-Fi") },
+        title = { Text(stringResource(R.string.phone_wifi_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    if (currentSsid != null) "Wpisaliśmy sieć, z którą telefon jest teraz połączony." else "Wpisz nazwę sieci (SSID).",
+                    if (currentSsid != null) stringResource(R.string.phone_wifi_current) else stringResource(R.string.phone_wifi_enter),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                OutlinedTextField(value = ssid, onValueChange = { ssid = it }, label = { Text("Nazwa sieci") }, singleLine = true)
+                OutlinedTextField(value = ssid, onValueChange = { ssid = it }, label = { Text(stringResource(R.string.phone_wifi_name)) }, singleLine = true)
             }
         },
-        confirmButton = { TextButton(enabled = ssid.isNotBlank(), onClick = { onConfirm(ssid) }) { Text("Dodaj") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        confirmButton = { TextButton(enabled = ssid.isNotBlank(), onClick = { onConfirm(ssid) }) { Text(stringResource(R.string.common_add)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -292,16 +298,16 @@ fun PlaceRuleDialog(onConfirm: (label: String, radiusMeters: Int) -> Unit, onDis
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Miejsce") },
+        title = { Text(stringResource(R.string.phone_place_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "Zapiszemy miejsce, w którym jesteś teraz. Tryb będzie podpowiadany, gdy wrócisz w jego pobliże.",
+                    stringResource(R.string.phone_place_text),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                OutlinedTextField(value = label, onValueChange = { label = it }, label = { Text("Nazwa, np. Biuro") }, singleLine = true)
-                Text("Promień", style = MaterialTheme.typography.labelLarge)
+                OutlinedTextField(value = label, onValueChange = { label = it }, label = { Text(stringResource(R.string.phone_place_name)) }, singleLine = true)
+                Text(stringResource(R.string.phone_radius), style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(100, 300, 1000).forEach { r ->
                         FilterChip(
@@ -313,8 +319,8 @@ fun PlaceRuleDialog(onConfirm: (label: String, radiusMeters: Int) -> Unit, onDis
                 }
             }
         },
-        confirmButton = { TextButton(enabled = label.isNotBlank(), onClick = { onConfirm(label, radius) }) { Text("Zapisz tutaj") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        confirmButton = { TextButton(enabled = label.isNotBlank(), onClick = { onConfirm(label, radius) }) { Text(stringResource(R.string.phone_save_here)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -326,22 +332,22 @@ fun ChargingRuleDialog(onConfirm: (charging: Boolean) -> Unit, onDismiss: () -> 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Ładowanie") },
+        title = { Text(stringResource(R.string.phone_charging_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Np. „Noc” podczas ładowania przy łóżku albo „Auto” po podłączeniu ładowarki samochodowej.",
+                    stringResource(R.string.phone_charging_text),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = charging, onClick = { charging = true }, label = { Text("Podczas ładowania") })
-                    FilterChip(selected = !charging, onClick = { charging = false }, label = { Text("Bez ładowarki") })
+                    FilterChip(selected = charging, onClick = { charging = true }, label = { Text(stringResource(R.string.phone_while_charging)) })
+                    FilterChip(selected = !charging, onClick = { charging = false }, label = { Text(stringResource(R.string.phone_not_charging)) })
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(charging) }) { Text("Dodaj") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        confirmButton = { TextButton(onClick = { onConfirm(charging) }) { Text(stringResource(R.string.common_add)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -351,21 +357,21 @@ fun BatteryRuleDialog(onConfirm: (belowPercent: Int) -> Unit, onDismiss: () -> U
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Niska bateria") },
+        title = { Text(stringResource(R.string.phone_battery_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Poniżej ${percent.roundToInt()}%", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.phone_battery_below, percent.roundToInt()), style = MaterialTheme.typography.titleMedium)
                 // steps = liczba "ząbków" między końcami: 5, 10, …, 50.
                 Slider(value = percent, onValueChange = { percent = it }, valueRange = 5f..50f, steps = 8)
                 Text(
-                    "Ta reguła wygrywa z innymi — dobry moment na tryb z oszczędzaniem baterii w ustawieniach telefonu.",
+                    stringResource(R.string.phone_battery_text),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(percent.roundToInt()) }) { Text("Dodaj") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        confirmButton = { TextButton(onClick = { onConfirm(percent.roundToInt()) }) { Text(stringResource(R.string.common_add)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -376,20 +382,20 @@ fun TimedModeDialog(modeName: String, onPick: (durationMs: Long) -> Unit, onDism
     val now = java.time.LocalDateTime.now()
     val untilMidnight = java.time.Duration.between(now, now.toLocalDate().plusDays(1).atStartOfDay()).toMillis()
     val options = listOf(
-        "30 minut" to 30 * 60_000L,
-        "1 godzina" to 60 * 60_000L,
-        "2 godziny" to 2 * 60 * 60_000L,
-        "3 godziny" to 3 * 60 * 60_000L,
-        "Do końca dnia" to untilMidnight,
+        pluralStringResource(R.plurals.phone_minutes, 30, 30) to 30 * 60_000L,
+        pluralStringResource(R.plurals.phone_hours, 1, 1) to 60 * 60_000L,
+        pluralStringResource(R.plurals.phone_hours, 2, 2) to 2 * 60 * 60_000L,
+        pluralStringResource(R.plurals.phone_hours, 3, 3) to 3 * 60 * 60_000L,
+        stringResource(R.string.phone_until_end_of_day) to untilMidnight,
     )
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("$modeName na czas") },
+        title = { Text(stringResource(R.string.phone_timed_title, modeName)) },
         text = {
             Column {
                 Text(
-                    "Po tym czasie launcher sam wróci do obecnego trybu. Automat w tym czasie nie przełącza.",
+                    stringResource(R.string.phone_timed_text),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -407,6 +413,6 @@ fun TimedModeDialog(modeName: String, onPick: (durationMs: Long) -> Unit, onDism
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }

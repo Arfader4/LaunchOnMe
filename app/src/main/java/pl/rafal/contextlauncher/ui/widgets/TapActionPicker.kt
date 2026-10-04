@@ -26,9 +26,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.AppInfo
 import pl.rafal.contextlauncher.data.TapAction
 import pl.rafal.contextlauncher.data.db.ModeEntity
@@ -73,12 +75,12 @@ fun TapActionDialog(
         title = {
             Text(
                 when (step) {
-                    Step.LIST -> "Po dotknięciu naklejki"
-                    Step.KIND -> "Dodaj akcję"
-                    Step.TOGGLE -> "Co przełączać?"
-                    Step.MODE -> "Który tryb włączyć?"
-                    Step.LINK -> "Adres strony"
-                    Step.SYSTEM -> "Akcja systemowa"
+                    Step.LIST -> stringResource(R.string.tap_title_list)
+                    Step.KIND -> stringResource(R.string.tap_title_kind)
+                    Step.TOGGLE -> stringResource(R.string.tap_title_toggle)
+                    Step.MODE -> stringResource(R.string.tap_title_mode)
+                    Step.LINK -> stringResource(R.string.tap_title_link)
+                    Step.SYSTEM -> stringResource(R.string.tap_title_system)
                 },
             )
         },
@@ -86,7 +88,7 @@ fun TapActionDialog(
             when (step) {
                 Step.LIST -> Column {
                     if (actions.isEmpty()) {
-                        Text("Nic — tylko ozdoba.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.tap_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     actions.forEachIndexed { index, action ->
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -95,30 +97,30 @@ fun TapActionDialog(
                         }
                     }
                     Spacer(Modifier.heightIn(min = 8.dp))
-                    TextButton(onClick = { step = Step.KIND }) { Text("+ Dodaj akcję") }
+                    TextButton(onClick = { step = Step.KIND }) { Text(stringResource(R.string.tap_add_action)) }
                     if (actions.size > 1) {
                         Text(
-                            "Akcje wykonują się po kolei. Aplikację, link albo panel najlepiej dać na koniec — przykryje ekran.",
+                            stringResource(R.string.tap_order_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
                 Step.KIND -> Column {
-                    Option("📱  Otwórz aplikację…") { appPickOpen = true }
-                    Option("↗  Skrót aplikacji (np. czat)…") { shortcutPickOpen = true }
-                    Option("📞  Zadzwoń do…") {
+                    Option(stringResource(R.string.tap_kind_app)) { appPickOpen = true }
+                    Option(stringResource(R.string.tap_kind_shortcut)) { shortcutPickOpen = true }
+                    Option(stringResource(R.string.tap_kind_dial)) {
                         step = Step.LIST
                         onPickPhone(false)
                     }
-                    Option("💬  SMS do…") {
+                    Option(stringResource(R.string.tap_kind_sms)) {
                         step = Step.LIST
                         onPickPhone(true)
                     }
-                    Option("🔦  Przełącz funkcję…") { step = Step.TOGGLE }
-                    Option("⚙  Akcja systemowa (Wi-Fi, aparat…)…") { step = Step.SYSTEM }
-                    Option("⭐  Włącz tryb…") { step = Step.MODE }
-                    Option("🔗  Otwórz link…") { step = Step.LINK }
+                    Option(stringResource(R.string.tap_kind_toggle)) { step = Step.TOGGLE }
+                    Option(stringResource(R.string.tap_kind_system)) { step = Step.SYSTEM }
+                    Option(stringResource(R.string.tap_kind_mode)) { step = Step.MODE }
+                    Option(stringResource(R.string.tap_kind_link)) { step = Step.LINK }
                 }
                 Step.TOGGLE -> Column {
                     QuickToggle.entries.forEach { toggle -> Option(toggle.label) { add(TapAction.Toggle(toggle)) } }
@@ -145,7 +147,7 @@ fun TapActionDialog(
                 Step.LINK -> OutlinedTextField(
                     value = link,
                     onValueChange = { link = it },
-                    placeholder = { Text("np. intercity.pl") },
+                    placeholder = { Text(stringResource(R.string.tap_link_placeholder)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth(),
@@ -154,18 +156,18 @@ fun TapActionDialog(
         },
         confirmButton = {
             when (step) {
-                Step.LIST -> TextButton(onClick = onSave) { Text("Zapisz") }
+                Step.LIST -> TextButton(onClick = onSave) { Text(stringResource(R.string.common_save)) }
                 Step.LINK -> TextButton(onClick = {
                     val url = link.trim().let { if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it" }
                     link = ""
                     add(TapAction.OpenLink(url))
-                }, enabled = link.isNotBlank()) { Text("Dodaj") }
+                }, enabled = link.isNotBlank()) { Text(stringResource(R.string.common_add)) }
                 else -> {}
             }
         },
         dismissButton = {
             TextButton(onClick = { if (step == Step.LIST) onDismiss() else step = if (step == Step.KIND) Step.LIST else Step.KIND }) {
-                Text(if (step == Step.LIST) "Anuluj" else "Wstecz")
+                Text(if (step == Step.LIST) stringResource(R.string.common_cancel) else stringResource(R.string.common_back))
             }
         },
     )
@@ -174,7 +176,7 @@ fun TapActionDialog(
     if (appPickOpen) {
         AppGridPickerDialog(
             allApps = apps,
-            title = "Którą aplikację otworzyć?",
+            title = stringResource(R.string.tap_pick_app_title),
             single = true,
             onConfirm = { chosen ->
                 chosen.firstOrNull()?.let { app ->
@@ -192,7 +194,7 @@ fun TapActionDialog(
             shortcuts = shortcuts,
             apps = apps,
             hasAccess = hasShortcutAccess,
-            title = "Który skrót?",
+            title = stringResource(R.string.tap_pick_shortcut_title),
             onPick = { sc ->
                 sc.shortcutId?.let { add(TapAction.OpenShortcut(sc.packageName, it, sc.userSerial, sc.label)) }
                 shortcutPickOpen = false

@@ -37,6 +37,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.Flow
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.ModeEntity
 
 // Co przyszło z "Udostępnij". Trzy przypadki, każdy z własnymi danymi.
@@ -48,7 +51,7 @@ sealed interface SharedContent {
         val isImage: Boolean get() = mimeType?.startsWith("image/") == true
 
         override val suggestedTitle get() = subject.orEmpty() // pusta = weźmiemy nazwę pliku
-        override val description get() = "Plik (zostanie skopiowany do launchera)"
+        override val description get() = AppText.get(R.string.share_file_description)
     }
 
     data class Link(val url: String, val subject: String?) : SharedContent {
@@ -97,7 +100,7 @@ fun ShareScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
-            Text("Przypnij do OnHand", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.share_title), style = MaterialTheme.typography.titleLarge)
             Text(
                 content.description,
                 style = MaterialTheme.typography.bodyMedium,
@@ -108,12 +111,12 @@ fun ShareScreen(
             if (canBeSticker) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = !asSticker, onClick = { asSticker = false }, label = { Text("OnHand") })
-                    FilterChip(selected = asSticker, onClick = { asSticker = true }, label = { Text("Naklejka na kartę") })
+                    FilterChip(selected = asSticker, onClick = { asSticker = true }, label = { Text(stringResource(R.string.share_sticker_on_card)) })
                 }
             }
             if (asSticker) {
                 Text(
-                    "Po wybraniu trybu otworzy się StickOnMe: wytniesz obiekt, dodasz ramkę i zapiszesz — naklejka trafi na kartę.",
+                    stringResource(R.string.share_sticker_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -121,11 +124,11 @@ fun ShareScreen(
             if (!asSticker) OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
-                label = { Text("Nazwa (opcjonalnie)") },
+                label = { Text(stringResource(R.string.share_name_optional)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Text("Tryb", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.share_mode), style = MaterialTheme.typography.labelLarge)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 modes.forEach { mode ->
                     val isSelected = mode.id == selected?.id
@@ -147,12 +150,12 @@ fun ShareScreen(
                 }
             }
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = onCancel) { Text("Anuluj") }
+                TextButton(onClick = onCancel) { Text(stringResource(R.string.common_cancel)) }
                 Spacer(Modifier.width(8.dp))
                 Button(
                     enabled = selected != null,
                     onClick = { selected?.let { onPin(it, title.trim(), asSticker) } },
-                ) { Text("Przypnij") }
+                ) { Text(stringResource(R.string.share_pin)) }
             }
         }
     }

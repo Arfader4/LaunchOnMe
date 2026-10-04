@@ -14,6 +14,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.annotation.StringRes
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -93,6 +94,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -213,7 +215,7 @@ private fun StudioApp(pickMode: Boolean, wallpaperMode: Boolean, start: StudioSt
                     .getOrNull()?.let { maxOf(it.outWidth, it.outHeight) }?.takeIf { it > 0 } ?: 1024
             }
             board = Board(
-                name = "Kolaż", width = 1080, height = 1080, bgType = Board.BG_COLOR,
+                name = context.getString(R.string.som_board_collage_name), width = 1080, height = 1080, bgType = Board.BG_COLOR,
                 layers = listOf(Layer(kind = Layer.KIND_IMAGE, path = path, x = 540f, y = 540f, scale = 1080f * 0.6f / size)),
             )
             libraryTab = 1
@@ -381,21 +383,21 @@ private fun LibraryScreen(
                 Text("StickOnMe", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text(
                     when {
-                        wallpaperMode -> "Wybierz tablicę na tapetę trybu (albo zrób nową) i dotknij „✓ Na tapetę”"
-                        pickMode -> "Wybierz naklejkę dla karty albo zrób nową"
-                        else -> "Twoje naklejki"
+                        wallpaperMode -> stringResource(R.string.som_lib_hint_wallpaper)
+                        pickMode -> stringResource(R.string.som_lib_hint_pick)
+                        else -> stringResource(R.string.som_lib_hint_default)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Button(onClick = if (tab == 0) onNew else onNewBoard) { Text(if (tab == 0) "+ Nowa" else "+ Tablica") }
+            Button(onClick = if (tab == 0) onNew else onNewBoard) { Text(if (tab == 0) stringResource(R.string.som_lib_new_sticker) else stringResource(R.string.som_lib_new_board)) }
         }
         Spacer(Modifier.height(12.dp))
         if (!wallpaperMode) { // tapeta = tylko tablice
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(selected = tab == 0, onClick = { onTab(0) }, label = { Text("Naklejki") })
-                FilterChip(selected = tab == 1, onClick = { onTab(1) }, label = { Text("Tablice") })
+                FilterChip(selected = tab == 0, onClick = { onTab(0) }, label = { Text(stringResource(R.string.som_lib_tab_stickers)) })
+                FilterChip(selected = tab == 1, onClick = { onTab(1) }, label = { Text(stringResource(R.string.som_lib_tab_boards)) })
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -403,7 +405,7 @@ private fun LibraryScreen(
             BoardsGrid(refresh = refresh, onOpen = onOpenBoard)
         } else if (files.isEmpty()) {
             Text(
-                "Jeszcze nie masz naklejek. Dotknij „+ Nowa”, wybierz zdjęcie — obiekt wytnie się sam, a pędzlem poprawisz szczegóły.",
+                stringResource(R.string.som_lib_empty),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
@@ -430,7 +432,7 @@ private fun LibraryScreen(
                             )
                             .padding(8.dp),
                     ) {
-                        image?.let { Image(it, contentDescription = "Naklejka", modifier = Modifier.fillMaxSize()) }
+                        image?.let { Image(it, contentDescription = stringResource(R.string.som_lib_sticker), modifier = Modifier.fillMaxSize()) }
                     }
                 }
             }
@@ -441,20 +443,20 @@ private fun LibraryScreen(
         AlertDialog(
             onDismissRequest = { menuFor = null },
             containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("Naklejka") },
+            title = { Text(stringResource(R.string.som_lib_sticker)) },
             text = {
                 Column {
-                    if (pickMode) TextButton(onClick = { menuFor = null; onPick(file) }) { Text("✓ Wybierz na kartę") }
-                    TextButton(onClick = { menuFor = null; onEdit(file) }) { Text("✎ Edytuj (zapisze nową wersję)") }
-                    TextButton(onClick = { menuFor = null; onToBoard(file) }) { Text("▦ Na nową tablicę") }
+                    if (pickMode) TextButton(onClick = { menuFor = null; onPick(file) }) { Text(stringResource(R.string.som_lib_menu_pick)) }
+                    TextButton(onClick = { menuFor = null; onEdit(file) }) { Text(stringResource(R.string.som_lib_menu_edit)) }
+                    TextButton(onClick = { menuFor = null; onToBoard(file) }) { Text(stringResource(R.string.som_lib_menu_to_board)) }
                     TextButton(onClick = {
                         menuFor = null
                         runCatching { StickerLibrary.share(context, file) }
-                    }) { Text("↗ Udostępnij (czat, poczta…)") }
-                    TextButton(onClick = { menuFor = null; toDelete = file }) { Text("✕ Usuń", color = MaterialTheme.colorScheme.error) }
+                    }) { Text(stringResource(R.string.som_lib_menu_share)) }
+                    TextButton(onClick = { menuFor = null; toDelete = file }) { Text(stringResource(R.string.som_lib_menu_delete), color = MaterialTheme.colorScheme.error) }
                 }
             },
-            confirmButton = { TextButton(onClick = { menuFor = null }) { Text("Zamknij") } },
+            confirmButton = { TextButton(onClick = { menuFor = null }) { Text(stringResource(R.string.som_close)) } },
         )
     }
 
@@ -462,16 +464,16 @@ private fun LibraryScreen(
         AlertDialog(
             onDismissRequest = { toDelete = null },
             containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("Usunąć naklejkę?") },
-            text = { Text("Naklejki już położone na kartach zostają (to ich kopie).") },
+            title = { Text(stringResource(R.string.som_lib_delete_sticker_title)) },
+            text = { Text(stringResource(R.string.som_lib_delete_sticker_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     StickerLibrary.delete(file)
                     toDelete = null
                     version++
-                }) { Text("Usuń", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.som_delete), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Anuluj") } },
+            dismissButton = { TextButton(onClick = { toDelete = null }) { Text(stringResource(R.string.som_cancel)) } },
         )
     }
 }
@@ -491,7 +493,7 @@ private fun BoardsGrid(refresh: Int, onOpen: (Board) -> Unit) {
     when {
         list == null -> Unit
         list.isEmpty() -> Text(
-            "Tablica to płótno na kolaż, tapetę albo kilka naklejek sklejonych w jedną. Dotknij „+ Tablica” i wybierz rozmiar.",
+            stringResource(R.string.som_lib_boards_empty),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         else -> LazyVerticalGrid(
@@ -525,24 +527,24 @@ private fun BoardsGrid(refresh: Int, onOpen: (Board) -> Unit) {
         AlertDialog(
             onDismissRequest = { toDelete = null },
             containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("Usunąć tablicę?") },
-            text = { Text("Zapisane z niej naklejki i obrazy w Galerii zostają.") },
+            title = { Text(stringResource(R.string.som_lib_delete_board_title)) },
+            text = { Text(stringResource(R.string.som_lib_delete_board_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     BoardStore.delete(context, board)
                     toDelete = null
                     version++
-                }) { Text("Usuń", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.som_delete), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Anuluj") } },
+            dismissButton = { TextButton(onClick = { toDelete = null }) { Text(stringResource(R.string.som_cancel)) } },
         )
     }
 }
 
 // --- Edytor ---
 
-private enum class Tool(val label: String) {
-    ADD("Dodaj"), ERASE("Usuń"), CROP("Kadr"), OVAL("Owal"), MOVE("Przesuń");
+private enum class Tool(@StringRes val labelRes: Int) {
+    ADD(R.string.som_add), ERASE(R.string.som_editor_tool_erase), CROP(R.string.som_editor_tool_crop), OVAL(R.string.som_editor_tool_oval), MOVE(R.string.som_editor_tool_move);
     val paints get() = this == ADD || this == ERASE
     val crops get() = this == CROP || this == OVAL
 }
@@ -584,17 +586,17 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
         }
         val result = runCatching { autoMask(editor.photo) }.getOrNull()
         if (result != null) editor.applyConfidence(result.first, result.second, result.third)
-        else message = "Nie udało się wyciąć obiektu automatycznie — zaznacz go pędzlem („Usuń” zdejmuje tło)."
+        else message = context.getString(R.string.som_editor_auto_failed)
         busy = false
     }
 
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
-            TextButton(onClick = onCancel) { Text("Anuluj") }
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.som_cancel)) }
             Spacer(Modifier.weight(1f))
-            FilterChip(selected = tab == 0, onClick = { tab = 0 }, label = { Text("Wycinanie") })
+            FilterChip(selected = tab == 0, onClick = { tab = 0 }, label = { Text(stringResource(R.string.som_editor_tab_cutout)) })
             Spacer(Modifier.width(6.dp))
-            FilterChip(selected = tab == 1, onClick = { tab = 1 }, label = { Text("Wykończenie") })
+            FilterChip(selected = tab == 1, onClick = { tab = 1 }, label = { Text(stringResource(R.string.som_editor_tab_finish)) })
             Spacer(Modifier.weight(1f))
             Button(
                 enabled = !busy,
@@ -605,7 +607,7 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                             // Gest jest wyłączony (busy), więc maska się nie zmienia w trakcie liczenia.
                             val sticker = runCatching { withContext(Dispatchers.Default) { editor.render() } }.getOrNull()
                             if (sticker == null) {
-                                message = "Naklejka jest pusta — dodaj coś pędzlem (albo za mało pamięci)."
+                                message = context.getString(R.string.som_editor_empty)
                             } else {
                                 onSaved(StickerLibrary.save(context, sticker))
                             }
@@ -614,7 +616,7 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                         }
                     }
                 },
-            ) { Text("Zapisz") }
+            ) { Text(stringResource(R.string.som_save)) }
         }
 
         Box(
@@ -645,8 +647,8 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
         ) {
             if (tab == 0) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    Tool.entries.forEach { t -> FilterChip(selected = tool == t, onClick = { tool = t }, label = { Text(t.label) }) }
-                    TextButton(enabled = editor.canUndo, onClick = { editor.undoLast() }) { Text("↶ Cofnij") }
+                    Tool.entries.forEach { t -> FilterChip(selected = tool == t, onClick = { tool = t }, label = { Text(stringResource(t.labelRes)) }) }
+                    TextButton(enabled = editor.canUndo, onClick = { editor.undoLast() }) { Text(stringResource(R.string.som_editor_undo)) }
                     TextButton(onClick = {
                         busy = true
                         scope.launch {
@@ -654,21 +656,21 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                             if (result != null) editor.applyConfidence(result.first, result.second, result.third)
                             busy = false
                         }
-                    }) { Text("Auto") }
-                    TextButton(onClick = { editor.fill(true) }) { Text("Całe zdjęcie") }
+                    }) { Text(stringResource(R.string.som_editor_auto)) }
+                    TextButton(onClick = { editor.fill(true) }) { Text(stringResource(R.string.som_editor_whole_photo)) }
                 }
                 if (tool.crops) {
                     Text(
-                        "Przeciągnij palcem ramkę — wszystko poza nią zniknie (↶ Cofnij przywraca). Dwa palce = przybliż i przesuń.",
+                        stringResource(R.string.som_editor_crop_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    Text("Pędzel: ${brush.roundToInt()} dp · dwa palce = przybliż i przesuń", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.som_editor_brush, brush.roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Slider(value = brush, onValueChange = { brush = it }, valueRange = 8f..96f)
                 }
             } else {
-                Text("Obrót: ${editor.rotation.roundToInt()}°", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.som_editor_rotation, editor.rotation.roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { editor.rotation = ((editor.rotation - 90f + 540f) % 360f) - 180f }) { Text("↺ 90°") }
                     Slider(
@@ -679,15 +681,15 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                     )
                     TextButton(onClick = { editor.rotation = ((editor.rotation + 90f + 540f) % 360f) - 180f }) { Text("↻ 90°") }
                 }
-                Text("Wygładzenie krawędzi: ${editor.edgeSmooth.roundToInt()} px", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.som_editor_edge_smooth, editor.edgeSmooth.roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Slider(value = editor.edgeSmooth, onValueChange = { editor.edgeSmooth = it }, valueRange = 0f..12f)
-                Text("Zwężenie (usuwa resztki tła przy brzegu): ${editor.edgeShrink.roundToInt()} px", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.som_editor_edge_shrink, editor.edgeShrink.roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Slider(value = editor.edgeShrink, onValueChange = { editor.edgeShrink = it }, valueRange = 0f..8f)
-                Text("Kształt", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.som_editor_shape), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     StickerShapes.all.forEach { s -> FilterChip(selected = editor.shape == s.id, onClick = { editor.shape = s.id }, label = { Text(s.label) }) }
                 }
-                Text("Ramka", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.som_editor_frame), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     Layer.FRAMES.forEach { (key, label) -> FilterChip(selected = editor.frame == key, onClick = { editor.frame = key }, label = { Text(label) }) }
                 }
@@ -705,10 +707,10 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                         }
                     }
                 }
-                Text("Rozmiar naklejki", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.som_editor_size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(512 to "Mała", 768 to "Średnia", 1024 to "Duża").forEach { (side, label) ->
-                        FilterChip(selected = editor.outputSide == side, onClick = { editor.outputSide = side }, label = { Text("$label · $side px") })
+                    listOf(512 to R.string.som_editor_size_small, 768 to R.string.som_editor_size_medium, 1024 to R.string.som_editor_size_large).forEach { (side, label) ->
+                        FilterChip(selected = editor.outputSide == side, onClick = { editor.outputSide = side }, label = { Text(stringResource(R.string.som_editor_size_chip, stringResource(label), side)) })
                     }
                 }
             }

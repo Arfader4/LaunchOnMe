@@ -63,6 +63,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.Icon
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -604,12 +606,12 @@ fun CardGridView(
                         .height(ZoneHeight),
                 ) {
                     DropZone(
-                        label = "✕  Usuń z karty",
+                        label = "✕  " + stringResource(R.string.grid_remove_from_card),
                         active = overZone && (!rightHalf || dragged !is CardApp || dragged.app.isShortcut),
                         modifier = Modifier.weight(1f),
                     )
                     if (dragged is CardApp && !dragged.app.isShortcut) {
-                        DropZone(label = "🗑  Odinstaluj", active = overZone && rightHalf, modifier = Modifier.weight(1f))
+                        DropZone(label = "🗑  " + stringResource(R.string.grid_uninstall), active = overZone && rightHalf, modifier = Modifier.weight(1f))
                     }
                 }
             }
@@ -694,12 +696,13 @@ private fun WidgetCell(
 // Krzyżyk w rogu elementu w trybie edycji; size = obszar dotyku (mniejszy na małych widżetach).
 @Composable
 private fun RemoveBadge(onClick: () -> Unit, size: Dp, modifier: Modifier = Modifier) {
+    val removeDesc = stringResource(R.string.grid_remove_from_mode)
     Box(
         contentAlignment = Alignment.TopStart,
         modifier = modifier
             .size(size)
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "Usuń z trybu" },
+            .semantics { contentDescription = removeDesc },
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -716,12 +719,13 @@ private fun RemoveBadge(onClick: () -> Unit, size: Dp, modifier: Modifier = Modi
 // ⚙ w lewym dolnym rogu widżetu w edycji: jego ustawienia (naklejka, notatka, zegar…).
 @Composable
 private fun ConfigBadge(onClick: () -> Unit, size: Dp, modifier: Modifier = Modifier) {
+    val settingsDesc = stringResource(R.string.grid_widget_settings)
     Box(
         contentAlignment = Alignment.BottomStart,
         modifier = modifier
             .size(size)
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "Ustawienia widżetu" },
+            .semantics { contentDescription = settingsDesc },
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -746,10 +750,11 @@ private fun ConfigBadge(onClick: () -> Unit, size: Dp, modifier: Modifier = Modi
 private fun ResizeHandle(size: Dp, modifier: Modifier = Modifier) {
     val fg = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
     val shade = Color.Black.copy(alpha = 0.28f)
+    val resizeDesc = stringResource(R.string.grid_resize)
     Box(
         modifier = modifier
             .size(size)
-            .semantics { contentDescription = "Zmień rozmiar" },
+            .semantics { contentDescription = resizeDesc },
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val w = this.size.width // rozmiar płótna (DrawScope), nie parametr size

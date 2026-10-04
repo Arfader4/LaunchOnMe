@@ -1,6 +1,7 @@
 package pl.rafal.contextlauncher.ui
 
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,70 +32,74 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.graphics.ColorUtils
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import pl.rafal.contextlauncher.AppText
 import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.ModeEntity
 
 // Katalog ikon trybów. Grafiki są w res/drawable, więc ten sam symbol pokażą launcher i kafelek szybkich ustawień.
-enum class ModeIcon(val key: String, @DrawableRes val res: Int, val label: String, val extra: Boolean = false) {
-    WORK("work", R.drawable.ic_mode_work, "Teczka"),
-    HOME("home", R.drawable.ic_mode_home, "Dom"),
-    TRAVEL("travel", R.drawable.ic_mode_travel, "Podróż"),
-    STUDY("study", R.drawable.ic_mode_study, "Książka"),
-    SPORT("sport", R.drawable.ic_mode_sport, "Trening"),
-    NIGHT("night", R.drawable.ic_mode_night, "Księżyc"),
-    SUN("sun", R.drawable.ic_mode_sun, "Słońce"),
-    HEART("heart", R.drawable.ic_mode_heart, "Serce"),
-    STAR("star", R.drawable.ic_mode_star, "Gwiazda"),
-    MUSIC("music", R.drawable.ic_mode_music, "Muzyka"),
-    CAR("car", R.drawable.ic_mode_car, "Auto"),
-    CART("cart", R.drawable.ic_mode_cart, "Zakupy"),
-    COFFEE("coffee", R.drawable.ic_mode_coffee, "Kawa"),
-    LEAF("leaf", R.drawable.ic_mode_leaf, "Natura"),
-    GAME("game", R.drawable.ic_mode_game, "Gry"),
-    CAMERA("camera", R.drawable.ic_mode_camera, "Aparat"),
+enum class ModeIcon(val key: String, @DrawableRes val res: Int, @StringRes private val labelRes: Int, val extra: Boolean = false) {
+    WORK("work", R.drawable.ic_mode_work, R.string.mode_icon_work),
+    HOME("home", R.drawable.ic_mode_home, R.string.mode_icon_home),
+    TRAVEL("travel", R.drawable.ic_mode_travel, R.string.mode_icon_travel),
+    STUDY("study", R.drawable.ic_mode_study, R.string.mode_icon_study),
+    SPORT("sport", R.drawable.ic_mode_sport, R.string.mode_icon_sport),
+    NIGHT("night", R.drawable.ic_mode_night, R.string.mode_icon_night),
+    SUN("sun", R.drawable.ic_mode_sun, R.string.mode_icon_sun),
+    HEART("heart", R.drawable.ic_mode_heart, R.string.mode_icon_heart),
+    STAR("star", R.drawable.ic_mode_star, R.string.mode_icon_star),
+    MUSIC("music", R.drawable.ic_mode_music, R.string.mode_icon_music),
+    CAR("car", R.drawable.ic_mode_car, R.string.mode_icon_car),
+    CART("cart", R.drawable.ic_mode_cart, R.string.mode_icon_cart),
+    COFFEE("coffee", R.drawable.ic_mode_coffee, R.string.mode_icon_coffee),
+    LEAF("leaf", R.drawable.ic_mode_leaf, R.string.mode_icon_leaf),
+    GAME("game", R.drawable.ic_mode_game, R.string.mode_icon_game),
+    CAMERA("camera", R.drawable.ic_mode_camera, R.string.mode_icon_camera),
     // Rozszerzony zestaw (konturowy, jak podstawowe — foldery mają osobne, wypełnione symbole).
-    X_BED("bed", R.drawable.ic_mode_bed, "Sen", extra = true),
-    X_CODE("code", R.drawable.ic_mode_code, "Programowanie", extra = true),
-    X_COCKTAIL("cocktail", R.drawable.ic_mode_cocktail, "Impreza", extra = true),
-    X_BEER("beer", R.drawable.ic_mode_beer, "Pub", extra = true),
-    X_BIKE("bike", R.drawable.ic_mode_bike, "Rower", extra = true),
-    X_WAVES("waves", R.drawable.ic_mode_waves, "Woda", extra = true),
-    X_MOUNTAIN("mountain", R.drawable.ic_mode_mountain, "Góry", extra = true),
-    X_TENT("tent", R.drawable.ic_mode_tent, "Biwak", extra = true),
-    X_BEACH("beach", R.drawable.ic_mode_beach, "Plaża", extra = true),
-    X_SNOW("snow", R.drawable.ic_mode_snow, "Zima", extra = true),
-    X_PAW("paw", R.drawable.ic_mode_paw, "Zwierzęta", extra = true),
-    X_PILL("pill", R.drawable.ic_mode_pill, "Zdrowie", extra = true),
-    X_LOTUS("lotus", R.drawable.ic_mode_lotus, "Relaks", extra = true),
-    X_CHAT("chat", R.drawable.ic_mode_chat, "Rozmowy", extra = true),
-    X_PHONE("phone", R.drawable.ic_mode_phone, "Telefon", extra = true),
-    X_LAPTOP("laptop", R.drawable.ic_mode_laptop, "Komputer", extra = true),
-    X_BRUSH("brush", R.drawable.ic_mode_brush, "Sztuka", extra = true),
-    X_HAMMER("hammer", R.drawable.ic_mode_hammer, "Majsterkowanie", extra = true),
-    X_SHIELD("shield", R.drawable.ic_mode_shield, "Skupienie", extra = true),
-    X_CHART("chart", R.drawable.ic_mode_chart, "Finanse", extra = true),
-    X_FAMILY("family", R.drawable.ic_mode_family, "Rodzina", extra = true),
-    X_BELL("bell", R.drawable.ic_mode_bell, "Przypomnienia", extra = true),
-    X_RAIN("rain", R.drawable.ic_mode_rain, "Deszcz", extra = true),
-    X_MOVIE("movie", R.drawable.ic_mode_movie, "Kino", extra = true),
-    X_GIFT("gift", R.drawable.ic_mode_gift, "Święta", extra = true),
-    X_CLOCK("clock", R.drawable.ic_mode_clock, "Rutyna", extra = true),
-    X_CALENDAR("calendar", R.drawable.ic_mode_calendar, "Plan", extra = true),
-    X_GRAD("grad", R.drawable.ic_mode_grad, "Uczelnia", extra = true),
-    X_BUS("bus", R.drawable.ic_mode_bus, "Komunikacja", extra = true),
-    X_TRAIN("train", R.drawable.ic_mode_train, "Pociąg", extra = true),
-    X_BOLT("bolt", R.drawable.ic_mode_bolt, "Energia", extra = true),
-    X_GLOBE("globe", R.drawable.ic_mode_globe, "Świat", extra = true),
-    X_FLAG("flag", R.drawable.ic_mode_flag, "Cele", extra = true),
-    X_HEADPHONES("headphones", R.drawable.ic_mode_headphones, "Słuchawki", extra = true),
-    X_READING("reading", R.drawable.ic_mode_reading, "Czytanie", extra = true),
-    X_BABY("baby", R.drawable.ic_mode_baby, "Dziecko", extra = true),
-    X_PIZZA("pizza", R.drawable.ic_mode_pizza, "Jedzenie", extra = true),
+    X_BED("bed", R.drawable.ic_mode_bed, R.string.mode_icon_bed, extra = true),
+    X_CODE("code", R.drawable.ic_mode_code, R.string.mode_icon_code, extra = true),
+    X_COCKTAIL("cocktail", R.drawable.ic_mode_cocktail, R.string.mode_icon_cocktail, extra = true),
+    X_BEER("beer", R.drawable.ic_mode_beer, R.string.mode_icon_beer, extra = true),
+    X_BIKE("bike", R.drawable.ic_mode_bike, R.string.mode_icon_bike, extra = true),
+    X_WAVES("waves", R.drawable.ic_mode_waves, R.string.mode_icon_waves, extra = true),
+    X_MOUNTAIN("mountain", R.drawable.ic_mode_mountain, R.string.mode_icon_mountain, extra = true),
+    X_TENT("tent", R.drawable.ic_mode_tent, R.string.mode_icon_tent, extra = true),
+    X_BEACH("beach", R.drawable.ic_mode_beach, R.string.mode_icon_beach, extra = true),
+    X_SNOW("snow", R.drawable.ic_mode_snow, R.string.mode_icon_snow, extra = true),
+    X_PAW("paw", R.drawable.ic_mode_paw, R.string.mode_icon_paw, extra = true),
+    X_PILL("pill", R.drawable.ic_mode_pill, R.string.mode_icon_pill, extra = true),
+    X_LOTUS("lotus", R.drawable.ic_mode_lotus, R.string.mode_icon_lotus, extra = true),
+    X_CHAT("chat", R.drawable.ic_mode_chat, R.string.mode_icon_chat, extra = true),
+    X_PHONE("phone", R.drawable.ic_mode_phone, R.string.mode_icon_phone, extra = true),
+    X_LAPTOP("laptop", R.drawable.ic_mode_laptop, R.string.mode_icon_laptop, extra = true),
+    X_BRUSH("brush", R.drawable.ic_mode_brush, R.string.mode_icon_brush, extra = true),
+    X_HAMMER("hammer", R.drawable.ic_mode_hammer, R.string.mode_icon_hammer, extra = true),
+    X_SHIELD("shield", R.drawable.ic_mode_shield, R.string.mode_icon_shield, extra = true),
+    X_CHART("chart", R.drawable.ic_mode_chart, R.string.mode_icon_chart, extra = true),
+    X_FAMILY("family", R.drawable.ic_mode_family, R.string.mode_icon_family, extra = true),
+    X_BELL("bell", R.drawable.ic_mode_bell, R.string.mode_icon_bell, extra = true),
+    X_RAIN("rain", R.drawable.ic_mode_rain, R.string.mode_icon_rain, extra = true),
+    X_MOVIE("movie", R.drawable.ic_mode_movie, R.string.mode_icon_movie, extra = true),
+    X_GIFT("gift", R.drawable.ic_mode_gift, R.string.mode_icon_gift, extra = true),
+    X_CLOCK("clock", R.drawable.ic_mode_clock, R.string.mode_icon_clock, extra = true),
+    X_CALENDAR("calendar", R.drawable.ic_mode_calendar, R.string.mode_icon_calendar, extra = true),
+    X_GRAD("grad", R.drawable.ic_mode_grad, R.string.mode_icon_grad, extra = true),
+    X_BUS("bus", R.drawable.ic_mode_bus, R.string.mode_icon_bus, extra = true),
+    X_TRAIN("train", R.drawable.ic_mode_train, R.string.mode_icon_train, extra = true),
+    X_BOLT("bolt", R.drawable.ic_mode_bolt, R.string.mode_icon_bolt, extra = true),
+    X_GLOBE("globe", R.drawable.ic_mode_globe, R.string.mode_icon_globe, extra = true),
+    X_FLAG("flag", R.drawable.ic_mode_flag, R.string.mode_icon_flag, extra = true),
+    X_HEADPHONES("headphones", R.drawable.ic_mode_headphones, R.string.mode_icon_headphones, extra = true),
+    X_READING("reading", R.drawable.ic_mode_reading, R.string.mode_icon_reading, extra = true),
+    X_BABY("baby", R.drawable.ic_mode_baby, R.string.mode_icon_baby, extra = true),
+    X_PIZZA("pizza", R.drawable.ic_mode_pizza, R.string.mode_icon_pizza, extra = true),
     ;
+
+    val label: String get() = AppText.get(labelRes)
 
     companion object {
         fun of(key: String?): ModeIcon = entries.firstOrNull { it.key == key } ?: STAR
@@ -160,7 +165,7 @@ fun IconPicker(selected: ModeIcon, color: Long, onSelect: (ModeIcon) -> Unit) {
             IconGrid(columns, ModeIcon.entries.filter { !it.extra }, selected, color, onSelect)
         }
         Text(
-            if (more) "Mniej ikon ▴" else "Więcej ikon (${ModeIcon.entries.count { it.extra }}) ▾",
+            if (more) stringResource(R.string.mode_icons_less) else stringResource(R.string.mode_icons_more, ModeIcon.entries.count { it.extra }),
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier
@@ -214,6 +219,7 @@ fun ColorSwatches(
     modeBadge: Boolean = false,  // kolory trybu: kółka pokazują kolor tak, jak wyjdzie na znaczku w tym motywie
 ) {
     var pickerOpen by remember { mutableStateOf(false) }
+    val customColorDescription = stringResource(R.string.mode_color_custom)
     // horizontalScroll: kolorów jest więcej, niż mieści się w szerokości ekranu.
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
         if (allowNone) {
@@ -233,7 +239,7 @@ fun ColorSwatches(
                     // Tęczowe kółko = "dowolny kolor".
                     .background(androidx.compose.ui.graphics.Brush.sweepGradient((0..6).map { Color.hsv(it * 60f % 360f, 0.8f, 1f) }))
                     .clickable { pickerOpen = true }
-                    .semantics { contentDescription = "Własny kolor" },
+                    .semantics { contentDescription = customColorDescription },
             ) {
                 androidx.compose.material3.Text("+", color = Color.Black, style = MaterialTheme.typography.labelLarge)
             }
@@ -260,6 +266,7 @@ private fun Swatch(color: Long?, selected: Boolean, onClick: () -> Unit, modeBad
         modeBadge -> remember(color, dark) { modeBadgeColor(color, dark) }
         else -> Color(color)
     }
+    val swatchDescription = if (color == null) stringResource(R.string.mode_color_scheme) else stringResource(R.string.mode_color)
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -272,7 +279,7 @@ private fun Swatch(color: Long?, selected: Boolean, onClick: () -> Unit, modeBad
                 shape = CircleShape,
             )
             .clickable(onClick = onClick)
-            .semantics { contentDescription = if (color == null) "Kolor ze schematu" else "Kolor" },
+            .semantics { contentDescription = swatchDescription },
     ) {
         if (color == null) {
             // "A" = automatyczny kolor ze schematu

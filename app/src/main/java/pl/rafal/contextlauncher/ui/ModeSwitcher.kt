@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.onClick
@@ -36,6 +37,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.ModeEntity
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -91,6 +93,7 @@ fun ModeSwitcherButton(
 ) {
     var expanded by remember { mutableStateOf(false) }
     LaunchedEffect(closeSignal) { expanded = false }
+    val switchDescription = stringResource(R.string.mode_switch_cd, active?.name.orEmpty())
     // Klawisz ON: dotknięcie = lista trybów, przytrzymanie = łuk z trybami (wybór jednym ruchem palca).
     val arc = remember { ModeArcState() }
     val haptics by androidx.compose.runtime.rememberUpdatedState(androidx.compose.ui.platform.LocalHapticFeedback.current)
@@ -152,7 +155,7 @@ fun ModeSwitcherButton(
                     .clip(OnKeyShape)
                     .then(arcGesture)
                     .semantics {
-                        contentDescription = "Zmień tryb, aktywny: ${active?.name.orEmpty()}. Przytrzymaj, aby wybrać z łuku."
+                        contentDescription = switchDescription
                         role = androidx.compose.ui.semantics.Role.Button
                         onClick { expanded = true; true }
                     },
@@ -180,7 +183,7 @@ fun ModeSwitcherButton(
                     .background(MaterialTheme.colorScheme.surface)
                     .then(arcGesture)
                     .semantics {
-                        contentDescription = "Zmień tryb, aktywny: ${active?.name.orEmpty()}. Przytrzymaj, aby wybrać z łuku."
+                        contentDescription = switchDescription
                         role = androidx.compose.ui.semantics.Role.Button
                         onClick { expanded = true; true }
                     }
@@ -276,6 +279,8 @@ fun ModeDropdown(
                 val index = order.indexOf(mode)
                 val pillColor = if (isActive) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
                 val ring = Color(mode.color)
+                val timedDescription = stringResource(R.string.mode_timed_cd, mode.name)
+                val manageDescription = stringResource(R.string.mode_manage_cd, mode.name)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -385,7 +390,7 @@ fun ModeDropdown(
                                     onDismiss()
                                     onTimed(mode)
                                 }
-                                .semantics { contentDescription = "Włącz ${mode.name} na czas" },
+                                .semantics { contentDescription = timedDescription },
                         ) { Text("⏱", style = MaterialTheme.typography.titleMedium) }
                     }
                     Box(
@@ -397,7 +402,7 @@ fun ModeDropdown(
                                 onDismiss()
                                 onManage(mode)
                             }
-                            .semantics { contentDescription = "Ustawienia trybu ${mode.name}" },
+                            .semantics { contentDescription = manageDescription },
                     ) { Text("⋮", style = MaterialTheme.typography.titleMedium) }
                     Spacer(Modifier.width(4.dp))
                 }
@@ -405,7 +410,7 @@ fun ModeDropdown(
         }
         if (onReorder != null && modes.size > 1) {
             Text(
-                "Przytrzymaj tryb i przesuń, aby zmienić kolejność",
+                stringResource(R.string.mode_reorder_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White.copy(alpha = 0.85f),
                 modifier = Modifier
@@ -424,7 +429,7 @@ fun ModeDropdown(
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 8.dp, vertical = 6.dp),
         ) {
-            SmallKey("+ Nowy tryb") {
+            SmallKey(stringResource(R.string.mode_new_button)) {
                 onDismiss()
                 onNewMode()
             }

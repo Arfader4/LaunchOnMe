@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import pl.rafal.contextlauncher.data.AppInfo
 import pl.rafal.contextlauncher.data.ModeTemplate
 import pl.rafal.contextlauncher.data.ModeTemplates
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 
 // Kreator pierwszego uruchomienia: powitanie → wybór trybów z szablonów → ściąga.
 // firstRun = true: świeża instalacja (nie da się go zamknąć bez utworzenia trybu).
@@ -103,7 +105,7 @@ fun OnboardingScreen(
             when (step) {
                 0 -> {
                     Spacer(Modifier.weight(1f))
-                    Button(onClick = { step = 1 }) { Text("Dalej") }
+                    Button(onClick = { step = 1 }) { Text(stringResource(R.string.common_next)) }
                 }
                 1 -> {
                     TextButton(onClick = {
@@ -113,7 +115,7 @@ fun OnboardingScreen(
                         } else {
                             onClose()
                         }
-                    }) { Text(if (firstRun) "Pomiń" else "Anuluj") }
+                    }) { Text(if (firstRun) stringResource(R.string.common_skip) else stringResource(R.string.common_cancel)) }
                     Spacer(Modifier.weight(1f))
                     Button(
                         enabled = selected.isNotEmpty(),
@@ -122,11 +124,11 @@ fun OnboardingScreen(
                             onCreate(ModeTemplates.All.filter { it.name in selected })
                             step = 2
                         },
-                    ) { Text("Utwórz tryby (${selected.size})") }
+                    ) { Text(stringResource(R.string.onb_create_modes, selected.size)) }
                 }
                 else -> {
                     Spacer(Modifier.weight(1f))
-                    Button(onClick = onClose) { Text("Zaczynamy") }
+                    Button(onClick = onClose) { Text(stringResource(R.string.onb_lets_go)) }
                 }
             }
         }
@@ -143,14 +145,14 @@ private fun WelcomeStep() {
     ) {
         Text("LaunchOnMe", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
         Text(
-            "Ekran główny, który zmienia się razem z Twoim dniem.",
+            stringResource(R.string.onb_tagline),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
-        Feature("Tryby", "Praca, Dom, Podróż… Każdy ma własną kartę z aplikacjami i widżetami.")
-        Feature("OnHand", "Bilety, faktury i notatki przypięte do trybu, zawsze na wierzchu.")
-        Feature("Podpowiedzi", "Launcher sam zaproponuje tryb o właściwej porze albo przed podróżą z kalendarza.")
+        Feature(stringResource(R.string.onb_feat_modes_title), stringResource(R.string.onb_feat_modes_text))
+        Feature("OnHand", stringResource(R.string.onb_feat_onhand_text))
+        Feature(stringResource(R.string.onb_feat_suggest_title), stringResource(R.string.onb_feat_suggest_text))
     }
 }
 
@@ -185,9 +187,9 @@ private fun ChooseModesStep(
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        Text("Wybierz tryby", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.onb_choose_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         Text(
-            "Launcher sam dobierze aplikacje z Twojego telefonu. Wszystko zmienisz później.",
+            stringResource(R.string.onb_choose_text),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -233,7 +235,7 @@ private fun TemplateCard(
                 Text(template.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 if (alreadyHave) {
                     Spacer(Modifier.width(8.dp))
-                    Text("już masz", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.onb_already_have), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Text(template.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -258,11 +260,11 @@ private fun TipsStep() {
             .fillMaxSize()
             .padding(top = 48.dp),
     ) {
-        Text("Gotowe!", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
-        Text("Kilka gestów na start:", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Feature("Nazwa trybu u góry", "Zmiana trybu, a ⋮ przy trybie to jego reguły i ustawienia.")
-        Feature("Przesunięcie w górę", "Szuflada ze wszystkimi aplikacjami i folderami.")
-        Feature("Przytrzymanie karty", "Edycja układu: widżety, przesuwanie, usuwanie. Ikona upuszczona na ikonę tworzy folder.")
-        Feature("Przytrzymanie ikony", "Dodanie do trybu albo folderu, usuwanie, informacje o aplikacji.")
+        Text(stringResource(R.string.onb_done_title), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.onb_gestures_intro), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Feature(stringResource(R.string.onb_tip_mode_name_title), stringResource(R.string.onb_tip_mode_name_text))
+        Feature(stringResource(R.string.onb_tip_swipe_up_title), stringResource(R.string.onb_tip_swipe_up_text))
+        Feature(stringResource(R.string.onb_tip_hold_card_title), stringResource(R.string.onb_tip_hold_card_text))
+        Feature(stringResource(R.string.onb_tip_hold_icon_title), stringResource(R.string.onb_tip_hold_icon_text))
     }
 }

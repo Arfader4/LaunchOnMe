@@ -67,6 +67,8 @@ import pl.rafal.contextlauncher.data.folderRows
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
 import pl.rafal.contextlauncher.data.suggestedApps
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 
 // Wszystko, co okno folderu na karcie może zlecić (jak interfejs z delegatami w C#).
 // Zmiany samych danych (nazwa, wygląd, kolejność, podfoldery…) idą jedną drogą: onUpdate dostaje funkcję,
@@ -131,6 +133,9 @@ fun CardFolderDialog(
         }
     }
     val close = { closing = true }
+    val backDesc = stringResource(R.string.common_back)
+    val lookDesc = stringResource(R.string.folder_look_desc)
+    val optionsDesc = stringResource(R.string.folder_options_title)
 
     Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         // Wstecz: najpierw z podfolderu do folderu wyżej, dopiero potem zamknięcie okna.
@@ -186,7 +191,7 @@ fun CardFolderDialog(
                                 .size(40.dp)
                                 .clip(CircleShape)
                                 .clickable { path = path.dropLast(1) }
-                                .semantics { contentDescription = "Wstecz" },
+                                .semantics { contentDescription = backDesc },
                         ) { Text("‹", style = MaterialTheme.typography.headlineSmall) }
                     }
                     FolderBadge(
@@ -195,7 +200,7 @@ fun CardFolderDialog(
                         36.dp,
                         Modifier
                             .clickable { lookFor = path }
-                            .semantics { contentDescription = "Wygląd folderu" },
+                            .semantics { contentDescription = lookDesc },
                         grid = current.grid,
                     )
                     Spacer(Modifier.width(12.dp))
@@ -218,17 +223,17 @@ fun CardFolderDialog(
                                 .size(44.dp)
                                 .clip(CircleShape)
                                 .clickable { menuOpen = true }
-                                .semantics { contentDescription = "Opcje folderu" },
+                                .semantics { contentDescription = optionsDesc },
                         ) { Text("⋮", style = MaterialTheme.typography.titleLarge) }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             buildList {
                                 // Krótkie menu: tylko czynności. Ustawienia (wygląd, kolejność, układ, udostępnianie)
                                 // są pogrupowane w oknie "Opcje folderu" — zamiast 20 pozycji w jednej liście.
-                                add(MenuAction("Dodaj aplikacje…") { pickOpen = true })
-                                add(MenuAction("Dodaj skrót aplikacji…") { shortcutOpen = true })
-                                add(MenuAction("Nowy podfolder…") { newSubOpen = true })
-                                add(MenuAction("Ułóż kolejność") { arranging = true })
-                                add(MenuAction("Opcje folderu…") { optionsOpen = true })
+                                add(MenuAction(stringResource(R.string.folder_menu_add_apps)) { pickOpen = true })
+                                add(MenuAction(stringResource(R.string.folder_menu_add_shortcut)) { shortcutOpen = true })
+                                add(MenuAction(stringResource(R.string.folder_menu_new_subfolder)) { newSubOpen = true })
+                                add(MenuAction(stringResource(R.string.folder_menu_arrange)) { arranging = true })
+                                add(MenuAction(stringResource(R.string.folder_menu_options)) { optionsOpen = true })
                             }.forEach { action ->
                                 DropdownMenuItem(text = { Text(action.label) }, onClick = {
                                     menuOpen = false
@@ -246,7 +251,7 @@ fun CardFolderDialog(
                     }
                 } else if (apps.isEmpty() && current.children.isEmpty()) {
                     Text(
-                        "Pusty folder. Dodaj aplikacje przyciskiem „+ Aplikacje” albo upuść ikonę na folder w edycji układu.",
+                        stringResource(R.string.folder_card_empty),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 20.dp),
@@ -298,9 +303,9 @@ fun CardFolderDialog(
                                                     count = child.allKeys().size,
                                                     onClick = { path = path + index },
                                                     menu = listOf(
-                                                        MenuAction("Zmień nazwę") { renameFor = path + index },
-                                                        MenuAction("Wygląd (symbol i kolor)…") { lookFor = path + index },
-                                                        MenuAction("Usuń podfolder (aplikacje tutaj)") { upd { it.removeChild(index) } },
+                                                        MenuAction(stringResource(R.string.common_rename)) { renameFor = path + index },
+                                                        MenuAction(stringResource(R.string.folder_menu_look)) { lookFor = path + index },
+                                                        MenuAction(stringResource(R.string.folder_menu_remove_subfolder_here)) { upd { it.removeChild(index) } },
                                                     ),
                                                 )
                                             }
@@ -313,9 +318,9 @@ fun CardFolderDialog(
                                                     app = app,
                                                     onClick = { actions.onLaunch(app) },
                                                     menu = buildList {
-                                                        add(MenuAction("Wyjmij na kartę") { actions.onTakeOut(path, app, true) })
-                                                        if (current.children.isNotEmpty()) add(MenuAction("Przenieś do podfolderu…") { moveApp = app })
-                                                        if (path.isNotEmpty()) add(MenuAction("Przenieś do folderu wyżej") {
+                                                        add(MenuAction(stringResource(R.string.folder_menu_take_out)) { actions.onTakeOut(path, app, true) })
+                                                        if (current.children.isNotEmpty()) add(MenuAction(stringResource(R.string.folder_menu_move_to_subfolder)) { moveApp = app })
+                                                        if (path.isNotEmpty()) add(MenuAction(stringResource(R.string.folder_menu_move_up)) {
                                                             val index = path.last()
                                                             actions.onUpdate { r ->
                                                                 r.update(path.dropLast(1)) { parent ->
@@ -327,11 +332,11 @@ fun CardFolderDialog(
                                                             }
                                                         })
                                                         if (current.sort == CardFolderData.SORT_MANUAL && app.key != apps.firstOrNull()?.key) {
-                                                            add(MenuAction("Na początek (miniatura)") { upd { it.copy(keys = listOf(app.key) + (it.keys - app.key)) } })
+                                                            add(MenuAction(stringResource(R.string.folder_menu_to_front)) { upd { it.copy(keys = listOf(app.key) + (it.keys - app.key)) } })
                                                         }
-                                                        add(MenuAction("Usuń z folderu") { actions.onTakeOut(path, app, false) })
-                                                        add(MenuAction("Informacje o aplikacji") { actions.onAppInfo(app) })
-                                                        if (!app.isShortcut) add(MenuAction("Odinstaluj") { actions.onUninstall(app) })
+                                                        add(MenuAction(stringResource(R.string.folder_menu_remove_from_folder)) { actions.onTakeOut(path, app, false) })
+                                                        add(MenuAction(stringResource(R.string.folder_menu_app_info)) { actions.onAppInfo(app) })
+                                                        if (!app.isShortcut) add(MenuAction(stringResource(R.string.folder_menu_uninstall)) { actions.onUninstall(app) })
                                                     },
                                                 )
                                             }
@@ -343,9 +348,9 @@ fun CardFolderDialog(
                     }
                 }
                 if (!arranging) Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = { arranging = true }) { Text("Ułóż") }
-                    TextButton(onClick = { pickOpen = true }) { Text("+ Aplikacje") }
-                    TextButton(onClick = close) { Text("Zamknij") }
+                    TextButton(onClick = { arranging = true }) { Text(stringResource(R.string.folder_arrange)) }
+                    TextButton(onClick = { pickOpen = true }) { Text(stringResource(R.string.folder_add_apps_button)) }
+                    TextButton(onClick = close) { Text(stringResource(R.string.common_close)) }
                 }
             }
         }
@@ -377,12 +382,13 @@ fun CardFolderDialog(
     }
 
     renameFor?.let { target ->
+        val defaultName = stringResource(R.string.folder_default_name)
         TextInputDialog(
-            title = "Nazwa folderu",
+            title = stringResource(R.string.folder_name_title),
             initial = root.at(target)?.name.orEmpty(),
-            confirmLabel = "Zapisz",
+            confirmLabel = stringResource(R.string.common_save),
             onConfirm = { name ->
-                actions.onUpdate { r -> r.update(target) { it.copy(name = name.trim().ifBlank { "Folder" }) } }
+                actions.onUpdate { r -> r.update(target) { it.copy(name = name.trim().ifBlank { defaultName }) } }
                 renameFor = null
             },
             onDismiss = { renameFor = null },
@@ -410,7 +416,7 @@ fun CardFolderDialog(
             allApps = allApps,
             alreadySelected = current.keys.toSet(),
             suggestions = suggestedApps(allApps, apps, current.name),
-            title = "Dodaj do „${current.name}”",
+            title = stringResource(R.string.folder_add_to_title, current.name),
             onConfirm = { chosen ->
                 upd { f -> f.copy(keys = f.keys + chosen.map { it.key }.filter { it !in f.keys }) }
                 pickOpen = false
@@ -424,7 +430,7 @@ fun CardFolderDialog(
             shortcuts = shortcuts.filter { it.key !in current.keys },
             apps = allApps,
             hasAccess = hasShortcutAccess,
-            title = "Skrót do „${current.name}”",
+            title = stringResource(R.string.folder_shortcut_to_title, current.name),
             onPick = { sc ->
                 upd { f -> f.copy(keys = f.keys + sc.key) }
                 shortcutOpen = false
@@ -435,9 +441,9 @@ fun CardFolderDialog(
 
     if (newSubOpen) {
         TextInputDialog(
-            title = "Nowy podfolder w „${current.name}”",
+            title = stringResource(R.string.folder_new_subfolder_in_title, current.name),
             initial = "",
-            confirmLabel = "Utwórz",
+            confirmLabel = stringResource(R.string.common_create),
             onConfirm = { name ->
                 upd { it.copy(children = it.children + CardFolderData(name.trim(), null, null, emptyList(), keep = true)) }
                 newSubOpen = false
@@ -450,7 +456,7 @@ fun CardFolderDialog(
         AlertDialog(
             onDismissRequest = { moveApp = null },
             containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("Przenieś „${app.label}” do…") },
+            title = { Text(stringResource(R.string.folder_move_app_title, app.label)) },
             text = {
                 Column {
                     current.children.forEachIndexed { index, child ->
@@ -480,7 +486,7 @@ fun CardFolderDialog(
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { moveApp = null }) { Text("Anuluj") } },
+            dismissButton = { TextButton(onClick = { moveApp = null }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 
@@ -488,7 +494,7 @@ fun CardFolderDialog(
         AlertDialog(
             onDismissRequest = { copyOpen = false },
             containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("Kopiuj „${current.name}” do trybu") },
+            title = { Text(stringResource(R.string.folder_copy_to_mode_title, current.name)) },
             text = {
                 Column {
                     modes.filter { it.id != currentModeId }.forEach { mode ->
@@ -509,7 +515,7 @@ fun CardFolderDialog(
                         }
                     }
                     Text(
-                        "To niezależna kopia — zmiany w jednym trybie nie przenoszą się do drugiego.",
+                        stringResource(R.string.folder_copy_independent_note),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp),
@@ -517,7 +523,7 @@ fun CardFolderDialog(
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { copyOpen = false }) { Text("Anuluj") } },
+            dismissButton = { TextButton(onClick = { copyOpen = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 
@@ -525,15 +531,15 @@ fun CardFolderDialog(
         AlertDialog(
             onDismissRequest = { dissolveOpen = false },
             containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("Rozwiązać „${root.name}”?") },
-            text = { Text("Aplikacje (także z podfolderów) wrócą na kartę jako osobne ikony, w pobliżu miejsca folderu.") },
+            title = { Text(stringResource(R.string.folder_dissolve_title, root.name)) },
+            text = { Text(stringResource(R.string.folder_dissolve_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     dissolveOpen = false
                     actions.onDissolve()
-                }) { Text("Rozwiąż") }
+                }) { Text(stringResource(R.string.folder_dissolve_confirm)) }
             },
-            dismissButton = { TextButton(onClick = { dissolveOpen = false }) { Text("Anuluj") } },
+            dismissButton = { TextButton(onClick = { dissolveOpen = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 }
@@ -553,7 +559,7 @@ private fun ArrangeGrid(apps: List<AppInfo>, onDone: (List<String>) -> Unit) {
     val haptics = LocalHapticFeedback.current
     Column {
         Text(
-            "Przytrzymaj ikonę i przeciągnij ją w nowe miejsce.",
+            stringResource(R.string.folder_arrange_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp),
@@ -623,7 +629,7 @@ private fun ArrangeGrid(apps: List<AppInfo>, onDone: (List<String>) -> Unit) {
             }
         }
         Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = { onDone(order.toList()) }) { Text("Gotowe") }
+            TextButton(onClick = { onDone(order.toList()) }) { Text(stringResource(R.string.common_done)) }
         }
     }
 }
@@ -645,49 +651,49 @@ private fun FolderOptionsDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Opcje folderu") },
+        title = { Text(stringResource(R.string.folder_options_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OptionSection("Wygląd")
+                OptionSection(stringResource(R.string.folder_opt_look))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = onRename) { Text("Zmień nazwę") }
-                    TextButton(onClick = onLook) { Text("Symbol i kolor") }
+                    TextButton(onClick = onRename) { Text(stringResource(R.string.common_rename)) }
+                    TextButton(onClick = onLook) { Text(stringResource(R.string.folder_opt_symbol_color)) }
                 }
                 OptionChips(
-                    label = "Miniatura",
+                    label = stringResource(R.string.folder_opt_thumbnail),
                     options = listOf(2 to "2×2", 3 to "3×3"),
                     selected = folder.grid,
                     onSelect = { g -> onChange { it.copy(grid = g) } },
                 )
-                OptionSection("Układ")
+                OptionSection(stringResource(R.string.folder_opt_layout))
                 OptionChips(
-                    label = "Kolejność",
-                    options = listOf(CardFolderData.SORT_MANUAL to "Moja", CardFolderData.SORT_ALPHA to "A–Z", CardFolderData.SORT_USAGE to "Najczęstsze"),
+                    label = stringResource(R.string.folder_opt_order),
+                    options = listOf(CardFolderData.SORT_MANUAL to stringResource(R.string.folder_opt_order_manual), CardFolderData.SORT_ALPHA to "A–Z", CardFolderData.SORT_USAGE to stringResource(R.string.folder_opt_order_usage)),
                     selected = folder.sort,
                     onSelect = { v -> onChange { it.copy(sort = v) } },
                 )
                 OptionChips(
-                    label = "Wyrównanie",
-                    options = listOf(CardFolderData.ALIGN_START to "⇤ Lewo", CardFolderData.ALIGN_CENTER to "↔ Środek", CardFolderData.ALIGN_END to "Prawo ⇥"),
+                    label = stringResource(R.string.folder_opt_align),
+                    options = listOf(CardFolderData.ALIGN_START to stringResource(R.string.folder_opt_align_start), CardFolderData.ALIGN_CENTER to stringResource(R.string.folder_opt_align_center), CardFolderData.ALIGN_END to stringResource(R.string.folder_opt_align_end)),
                     selected = folder.align,
                     onSelect = { v -> onChange { it.copy(align = v) } },
                 )
                 OptionChips(
-                    label = "Rzędy",
-                    options = listOf(false to "Od góry", true to "Od dołu (kciuk)"),
+                    label = stringResource(R.string.folder_opt_rows),
+                    options = listOf(false to stringResource(R.string.folder_opt_rows_top), true to stringResource(R.string.folder_opt_rows_bottom)),
                     selected = folder.fromBottom,
                     onSelect = { v -> onChange { it.copy(fromBottom = v) } },
                 )
-                OptionSection("Udostępnij")
-                TextButton(onClick = onSaveToDrawer) { Text("Zapisz w szufladzie (Foldery)") }
-                if (canCopy) TextButton(onClick = onCopy) { Text("Kopiuj do trybu…") }
+                OptionSection(stringResource(R.string.folder_opt_share))
+                TextButton(onClick = onSaveToDrawer) { Text(stringResource(R.string.folder_opt_save_to_drawer)) }
+                if (canCopy) TextButton(onClick = onCopy) { Text(stringResource(R.string.folder_opt_copy_to_mode)) }
                 Spacer(Modifier.height(4.dp))
                 TextButton(onClick = onRemove) {
-                    Text(if (isRoot) "Rozwiąż folder" else "Usuń podfolder (aplikacje wyżej)", color = MaterialTheme.colorScheme.error)
+                    Text(if (isRoot) stringResource(R.string.folder_opt_dissolve) else stringResource(R.string.folder_opt_remove_subfolder_up), color = MaterialTheme.colorScheme.error)
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Gotowe") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_done)) } },
     )
 }
 

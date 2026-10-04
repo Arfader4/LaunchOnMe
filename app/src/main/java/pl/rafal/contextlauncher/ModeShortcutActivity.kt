@@ -18,9 +18,9 @@ class ModeShortcutActivity : ComponentActivity() {
             val mode = LauncherDatabase.get(applicationContext).modeDao().getAll().firstOrNull { it.id == modeId }
             if (mode != null) {
                 ModeActivation.activate(applicationContext, mode, manual = true)
-                Toast.makeText(applicationContext, "Włączono tryb ${mode.name}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, getString(R.string.act_mode_enabled, mode.name), Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(applicationContext, "Ten tryb już nie istnieje", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, getString(R.string.act_mode_gone), Toast.LENGTH_SHORT).show()
             }
             finish()
         }

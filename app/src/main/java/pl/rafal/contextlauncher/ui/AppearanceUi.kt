@@ -26,6 +26,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.ui.theme.Palette
 import pl.rafal.contextlauncher.ui.theme.ThemeMode
 
@@ -48,18 +50,18 @@ fun AppearanceSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp),
         ) {
-            Text("Wygląd", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.look_title), style = MaterialTheme.typography.titleLarge)
 
-            Text("Jasność", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.look_brightness), style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ThemeMode.entries.forEach { mode ->
                     FilterChip(selected = mode == themeMode, onClick = { onThemeMode(mode) }, label = { Text(mode.label) })
                 }
             }
 
-            Text("Domyślny schemat", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.look_default_scheme), style = MaterialTheme.typography.titleSmall)
             Text(
-                "Dla trybów bez własnego schematu. Tryb może mieć własny w swoich ustawieniach (⋮ przy trybie).",
+                stringResource(R.string.look_default_scheme_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -77,7 +79,7 @@ fun PaletteRow(selected: Palette?, onSelect: (Palette?) -> Unit, allowDefault: B
         modifier = Modifier.horizontalScroll(rememberScrollState()),
     ) {
         if (allowDefault) {
-            PaletteCard(label = "Domyślny", swatches = emptyList(), selected = selected == null, onClick = { onSelect(null) })
+            PaletteCard(label = stringResource(R.string.look_default), swatches = emptyList(), selected = selected == null, onClick = { onSelect(null) })
         }
         Palette.entries.forEach { palette ->
             PaletteCard(

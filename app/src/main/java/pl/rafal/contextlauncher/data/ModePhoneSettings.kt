@@ -1,8 +1,14 @@
 package pl.rafal.contextlauncher.data
 
+import androidx.annotation.StringRes
 import org.json.JSONObject
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 
-enum class RingerSetting(val label: String) { NORMAL("Dźwięk"), VIBRATE("Wibracje"), SILENT("Cisza") }
+enum class RingerSetting(@StringRes private val labelRes: Int) {
+    NORMAL(R.string.mphone_ringer_normal), VIBRATE(R.string.mphone_ringer_vibrate), SILENT(R.string.mphone_ringer_silent);
+    val label: String get() = AppText.get(labelRes)
+}
 
 // Ustawienia telefonu w danym trybie. null = "nie zmieniaj".
 // Głośności i jasność w procentach (0–100), wygaszanie ekranu w sekundach.

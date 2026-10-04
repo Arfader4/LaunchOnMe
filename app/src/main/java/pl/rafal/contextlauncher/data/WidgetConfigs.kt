@@ -2,6 +2,8 @@ package pl.rafal.contextlauncher.data
 
 import org.json.JSONArray
 import org.json.JSONObject
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import java.time.LocalDate
 
 // Ustawienia widżetów "Lista" i "Odliczanie" trzymane w kolumnie config (JSON), jak inne własne widżety.
@@ -21,7 +23,7 @@ data class Checklist(val title: String, val items: List<CheckItem>) {
                 val o = array.getJSONObject(i)
                 CheckItem(o.optString("t"), o.optBoolean("d"))
             }
-            return Checklist(config.optString("title", "Lista"), items)
+            return Checklist(config.optString("title", AppText.get(R.string.w_checklist_default_title)), items)
         }
 
         // Do szablonów: tytuł + pozycje (wszystkie nieodhaczone).

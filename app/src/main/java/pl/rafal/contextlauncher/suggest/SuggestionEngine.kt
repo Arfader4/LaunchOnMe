@@ -1,5 +1,8 @@
 package pl.rafal.contextlauncher.suggest
 
+import androidx.annotation.StringRes
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDateTime
@@ -74,9 +77,16 @@ object SuggestionEngine {
     private val Weekdays = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
     private val Weekend = setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
     private val ShortDay = mapOf(
-        DayOfWeek.MONDAY to "pon.", DayOfWeek.TUESDAY to "wt.", DayOfWeek.WEDNESDAY to "śr.",
-        DayOfWeek.THURSDAY to "czw.", DayOfWeek.FRIDAY to "pt.", DayOfWeek.SATURDAY to "sob.", DayOfWeek.SUNDAY to "niedz.",
+        DayOfWeek.MONDAY to (R.string.rule_day_mon to "pon."), DayOfWeek.TUESDAY to (R.string.rule_day_tue to "wt."),
+        DayOfWeek.WEDNESDAY to (R.string.rule_day_wed to "śr."), DayOfWeek.THURSDAY to (R.string.rule_day_thu to "czw."),
+        DayOfWeek.FRIDAY to (R.string.rule_day_fri to "pt."), DayOfWeek.SATURDAY to (R.string.rule_day_sat to "sob."),
+        DayOfWeek.SUNDAY to (R.string.rule_day_sun to "niedz."),
     )
+
+    // Tekst z zasobów (angielski / polski). W czystych testach JUnit AppText nie jest zainicjowany
+    // (brak Androida) — wtedy używamy polskiego wzorca, identycznego z values-pl.
+    private fun text(@StringRes id: Int, fallback: String, vararg args: Any): String =
+        runCatching { AppText.get(id, *args) }.getOrElse { String.format(fallback, *args) }
 
     fun evaluate(
         rules: List<ModeRule>,
@@ -146,25 +156,25 @@ object SuggestionEngine {
                     event.begin.isBefore(now.plus(CALENDAR_LOOKAHEAD)) // i zaczyna się w ciągu 3 godzin (albo już trwa)
             }
             ?.let { event ->
-                if (event.begin.isAfter(now)) "„${event.title}” o ${event.begin.format(TimeFormat)}"
-                else "trwa „${event.title}”"
+                if (event.begin.isAfter(now)) text(R.string.rule_reason_event_at, "„%1\$s” o %2\$s", event.title, event.begin.format(TimeFormat))
+                else text(R.string.rule_reason_event_now, "trwa „%1\$s”", event.title)
             }
         is Rule.BluetoothDevice ->
-            if (rule.address in signals.connectedBluetooth) "połączono z ${rule.name}" else null
+            if (rule.address in signals.connectedBluetooth) text(R.string.rule_reason_bluetooth, "połączono z %1\$s", rule.name) else null
         is Rule.WifiNetwork ->
-            if (signals.wifiSsid != null && signals.wifiSsid.equals(rule.ssid, ignoreCase = true)) "sieć ${rule.ssid}" else null
+            if (signals.wifiSsid != null && signals.wifiSsid.equals(rule.ssid, ignoreCase = true)) text(R.string.rule_reason_wifi, "sieć %1\$s", rule.ssid) else null
         is Rule.Place -> signals.location
             ?.takeIf { distanceMeters(it, GeoPoint(rule.latitude, rule.longitude)) <= rule.radiusMeters }
-            ?.let { "jesteś w miejscu „${rule.label}”" }
+            ?.let { text(R.string.rule_reason_place, "jesteś w miejscu „%1\$s”", rule.label) }
         is Rule.Charging -> when (signals.charging) {
             null -> null
-            rule.charging -> if (rule.charging) "telefon się ładuje" else "telefon odłączony od ładowarki"
+            rule.charging -> if (rule.charging) text(R.string.rule_reason_charging, "telefon się ładuje") else text(R.string.rule_reason_unplugged, "telefon odłączony od ładowarki")
             else -> null
         }
-        Rule.Headphones -> if (signals.headphones) "podłączono słuchawki" else null
+        Rule.Headphones -> if (signals.headphones) text(R.string.rule_reason_headphones, "podłączono słuchawki") else null
         is Rule.BatteryBelow -> signals.batteryPercent
             ?.takeIf { it < rule.percent }
-            ?.let { "bateria $it%" }
+            ?.let { text(R.string.rule_reason_battery, "bateria %1\$d%%", it) }
     }
 
     // Odległość po powierzchni Ziemi (wzór haversine) w metrach.
@@ -189,20 +199,23 @@ object SuggestionEngine {
     }
 
     fun describe(rule: Rule): String = when (rule) {
-        is Rule.TimeWindow -> "${describeDays(rule.days)} ${rule.start.format(TimeFormat)}–${rule.end.format(TimeFormat)}"
-        is Rule.CalendarKeyword -> "wydarzenie z „${rule.keyword}” w kalendarzu"
-        is Rule.BluetoothDevice -> "połączenie z ${rule.name} (Bluetooth)"
-        is Rule.WifiNetwork -> "sieć Wi-Fi ${rule.ssid}"
-        is Rule.Place -> "miejsce „${rule.label}” (${rule.radiusMeters} m)"
-        is Rule.Charging -> if (rule.charging) "podczas ładowania" else "bez ładowarki"
-        Rule.Headphones -> "podłączone słuchawki"
-        is Rule.BatteryBelow -> "bateria poniżej ${rule.percent}%"
+        is Rule.TimeWindow -> text(
+            R.string.rule_desc_time, "%1\$s %2\$s–%3\$s",
+            describeDays(rule.days), rule.start.format(TimeFormat), rule.end.format(TimeFormat),
+        )
+        is Rule.CalendarKeyword -> text(R.string.rule_desc_calendar, "wydarzenie z „%1\$s” w kalendarzu", rule.keyword)
+        is Rule.BluetoothDevice -> text(R.string.rule_desc_bluetooth, "połączenie z %1\$s (Bluetooth)", rule.name)
+        is Rule.WifiNetwork -> text(R.string.rule_desc_wifi, "sieć Wi-Fi %1\$s", rule.ssid)
+        is Rule.Place -> text(R.string.rule_desc_place, "miejsce „%1\$s” (%2\$d m)", rule.label, rule.radiusMeters)
+        is Rule.Charging -> if (rule.charging) text(R.string.rule_desc_charging, "podczas ładowania") else text(R.string.rule_desc_unplugged, "bez ładowarki")
+        Rule.Headphones -> text(R.string.rule_desc_headphones, "podłączone słuchawki")
+        is Rule.BatteryBelow -> text(R.string.rule_desc_battery, "bateria poniżej %1\$d%%", rule.percent)
     }
 
     fun describeDays(days: Set<DayOfWeek>): String = when (days) {
-        Weekdays + Weekend -> "codziennie"
-        Weekdays -> "pon.–pt."
-        Weekend -> "weekend"
-        else -> days.sorted().joinToString(", ") { ShortDay.getValue(it) }
+        Weekdays + Weekend -> text(R.string.rule_days_every_day, "codziennie")
+        Weekdays -> text(R.string.rule_days_weekdays, "pon.–pt.")
+        Weekend -> text(R.string.rule_days_weekend, "weekend")
+        else -> days.sorted().joinToString(", ") { day -> ShortDay.getValue(day).let { (id, fallback) -> text(id, fallback) } }
     }
 }

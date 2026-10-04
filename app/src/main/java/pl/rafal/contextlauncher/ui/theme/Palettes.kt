@@ -1,5 +1,6 @@
 package pl.rafal.contextlauncher.ui.theme
 
+import androidx.annotation.StringRes
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -10,12 +11,17 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 
 // Jasny / ciemny / za systemem — wspólne dla całego launchera.
-enum class ThemeMode(val label: String) {
-    LIGHT("Jasny"),
-    DARK("Ciemny"),
-    AUTO("Auto"),
+enum class ThemeMode(@StringRes private val labelRes: Int) {
+    LIGHT(R.string.look_theme_light),
+    DARK(R.string.look_theme_dark),
+    AUTO(R.string.look_theme_auto),
+    ;
+
+    val label: String get() = AppText.get(labelRes)
 }
 
 // Role kolorów jednego wariantu schematu (jasnego albo ciemnego).
@@ -32,35 +38,37 @@ internal data class Roles(
 )
 
 // Schemat kolorystyczny: nazwa + wersja jasna i ciemna. Enum z polami, jak w C# klasa z instancjami statycznymi.
-enum class Palette(val label: String, private val light: Roles, private val dark: Roles) {
+enum class Palette(@StringRes private val labelRes: Int, private val light: Roles, private val dark: Roles) {
     NIGHT(
-        "Nocny",
+        R.string.look_palette_night,
         light = Roles(0xFFF4F2EE, 0xFFFFFFFF, 0xFFE9E6E0, 0xFFD3CFC7, 0xFF1B1C1E, 0xFF5C6068, 0xFFB26A00, 0xFFFFFFFF),
         dark = Roles(0xFF0F1012, 0xFF1A1C20, 0xFF23262B, 0xFF2E3238, 0xFFECEAE4, 0xFFA3A7AE, 0xFFF0A844, 0xFF1A1206),
     ),
     VINTAGE(
-        "Vintage",
+        R.string.look_palette_vintage,
         light = Roles(0xFFF6EEDF, 0xFFFFF9EF, 0xFFEEDFC8, 0xFFD8C3A5, 0xFF3B2A1D, 0xFF7A6450, 0xFF8B5A2B, 0xFFFFFFFF),
         dark = Roles(0xFF1C1611, 0xFF2A2119, 0xFF362A20, 0xFF4A3A2C, 0xFFF1E6D6, 0xFFC2AE96, 0xFFD4A373, 0xFF2A1A0C),
     ),
     CONTRAST(
-        "Contrast",
+        R.string.look_palette_contrast,
         light = Roles(0xFFFFFFFF, 0xFFFFFFFF, 0xFFF0F0F0, 0xFF7A7A7A, 0xFF000000, 0xFF333333, 0xFF000000, 0xFFFFFFFF),
         dark = Roles(0xFF000000, 0xFF0D0D0D, 0xFF1A1A1A, 0xFF5A5A5A, 0xFFFFFFFF, 0xFFD0D0D0, 0xFFFFFFFF, 0xFF000000),
     ),
     // Własny schemat z kreatora (Ustawienia → Wygląd). Wartości poniżej są tylko zastępcze — prawdziwe
     // kolory bierze z CustomTheme, więc zmiana w kreatorze od razu przemalowuje cały launcher.
     CUSTOM(
-        "Własny",
+        R.string.look_palette_custom,
         light = Roles(0xFF10151A, 0xFF1A2229, 0xFF232D35, 0xFF33414C, 0xFFE8EEF0, 0xFFA6B3BA, 0xFF4DF5CD, 0xFF06201A),
         dark = Roles(0xFF10151A, 0xFF1A2229, 0xFF232D35, 0xFF33414C, 0xFFE8EEF0, 0xFFA6B3BA, 0xFF4DF5CD, 0xFF06201A),
     ),
     ELEGANT(
-        "Elegant",
+        R.string.look_palette_elegant,
         light = Roles(0xFFF3F1E8, 0xFFFFFFFF, 0xFFE3E8E1, 0xFFC3CFC5, 0xFF17261E, 0xFF4F6358, 0xFF8C6D1F, 0xFFFFFFFF),
         dark = Roles(0xFF0E1A15, 0xFF15251E, 0xFF1D3128, 0xFF2F4A3D, 0xFFEDE6D3, 0xFFAFC0B4, 0xFFD4AF37, 0xFF1E1A08),
     ),
     ;
+
+    val label: String get() = AppText.get(labelRes)
 
     // Role dla wariantu; własny schemat jest jeden (bez osobnej wersji jasnej/ciemnej).
     private fun roles(dark: Boolean): Roles = if (this == CUSTOM) CustomTheme.colors.roles() else if (dark) this.dark else light

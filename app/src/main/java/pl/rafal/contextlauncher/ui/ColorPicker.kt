@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 
 // Wybór dowolnego koloru: barwa (koło kolorów rozwinięte w pasek), nasycenie, jasność + kod HEX.
 // HSV to ten sam model co w Paint/Photoshopie: łatwiej "dojść" do koloru niż suwakami R, G, B.
@@ -55,7 +57,7 @@ fun ColorPickerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Własny kolor") },
+        title = { Text(stringResource(R.string.look_custom_color)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -94,7 +96,7 @@ fun ColorPickerDialog(
                         modifier = Modifier.width(140.dp),
                     )
                 }
-                Text("Barwa", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.look_hue), style = MaterialTheme.typography.labelLarge)
                 // Tęczowy pasek nad suwakiem barwy — widać, dokąd przesunąć.
                 Box(
                     Modifier
@@ -104,7 +106,7 @@ fun ColorPickerDialog(
                         .background(Brush.horizontalGradient((0..6).map { Color.hsv(it * 60f % 360f, 1f, 1f) })),
                 )
                 Slider(value = hue, onValueChange = { hue = it; hex = toHex(android.graphics.Color.HSVToColor(floatArrayOf(it, sat, value))) }, valueRange = 0f..360f)
-                Text("Nasycenie", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.look_saturation), style = MaterialTheme.typography.labelLarge)
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -113,7 +115,7 @@ fun ColorPickerDialog(
                         .background(Brush.horizontalGradient(listOf(Color.hsv(hue, 0f, value), Color.hsv(hue, 1f, value)))),
                 )
                 Slider(value = sat, onValueChange = { sat = it; hex = toHex(android.graphics.Color.HSVToColor(floatArrayOf(hue, it, value))) })
-                Text("Jasność", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.look_value), style = MaterialTheme.typography.labelLarge)
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -124,8 +126,8 @@ fun ColorPickerDialog(
                 Slider(value = value, onValueChange = { value = it; hex = toHex(android.graphics.Color.HSVToColor(floatArrayOf(hue, sat, it))) })
             }
         },
-        confirmButton = { TextButton(onClick = { onPick(argb.toLong() and 0xFFFFFFFFL) }) { Text("Wybierz") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        confirmButton = { TextButton(onClick = { onPick(argb.toLong() and 0xFFFFFFFFL) }) { Text(stringResource(R.string.look_pick)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 

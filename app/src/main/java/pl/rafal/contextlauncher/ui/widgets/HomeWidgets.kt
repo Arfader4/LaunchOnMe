@@ -37,6 +37,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.util.VelocityTracker1D
 import androidx.compose.ui.platform.LocalHapticFeedback
 import kotlinx.coroutines.launch
+import pl.rafal.contextlauncher.AppText
 import pl.rafal.contextlauncher.R
 import androidx.compose.foundation.layout.aspectRatio
 import pl.rafal.contextlauncher.ui.LocalIconShape
@@ -52,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -74,10 +76,10 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
-private val Polish = Locale("pl")
 private val HourMinute: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-private val LongDate: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM", Polish) // "niedziela, 27 września"
-private val ShortDate: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, d MMM", Polish)   // "niedz., 27 wrz"
+// Język systemu (getter: po zmianie języka telefonu daty od razu w nowym języku).
+private val LongDate: DateTimeFormatter get() = DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()) // "niedziela, 27 września"
+private val ShortDate: DateTimeFormatter get() = DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault())   // "niedz., 27 wrz"
 private val DayMonth: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM")                 // "28.09"
 
 // --- Zegar ---
@@ -155,15 +157,15 @@ fun WeatherWidget(weather: Weather?, hasPermission: Boolean, onClick: (() -> Uni
     WidgetSurface(onClick = onClick) {
         when {
             !hasPermission -> {
-                Text("Pogoda", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.w_weather_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Dotknij, aby udostępnić przybliżoną lokalizację.",
+                    stringResource(R.string.w_weather_grant),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            weather == null -> Text("Wczytywanie pogody…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            weather == null -> Text(stringResource(R.string.w_weather_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
             else -> BoxWithConstraints(Modifier.fillMaxSize()) {
                 // Mały: ikona + temperatura (i opis, jeśli zmieści się w poziomie).
                 if (maxHeight < 90.dp) {
@@ -215,7 +217,7 @@ fun WeatherWidget(weather: Weather?, hasPermission: Boolean, onClick: (() -> Uni
                             weather.daily.drop(1).take(3).forEach { day ->
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
-                                        day.date.dayOfWeek.getDisplayName(TextStyle.SHORT, Polish),
+                                        day.date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -255,6 +257,9 @@ fun ModeDialWidget(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val active = modes.firstOrNull { it.id == activeId }
+    // Teksty dla czytnika ekranu czytamy tutaj: semantics { } nie jest funkcją @Composable.
+    val createModeLabel = stringResource(R.string.w_mode_create)
+    val createModeActiveLabel = stringResource(R.string.w_mode_create_active, active?.name.orEmpty())
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Wymiary czytamy tutaj: wewnątrz zagnieżdżonych Box/Row nie są dostępne (DSL marker zasłania zewnętrzny zakres).
@@ -282,12 +287,13 @@ fun ModeDialWidget(
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary)
                             .clickable(enabled = enabled, onClick = onNewMode)
-                            .semantics { contentDescription = "Stwórz tryb (aktywny: ${active?.name.orEmpty()})" },
+                            .semantics { contentDescription = createModeActiveLabel },
                     ) {
                         FitText("+", Modifier.fillMaxSize(0.6f), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Light, textAlign = TextAlign.Center)
                     }
                     // Kropka w kolorze aktywnego trybu — jej dotknięcie otwiera listę trybów.
                     active?.let {
+                        val changeModeLabel = stringResource(R.string.w_mode_change, it.name)
                         Box(
                             Modifier
                                 .align(Alignment.TopEnd)
@@ -298,7 +304,7 @@ fun ModeDialWidget(
                                 .padding(2.dp)
                                 .clip(CircleShape)
                                 .background(pl.rafal.contextlauncher.ui.modeBadgeColor(it.color, pl.rafal.contextlauncher.ui.isThemeDark()))
-                                .semantics { contentDescription = "Tryb ${it.name}, zmień" },
+                                .semantics { contentDescription = changeModeLabel },
                         )
                     }
                     if (badge) BadgeDot(Modifier.align(Alignment.BottomEnd))
@@ -306,7 +312,7 @@ fun ModeDialWidget(
                 }
                 if (labeled) {
                     FitText(
-                        "Nowy tryb",
+                        stringResource(R.string.w_mode_new),
                         Modifier.fillMaxWidth().height(labelH),
                         maxSize = 12.sp,
                         fontWeight = FontWeight.Normal,
@@ -350,7 +356,7 @@ fun ModeDialWidget(
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary)
                                 .clickable(enabled = enabled, onClick = onNewMode)
-                                .semantics { contentDescription = "Stwórz tryb" },
+                                .semantics { contentDescription = createModeLabel },
                         ) { Text("+", color = MaterialTheme.colorScheme.onPrimary, fontSize = 22.sp, fontWeight = FontWeight.Light) }
                     }
                 }
@@ -378,6 +384,7 @@ private fun FullModeDial(
     onSelect: (ModeEntity) -> Unit,
     onNewMode: () -> Unit,
 ) {
+    val createModeLabel = stringResource(R.string.w_mode_create) // semantics { } nie jest @Composable
     // Przy jednym trybie tarcza nie ma czego pokazywać — zamiast pustego koła podpowiadamy, co dalej.
     if (modes.size < 2) {
         WidgetSurface(onClick = null) {
@@ -393,14 +400,14 @@ private fun FullModeDial(
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary)
                         .clickable(enabled = enabled, onClick = onNewMode)
-                        .semantics { contentDescription = "Stwórz tryb" },
+                        .semantics { contentDescription = createModeLabel },
                 ) {
                     Text("+", color = MaterialTheme.colorScheme.onPrimary, fontSize = 30.sp, fontWeight = FontWeight.Light)
                 }
                 Spacer(Modifier.height(10.dp))
-                Text("Dodaj kolejny tryb", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.w_mode_add_another), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Tu pojawi się tarcza do szybkiego przełączania",
+                    stringResource(R.string.w_mode_dial_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -538,6 +545,7 @@ private fun FullModeDial(
                 // Im bliżej znacznika, tym większy znaczek (płynnie, także w trakcie kręcenia).
                 val fromTop = kotlin.math.abs(((deg % 360f) + 540f) % 360f - 180f) // 0 = na górze
                 val closeness = (1f - fromTop / step).coerceIn(0f, 1f)
+                val modeLabel = if (isActive) stringResource(R.string.w_mode_item_active, mode.name) else stringResource(R.string.w_mode_item, mode.name)
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
@@ -565,7 +573,7 @@ private fun FullModeDial(
                                 }
                             }
                         }
-                        .semantics { contentDescription = "Tryb ${mode.name}${if (isActive) ", aktywny" else ""}" },
+                        .semantics { contentDescription = modeLabel },
                 ) {
                     // Na tarczy zawsze koła — kwadrat w okrągłej ramce wyglądał na "ucięty".
                     ModeBadge(mode, size = badge, shape = CircleShape)
@@ -589,7 +597,7 @@ private fun FullModeDial(
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary)
                         .clickable(enabled = enabled, onClick = onNewMode)
-                        .semantics { contentDescription = "Stwórz tryb" },
+                        .semantics { contentDescription = createModeLabel },
                 ) {
                     Text("+", color = MaterialTheme.colorScheme.onPrimary, fontSize = 28.sp, fontWeight = FontWeight.Light)
                 }
@@ -636,13 +644,20 @@ fun GlanceWidget(
     val now = rememberCurrentMinute()
     val zone = ZoneId.systemDefault()
     val time = now.atZone(zone)
+    // Opisy stref dotyku (dla czytnika ekranu) — Modifier.tap nie jest @Composable, więc teksty czytamy tutaj.
+    val openClock = stringResource(R.string.w_glance_open_clock)
+    val openWeather = stringResource(R.string.w_glance_open_weather)
+    val openCalendar = stringResource(R.string.w_glance_open_calendar)
+    val openEvent = stringResource(R.string.w_glance_open_event)
+    val alarmLabel = stringResource(R.string.w_glance_alarm)
+    val grantCalendar = stringResource(R.string.w_glance_grant_calendar)
 
     WidgetSurface(onClick = null) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val gSize = widgetSizeOf(maxWidth + 16.dp, maxHeight + 8.dp) // + marginesy WidgetSurface = rozmiar kratki
             // 1×1: sam zegar.
             if (gSize == WidgetSize.TINY) {
-                Box(Modifier.fillMaxSize().tap("Otwórz zegar", callbacks?.onClock), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxSize().tap(openClock, callbacks?.onClock), contentAlignment = Alignment.Center) {
                     FitText(time.format(HourMinute), Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 }
                 return@BoxWithConstraints
@@ -651,7 +666,7 @@ fun GlanceWidget(
             if (gSize == WidgetSize.SMALL) {
                 Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
                     weather?.let { wth ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(0.3f).tap("Otwórz pogodę", callbacks?.onWeather)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(0.3f).tap(openWeather, callbacks?.onWeather)) {
                             Icon(
                                 painter = painterResource(WeatherCodes.icon(wth.code, wth.isDay)),
                                 contentDescription = null,
@@ -663,13 +678,13 @@ fun GlanceWidget(
                     }
                     FitText(
                         time.format(HourMinute),
-                        Modifier.fillMaxWidth().weight(0.45f).tap("Otwórz zegar", callbacks?.onClock),
+                        Modifier.fillMaxWidth().weight(0.45f).tap(openClock, callbacks?.onClock),
                         textAlign = TextAlign.Center,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(0.25f)) {
                         FitText(
                             time.format(DayMonth),
-                            Modifier.tap("Otwórz kalendarz", callbacks?.onDate),
+                            Modifier.tap(openCalendar, callbacks?.onDate),
                             maxSize = 12.sp,
                             fontWeight = FontWeight.Normal,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -677,18 +692,18 @@ fun GlanceWidget(
                         if (alarmAt != null) {
                             Icon(
                                 painterResource(R.drawable.ic_w_alarm),
-                                contentDescription = "Budzik " + describeAlarm(alarmAt, now),
+                                contentDescription = stringResource(R.string.w_glance_alarm_desc, describeAlarm(alarmAt, now)),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 4.dp).fillMaxHeight().aspectRatio(1f).tap("Budzik", callbacks?.onAlarm),
+                                modifier = Modifier.padding(start = 4.dp).fillMaxHeight().aspectRatio(1f).tap(alarmLabel, callbacks?.onAlarm),
                             )
                         }
                         if (event != null) {
                             Icon(
                                 painterResource(R.drawable.ic_w_calendar),
-                                contentDescription = "Wydarzenie: " + event.title,
+                                contentDescription = stringResource(R.string.w_glance_event_desc, event.title),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(start = 4.dp).fillMaxHeight().aspectRatio(1f)
-                                    .tap("Otwórz wydarzenie", callbacks?.let { cb -> { cb.onEvent(event) } }),
+                                    .tap(openEvent, callbacks?.let { cb -> { cb.onEvent(event) } }),
                             )
                         }
                     }
@@ -698,21 +713,21 @@ fun GlanceWidget(
             // Pasek jednej linii: godzina · data · pogoda · budzik — tekst maleje, zamiast się zawijać.
             if (gSize == WidgetSize.STRIP) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
-                    FitText(time.format(HourMinute), Modifier.weight(0.3f).tap("Otwórz zegar", callbacks?.onClock), maxSize = 32.sp)
+                    FitText(time.format(HourMinute), Modifier.weight(0.3f).tap(openClock, callbacks?.onClock), maxSize = 32.sp)
                     Spacer(Modifier.width(8.dp))
                     FitText(
                         time.format(ShortDate).replaceFirstChar { it.uppercase() },
-                        Modifier.weight(0.34f).tap("Otwórz kalendarz", callbacks?.onDate),
+                        Modifier.weight(0.34f).tap(openCalendar, callbacks?.onDate),
                         maxSize = 14.sp,
                         fontWeight = FontWeight.Normal,
                     )
                     weather?.let {
-                        FitText("${it.temperature}°", Modifier.weight(0.14f).tap("Otwórz pogodę", callbacks?.onWeather), maxSize = 16.sp)
+                        FitText("${it.temperature}°", Modifier.weight(0.14f).tap(openWeather, callbacks?.onWeather), maxSize = 16.sp)
                     }
                     if (alarmAt != null) {
                         FitText(
                             "⏰" + describeAlarm(alarmAt, now),
-                            Modifier.weight(0.22f).tap("Budzik", callbacks?.onAlarm),
+                            Modifier.weight(0.22f).tap(alarmLabel, callbacks?.onAlarm),
                             maxSize = 13.sp,
                             fontWeight = FontWeight.Normal,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -735,7 +750,7 @@ fun GlanceWidget(
                         fontSize = timeSize,
                         lineHeight = timeSize,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.tap("Otwórz zegar", callbacks?.onClock),
+                        modifier = Modifier.tap(openClock, callbacks?.onClock),
                     )
                     Column {
                         Text(
@@ -744,19 +759,19 @@ fun GlanceWidget(
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.tap("Otwórz kalendarz", callbacks?.onDate),
+                            modifier = Modifier.tap(openCalendar, callbacks?.onDate),
                         )
                         when {
                             !hasCalendar -> GlanceLine(
-                                "Dotknij, aby pokazać wydarzenia",
-                                Modifier.tap("Zezwól na kalendarz", callbacks?.onGrantCalendar),
+                                stringResource(R.string.w_glance_show_events),
+                                Modifier.tap(grantCalendar, callbacks?.onGrantCalendar),
                             )
                             event != null -> GlanceLine(
                                 describeEvent(event, now),
-                                Modifier.tap("Otwórz wydarzenie", callbacks?.let { cb -> { cb.onEvent(event) } }),
+                                Modifier.tap(openEvent, callbacks?.let { cb -> { cb.onEvent(event) } }),
                                 highlight = event.begin - now.toEpochMilli() in 0..SOON_MS || event.begin <= now.toEpochMilli(),
                             )
-                            else -> GlanceLine("Brak wydarzeń do jutra", Modifier.tap("Otwórz kalendarz", callbacks?.onDate))
+                            else -> GlanceLine(stringResource(R.string.w_glance_no_events), Modifier.tap(openCalendar, callbacks?.onDate))
                         }
                     }
                 }
@@ -771,7 +786,7 @@ fun GlanceWidget(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.End,
-                        modifier = Modifier.tap("Otwórz pogodę", callbacks?.onWeather),
+                        modifier = Modifier.tap(openWeather, callbacks?.onWeather),
                     ) {
                         if (weather != null) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -792,7 +807,7 @@ fun GlanceWidget(
                         } else {
                             // Jak przy kalendarzu: od razu widać, co zrobić, zamiast samego słowa "Pogoda".
                             Text(
-                                if (hasWeatherPermission) "Wczytywanie\npogody…" else "Dotknij, aby\npokazać pogodę",
+                                if (hasWeatherPermission) stringResource(R.string.w_glance_weather_loading) else stringResource(R.string.w_glance_weather_grant),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.End,
@@ -800,7 +815,7 @@ fun GlanceWidget(
                         }
                     }
                     if (alarmAt != null) {
-                        Column(horizontalAlignment = Alignment.End, modifier = Modifier.tap("Budzik", callbacks?.onAlarm)) {
+                        Column(horizontalAlignment = Alignment.End, modifier = Modifier.tap(alarmLabel, callbacks?.onAlarm)) {
                             Text(
                                 "⏰ " + describeAlarm(alarmAt, now),
                                 style = MaterialTheme.typography.labelLarge,
@@ -845,14 +860,14 @@ private const val SOON_MS = 60 * 60_000L
 private fun describeEvent(event: GlanceEvent, now: Instant): String {
     val nowMs = now.toEpochMilli()
     val zone = ZoneId.systemDefault()
-    val title = event.title.ifBlank { "(bez tytułu)" }
-    if (event.allDay) return "Cały dzień: $title"
+    val title = event.title.ifBlank { AppText.get(R.string.w_event_untitled) }
+    if (event.allDay) return AppText.get(R.string.w_event_all_day, title)
     val begin = Instant.ofEpochMilli(event.begin).atZone(zone)
     return when {
-        event.begin <= nowMs -> "Teraz: $title"
-        event.begin - nowMs <= SOON_MS -> "Za ${((event.begin - nowMs) / 60_000).coerceAtLeast(1)} min: $title"
+        event.begin <= nowMs -> AppText.get(R.string.w_event_now, title)
+        event.begin - nowMs <= SOON_MS -> AppText.get(R.string.w_event_in_min, ((event.begin - nowMs) / 60_000).coerceAtLeast(1), title)
         begin.toLocalDate() == now.atZone(zone).toLocalDate() -> "${begin.format(HourMinute)} $title"
-        else -> "Jutro ${begin.format(HourMinute)} $title"
+        else -> AppText.get(R.string.w_event_tomorrow, begin.format(HourMinute), title)
     }
 }
 
@@ -860,5 +875,5 @@ private fun describeEvent(event: GlanceEvent, now: Instant): String {
 private fun describeAlarm(at: Long, now: Instant): String {
     val alarm = Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault())
     return if (at - now.toEpochMilli() < 24 * 3_600_000L) alarm.format(HourMinute)
-    else alarm.dayOfWeek.getDisplayName(TextStyle.SHORT, Polish) + " " + alarm.format(HourMinute)
+    else alarm.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()) + " " + alarm.format(HourMinute)
 }

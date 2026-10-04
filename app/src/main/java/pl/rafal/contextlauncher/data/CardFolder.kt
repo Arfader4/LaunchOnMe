@@ -4,6 +4,8 @@ import android.content.ComponentName
 import android.content.pm.ApplicationInfo
 import org.json.JSONArray
 import org.json.JSONObject
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.CardItemEntity
 import pl.rafal.contextlauncher.data.db.FolderEntity
 import pl.rafal.contextlauncher.layout.GridRect
@@ -144,24 +146,25 @@ fun appItemFor(modeId: Long, key: String, rect: GridRect, page: Int = 0): CardIt
 
 // Polskie nazwy kategorii ze sklepu (ApplicationInfo.category). Służą jako "tagi": do nazw folderów,
 // filtrów w wyborze aplikacji i podpowiedzi, co jeszcze pasuje do folderu.
-val CategoryLabels: Map<Int, String> = linkedMapOf(
-    ApplicationInfo.CATEGORY_SOCIAL to "Społeczności",
-    ApplicationInfo.CATEGORY_AUDIO to "Muzyka",
-    ApplicationInfo.CATEGORY_VIDEO to "Wideo",
-    ApplicationInfo.CATEGORY_IMAGE to "Zdjęcia",
-    ApplicationInfo.CATEGORY_GAME to "Gry",
-    ApplicationInfo.CATEGORY_NEWS to "Wiadomości",
-    ApplicationInfo.CATEGORY_MAPS to "Mapy",
-    ApplicationInfo.CATEGORY_PRODUCTIVITY to "Praca",
-)
+val CategoryLabels: Map<Int, String>
+    get() = linkedMapOf(
+        ApplicationInfo.CATEGORY_SOCIAL to AppText.get(R.string.folder_cat_social),
+        ApplicationInfo.CATEGORY_AUDIO to AppText.get(R.string.folder_cat_audio),
+        ApplicationInfo.CATEGORY_VIDEO to AppText.get(R.string.folder_cat_video),
+        ApplicationInfo.CATEGORY_IMAGE to AppText.get(R.string.folder_cat_image),
+        ApplicationInfo.CATEGORY_GAME to AppText.get(R.string.folder_cat_game),
+        ApplicationInfo.CATEGORY_NEWS to AppText.get(R.string.folder_cat_news),
+        ApplicationInfo.CATEGORY_MAPS to AppText.get(R.string.folder_cat_maps),
+        ApplicationInfo.CATEGORY_PRODUCTIVITY to AppText.get(R.string.folder_cat_productivity),
+    )
 
 // Nazwa nowego folderu z kategorii aplikacji (jak w Pixel Launcherze): dwie gry → "Gry".
 // Kategorie różne albo nieznane → po prostu "Folder" (nazwę łatwo zmienić jednym dotknięciem).
 fun autoFolderName(apps: List<AppInfo>): String {
     val categories = apps.map { it.category }.filter { it != ApplicationInfo.CATEGORY_UNDEFINED }
     val common = categories.groupingBy { it }.eachCount().maxByOrNull { it.value } // ≈ GroupBy + OrderByDescending(Count)
-    if (common == null || common.value * 2 <= apps.size) return "Folder" // kategoria musi mieć większość
-    return CategoryLabels[common.key] ?: "Folder"
+    if (common == null || common.value * 2 <= apps.size) return AppText.get(R.string.folder_default_name) // kategoria musi mieć większość
+    return CategoryLabels[common.key] ?: AppText.get(R.string.folder_default_name)
 }
 
 // Podpowiedzi do folderu: aplikacje z tych samych kategorii co już dodane albo z kategorii,

@@ -1,6 +1,9 @@
 package pl.rafal.contextlauncher.data
 
+import androidx.annotation.StringRes
 import org.json.JSONObject
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.system.QuickToggle
 
 // Co ma się stać po dotknięciu naklejki (i w przyszłości innych elementów).
@@ -9,26 +12,26 @@ sealed interface TapAction {
     val label: String // opis do okna ustawień, np. "Otwórz: Spotify"
 
     data class OpenApp(val packageName: String, val className: String, val userSerial: Long, val appLabel: String) : TapAction {
-        override val label get() = "Otwórz: $appLabel"
+        override val label get() = AppText.get(R.string.tap_label_open_app, appLabel)
     }
     data class Dial(val number: String, val name: String) : TapAction {
-        override val label get() = "Zadzwoń: $name"
+        override val label get() = AppText.get(R.string.tap_label_dial, name)
     }
     data class Sms(val number: String, val name: String) : TapAction {
-        override val label get() = "SMS: $name"
+        override val label get() = AppText.get(R.string.tap_label_sms, name)
     }
     data class Toggle(val toggle: QuickToggle) : TapAction {
-        override val label get() = "Przełącz: ${toggle.label}"
+        override val label get() = AppText.get(R.string.tap_label_toggle, toggle.label)
     }
     data class SwitchMode(val modeId: Long, val modeName: String) : TapAction {
-        override val label get() = "Włącz tryb: $modeName"
+        override val label get() = AppText.get(R.string.tap_label_switch_mode, modeName)
     }
     data class OpenLink(val url: String) : TapAction {
-        override val label get() = "Otwórz link: $url"
+        override val label get() = AppText.get(R.string.tap_label_open_link, url)
     }
     // Skrót aplikacji (np. konkretny czat) — działa, gdy LaunchOnMe jest domyślnym launcherem.
     data class OpenShortcut(val packageName: String, val shortcutId: String, val userSerial: Long, val name: String) : TapAction {
-        override val label get() = "Skrót: $name"
+        override val label get() = AppText.get(R.string.tap_label_shortcut, name)
     }
     // Akcja systemowa: panel Wi-Fi, ustawienia, aparat, budziki…
     data class System(val action: SystemAction) : TapAction {
@@ -92,20 +95,23 @@ fun List<TapAction>.describe(): String? = if (isEmpty()) null else joinToString(
 
 // Akcje systemowe, które da się wywołać bez specjalnych uprawnień. Android od wersji 10 nie pozwala
 // aplikacjom samym włączać Wi-Fi — zamiast tego otwieramy systemowy panel z przełącznikiem (1 dotknięcie).
-enum class SystemAction(val label: String) {
-    WIFI_PANEL("Panel Wi-Fi"),
-    INTERNET_PANEL("Panel Internet (Wi-Fi + dane)"),
-    VOLUME_PANEL("Panel głośności"),
-    NFC_PANEL("Panel NFC"),
-    QUICK_SETTINGS("Szybkie ustawienia"),
-    NOTIFICATIONS("Powiadomienia"),
-    CAMERA("Aparat"),
-    ALARMS("Budziki"),
-    TIMER("Minutnik"),
-    BLUETOOTH_SETTINGS("Ustawienia Bluetooth"),
-    LOCATION_SETTINGS("Ustawienia lokalizacji"),
-    BATTERY_SAVER("Oszczędzanie baterii"),
-    DISPLAY_SETTINGS("Ustawienia ekranu"),
-    SOUND_SETTINGS("Ustawienia dźwięku"),
-    APP_SETTINGS("Lista aplikacji (ustawienia)"),
+enum class SystemAction(@StringRes private val labelRes: Int) {
+    WIFI_PANEL(R.string.tap_sys_wifi_panel),
+    INTERNET_PANEL(R.string.tap_sys_internet_panel),
+    VOLUME_PANEL(R.string.tap_sys_volume_panel),
+    NFC_PANEL(R.string.tap_sys_nfc_panel),
+    QUICK_SETTINGS(R.string.tap_sys_quick_settings),
+    NOTIFICATIONS(R.string.tap_sys_notifications),
+    CAMERA(R.string.tap_sys_camera),
+    ALARMS(R.string.tap_sys_alarms),
+    TIMER(R.string.tap_sys_timer),
+    BLUETOOTH_SETTINGS(R.string.tap_sys_bluetooth_settings),
+    LOCATION_SETTINGS(R.string.tap_sys_location_settings),
+    BATTERY_SAVER(R.string.tap_sys_battery_saver),
+    DISPLAY_SETTINGS(R.string.tap_sys_display_settings),
+    SOUND_SETTINGS(R.string.tap_sys_sound_settings),
+    APP_SETTINGS(R.string.tap_sys_app_settings),
+    ;
+
+    val label: String get() = AppText.get(labelRes)
 }

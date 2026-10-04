@@ -46,6 +46,8 @@ import androidx.compose.ui.Modifier
 import pl.rafal.contextlauncher.R
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.Icon
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -74,10 +76,10 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
-private val Pl = Locale("pl")
 private val Hm: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-private val DayHeader: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d MMM", Pl)
-private val FullDate: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM yyyy", Pl)
+// Język systemu (getter: po zmianie języka telefonu daty od razu w nowym języku).
+private val DayHeader: DateTimeFormatter get() = DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.getDefault())
+private val FullDate: DateTimeFormatter get() = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.getDefault())
 
 // ============================== Dziś ==============================
 
@@ -114,8 +116,8 @@ fun TodayWidget(agenda: List<GlanceEvent>, hasCalendar: Boolean, callbacks: Toda
         if (maxHeight < 64.dp) {
             val next = agenda.firstOrNull { !it.allDay && it.end > now.toEpochMilli() } ?: agenda.firstOrNull()
             when {
-                !hasCalendar -> HintText("Dotknij, aby pokazać plan", callbacks?.onGrant)
-                next == null -> HintText("Dziś i jutro nic w kalendarzu", callbacks?.onOpenDay)
+                !hasCalendar -> HintText(stringResource(R.string.cal_grant_short), callbacks?.onGrant)
+                next == null -> HintText(stringResource(R.string.cal_empty_short), callbacks?.onOpenDay)
                 else -> AgendaRow(next, now, onClick = callbacks?.let { cb -> { cb.onOpenEvent(next) } })
             }
             return@BoxWithConstraints
@@ -132,12 +134,12 @@ fun TodayWidget(agenda: List<GlanceEvent>, hasCalendar: Boolean, callbacks: Toda
                     .weight(1f)
                     .then(if (callbacks != null) Modifier.clickable(onClick = callbacks.onOpenDay) else Modifier),
             )
-            if (callbacks != null && hasCalendar) SmallRoundButton("+", "Nowe wydarzenie", callbacks.onNewEvent)
+            if (callbacks != null && hasCalendar) SmallRoundButton("+", stringResource(R.string.cal_new_event), callbacks.onNewEvent)
         }
         Spacer(Modifier.height(6.dp))
         when {
-            !hasCalendar -> HintText("Dotknij, aby pokazać plan z kalendarza", callbacks?.onGrant)
-            agenda.isEmpty() -> HintText("Dziś i jutro nic w kalendarzu 🎉", callbacks?.onOpenDay)
+            !hasCalendar -> HintText(stringResource(R.string.cal_grant), callbacks?.onGrant)
+            agenda.isEmpty() -> HintText(stringResource(R.string.cal_empty), callbacks?.onOpenDay)
             // W edycji układu lista nie przewija się — inaczej "zjadałaby" gest przesuwania widżetu.
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp), userScrollEnabled = callbacks != null) {
                 var lastDay: LocalDate? = null
@@ -146,7 +148,7 @@ fun TodayWidget(agenda: List<GlanceEvent>, hasCalendar: Boolean, callbacks: Toda
                     if (day != lastDay && day != today) {
                         item(key = "h$day") {
                             Text(
-                                if (day == today.plusDays(1)) "Jutro" else day.format(DayHeader).replaceFirstChar { it.uppercase() },
+                                if (day == today.plusDays(1)) stringResource(R.string.cal_tomorrow) else day.format(DayHeader).replaceFirstChar { it.uppercase() },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(top = 6.dp),
@@ -170,6 +172,7 @@ fun TodayWidget(agenda: List<GlanceEvent>, hasCalendar: Boolean, callbacks: Toda
 private fun AgendaRow(event: GlanceEvent, now: Instant, onClick: (() -> Unit)?) {
     val zone = ZoneId.systemDefault()
     val ongoing = !event.allDay && event.begin <= now.toEpochMilli()
+    val untitled = stringResource(R.string.w_event_untitled)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -188,11 +191,11 @@ private fun AgendaRow(event: GlanceEvent, now: Instant, onClick: (() -> Unit)?) 
         )
         Spacer(Modifier.width(8.dp))
         Column {
-            Text(event.title.ifBlank { "(bez tytułu)" }, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(event.title.ifBlank { untitled }, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 when {
-                    event.allDay -> "Cały dzień"
-                    ongoing -> "Teraz · do " + Instant.ofEpochMilli(event.end).atZone(zone).format(Hm)
+                    event.allDay -> stringResource(R.string.cal_all_day)
+                    ongoing -> stringResource(R.string.cal_now_until, Instant.ofEpochMilli(event.end).atZone(zone).format(Hm))
                     else -> Instant.ofEpochMilli(event.begin).atZone(zone).format(Hm) + "–" + Instant.ofEpochMilli(event.end).atZone(zone).format(Hm)
                 },
                 style = MaterialTheme.typography.labelSmall,
@@ -207,12 +210,14 @@ private fun AgendaRow(event: GlanceEvent, now: Instant, onClick: (() -> Unit)?) 
 @Composable
 fun CountdownWidget(countdown: Countdown, onClick: (() -> Unit)?) {
     val now = rememberCurrentMinute()
+    val countdownLabel = stringResource(R.string.w_countdown_title)
+    val todayLabel = stringResource(R.string.w_countdown_today)
     WidgetSurface(onClick = onClick) {
         val date = countdown.date
         if (date == null) {
-            Text("Odliczanie", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(countdownLabel, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
-            HintText("Dotknij, aby ustawić datę${if (countdown.title.isNotBlank()) " — ${countdown.title}" else ""}", null)
+            HintText(if (countdown.title.isNotBlank()) stringResource(R.string.w_countdown_set_date_titled, countdown.title) else stringResource(R.string.w_countdown_set_date), null)
             return@WidgetSurface
         }
         // ChronoUnit.DAYS.between ≈ (date - today).TotalDays w C#, ale na pełnych dniach kalendarzowych.
@@ -235,13 +240,13 @@ fun CountdownWidget(countdown: Countdown, onClick: (() -> Unit)?) {
             if (maxHeight < 90.dp || maxWidth < 110.dp) {
                 val size = (maxHeight.value * 0.55f).coerceIn(16f, 40f).sp
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
-                    FitText(if (days == 0L) "Dziś!" else "${kotlin.math.abs(days)}", Modifier.weight(0.45f), maxSize = size, color = MaterialTheme.colorScheme.primary)
+                    FitText(if (days == 0L) todayLabel else "${kotlin.math.abs(days)}", Modifier.weight(0.45f), maxSize = size, color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(6.dp))
                     Column(Modifier.weight(0.55f)) {
-                        FitText(countdown.title.ifBlank { "Odliczanie" }, Modifier.fillMaxWidth(), maxSize = 13.sp)
+                        FitText(countdown.title.ifBlank { countdownLabel }, Modifier.fillMaxWidth(), maxSize = 13.sp)
                         if (days != 0L) {
                             FitText(
-                                if (days > 0) daysWord(days) else daysWord(-days) + " temu",
+                                daysWord(kotlin.math.abs(days), ago = days < 0),
                                 Modifier.fillMaxWidth(),
                                 maxSize = 11.sp,
                                 fontWeight = FontWeight.Normal,
@@ -255,7 +260,7 @@ fun CountdownWidget(countdown: Countdown, onClick: (() -> Unit)?) {
             val big = (maxHeight.value / 2.4f).coerceIn(28f, 64f).sp
             Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
                 Text(
-                    countdown.title.ifBlank { "Odliczanie" },
+                    countdown.title.ifBlank { countdownLabel },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
@@ -264,7 +269,7 @@ fun CountdownWidget(countdown: Countdown, onClick: (() -> Unit)?) {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
                         when {
-                            days == 0L -> "Dziś!"
+                            days == 0L -> todayLabel
                             days > 0 -> "$days"
                             else -> "${-days}"
                         },
@@ -276,7 +281,7 @@ fun CountdownWidget(countdown: Countdown, onClick: (() -> Unit)?) {
                     if (days != 0L) {
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            (if (days > 0) daysWord(days) else daysWord(-days) + " temu"),
+                            daysWord(kotlin.math.abs(days), ago = days < 0),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 6.dp),
@@ -289,8 +294,13 @@ fun CountdownWidget(countdown: Countdown, onClick: (() -> Unit)?) {
     }
 }
 
-// Polska odmiana: 1 dzień, 2–4 dni, 5 dni… (i 22 dni, 25 dni). Tu akurat "dni" wystarcza dla wszystkiego poza 1.
-private fun daysWord(n: Long) = if (n == 1L) "dzień" else "dni"
+// Odmiana z zasobów <plurals> (po polsku: 1 dzień, 2–4 dni, 5 dni…); ago = "… temu".
+@Composable
+private fun daysWord(n: Long, ago: Boolean): String =
+    pluralStringResource(
+        if (ago) R.plurals.w_countdown_days_ago else R.plurals.w_countdown_days,
+        n.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+    )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -306,14 +316,14 @@ fun CountdownDialog(initial: Countdown, onSave: (Countdown) -> Unit, onDismiss: 
             TextButton(onClick = {
                 val date = pickerState.selectedDateMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
                 onSave(Countdown(title.trim(), date))
-            }) { Text("Zapisz") }
+            }) { Text(stringResource(R.string.common_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     ) {
         OutlinedTextField(
             value = title,
             onValueChange = { title = it },
-            label = { Text("Do czego odliczamy?") },
+            label = { Text(stringResource(R.string.w_countdown_dialog_label)) },
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
@@ -365,13 +375,13 @@ fun ChecklistWidget(list: Checklist, callbacks: ChecklistCallbacks?) {
                 Spacer(Modifier.width(4.dp))
             }
             if (callbacks != null) {
-                if (doneCount > 0) SmallRoundButton("🧹", "Usuń zrobione", callbacks.onClearDone)
-                SmallRoundButton("+", "Dodaj pozycję", callbacks.onAdd)
+                if (doneCount > 0) SmallRoundButton("🧹", stringResource(R.string.w_checklist_clear_done), callbacks.onClearDone)
+                SmallRoundButton("+", stringResource(R.string.w_checklist_add_item), callbacks.onAdd)
             }
         }
         if (list.items.isEmpty()) {
             Spacer(Modifier.height(6.dp))
-            HintText("Pusto. Dotknij +, aby dodać (kilka linijek = kilka pozycji).", callbacks?.onAdd)
+            HintText(stringResource(R.string.w_checklist_empty), callbacks?.onAdd)
             return@WidgetSurface
         }
         // Indeksy z oryginalnej listy, żeby po posortowaniu odhaczyć właściwą pozycję.
@@ -419,20 +429,20 @@ fun ChecklistAddDialog(onAdd: (List<String>) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Dodaj do listy") },
+        title = { Text(stringResource(R.string.w_checklist_add_title)) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                placeholder = { Text("mleko\nchleb\njajka") },
+                placeholder = { Text(stringResource(R.string.w_checklist_add_placeholder)) },
                 minLines = 3,
                 modifier = Modifier.fillMaxWidth(),
             )
         },
         confirmButton = {
-            TextButton(onClick = { onAdd(text.lines().map { it.trim().removePrefix("•").trim() }.filter { it.isNotEmpty() }) }) { Text("Dodaj") }
+            TextButton(onClick = { onAdd(text.lines().map { it.trim().removePrefix("•").trim() }.filter { it.isNotEmpty() }) }) { Text(stringResource(R.string.common_add)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -460,9 +470,9 @@ fun QuickTogglesWidget(states: QuickStates, onToggle: ((QuickToggle) -> Unit)?) 
                         QuickToggle.TORCH -> Triple(R.drawable.ic_qs_torch, states.torch, toggle.label)
                         QuickToggle.DND -> Triple(R.drawable.ic_qs_dnd, states.dnd, toggle.label)
                         QuickToggle.RINGER -> when (states.ringer) {
-                            RingerState.NORMAL -> Triple(R.drawable.ic_qs_bell, true, "Dzwonek")
-                            RingerState.VIBRATE -> Triple(R.drawable.ic_qs_vibrate, false, "Wibracje")
-                            RingerState.SILENT -> Triple(R.drawable.ic_qs_silent, false, "Cisza")
+                            RingerState.NORMAL -> Triple(R.drawable.ic_qs_bell, true, stringResource(R.string.w_toggle_ring))
+                            RingerState.VIBRATE -> Triple(R.drawable.ic_qs_vibrate, false, stringResource(R.string.w_toggle_vibrate))
+                            RingerState.SILENT -> Triple(R.drawable.ic_qs_silent, false, stringResource(R.string.w_toggle_silent))
                         }
                         QuickToggle.ROTATION -> Triple(R.drawable.ic_qs_rotate, states.rotation, toggle.label)
                         QuickToggle.INTERNET -> Triple(R.drawable.ic_qs_wifi, states.wifi, if (states.wifi) "Wi-Fi" else toggle.label)
@@ -477,13 +487,15 @@ fun QuickTogglesWidget(states: QuickStates, onToggle: ((QuickToggle) -> Unit)?) 
 
 @Composable
 private fun ToggleButton(icon: Int, label: String, on: Boolean, size: Dp, showLabel: Boolean, onClick: (() -> Unit)?) {
+    // Opis dla czytnika ekranu czytamy tutaj: semantics { } nie jest funkcją @Composable.
+    val stateDescription = if (on) stringResource(R.string.w_toggle_state_on, label) else stringResource(R.string.w_toggle_state_off, label)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .then(if (onClick != null) Modifier.clickable(onClickLabel = label, onClick = onClick) else Modifier)
             .padding(2.dp)
-            .semantics { contentDescription = "$label: ${if (on) "włączone" else "wyłączone"}" },
+            .semantics { contentDescription = stateDescription },
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -520,8 +532,8 @@ class ContactCallbacks(
 fun ContactsWidget(contacts: List<FavoriteContact>, hasPermission: Boolean, callbacks: ContactCallbacks?) {
     WidgetSurface(onClick = null) {
         when {
-            !hasPermission -> HintText("Dotknij, aby pokazać ulubione kontakty", callbacks?.onGrant)
-            contacts.isEmpty() -> HintText("Oznacz kontakty gwiazdką w aplikacji Kontakty", callbacks?.onOpenContacts)
+            !hasPermission -> HintText(stringResource(R.string.contacts_grant), callbacks?.onGrant)
+            contacts.isEmpty() -> HintText(stringResource(R.string.contacts_empty), callbacks?.onOpenContacts)
             else -> BoxWithConstraints(Modifier.fillMaxSize()) {
                 // Niski widżet: same zdjęcia (bez imion), wysoki: większe zdjęcia z imionami.
                 val h = maxHeight
@@ -565,7 +577,7 @@ private fun ContactBubble(contact: FavoriteContact, callbacks: ContactCallbacks?
         if (callbacks != null) {
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 contact.number?.let { number ->
-                    DropdownMenuItem(text = { Text("📞  Zadzwoń") }, onClick = { menu = false; callbacks.onDial(number) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.contacts_call)) }, onClick = { menu = false; callbacks.onDial(number) })
                     DropdownMenuItem(text = { Text("💬  SMS") }, onClick = { menu = false; callbacks.onSms(number) })
                 }
                 DropdownMenuItem(text = { Text("👤  ${contact.name}") }, onClick = { menu = false; callbacks.onOpen(contact) })

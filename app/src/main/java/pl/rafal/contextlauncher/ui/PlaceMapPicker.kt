@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -148,11 +149,11 @@ fun PlaceMapDialog(
             modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.92f),
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Miejsce trybu", style = MaterialTheme.typography.titleLarge)
+                Text(stringResource(R.string.map_title), style = MaterialTheme.typography.titleLarge)
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it },
-                    label = { Text("Nazwa, np. Biuro") },
+                    label = { Text(stringResource(R.string.map_name_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -160,7 +161,7 @@ fun PlaceMapDialog(
                     OutlinedTextField(
                         value = query,
                         onValueChange = { query = it },
-                        placeholder = { Text("Szukaj adresu") },
+                        placeholder = { Text(stringResource(R.string.map_search_placeholder)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
@@ -169,9 +170,9 @@ fun PlaceMapDialog(
                         scope.launch {
                             results = geocode(context, query.trim())
                             searching = false
-                            if (results.isEmpty()) android.widget.Toast.makeText(context, "Nie znaleziono adresu", android.widget.Toast.LENGTH_SHORT).show()
+                            if (results.isEmpty()) android.widget.Toast.makeText(context, context.getString(R.string.map_not_found), android.widget.Toast.LENGTH_SHORT).show()
                         }
-                    }) { Text(if (searching) "…" else "Szukaj") }
+                    }) { Text(if (searching) "…" else stringResource(R.string.map_search)) }
                 }
                 if (results.isNotEmpty()) {
                     LazyColumn(Modifier.heightIn(max = 160.dp)) {
@@ -207,7 +208,7 @@ fun PlaceMapDialog(
                     AndroidView(factory = { map }, modifier = Modifier.fillMaxSize())
                     Icon(
                         painter = painterResource(R.drawable.ic_folder_pin),
-                        contentDescription = "Wybrane miejsce",
+                        contentDescription = stringResource(R.string.map_selected_place_cd),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.align(Alignment.Center).offset(y = (-18).dp).size(36.dp),
                     )
@@ -222,7 +223,7 @@ fun PlaceMapDialog(
                                 .align(Alignment.TopEnd)
                                 .padding(8.dp)
                                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), RoundedCornerShape(20.dp)),
-                        ) { Text("Tu jestem") }
+                        ) { Text(stringResource(R.string.map_here)) }
                     }
                     // Atrybucja wymagana przez licencję danych OpenStreetMap.
                     Text(
@@ -235,7 +236,7 @@ fun PlaceMapDialog(
                             .padding(horizontal = 4.dp),
                     )
                 }
-                Text("Promień", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.map_radius), style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     listOf(50, 100, 300, 500, 1000, 3000).forEach { r ->
                         FilterChip(
@@ -246,12 +247,12 @@ fun PlaceMapDialog(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = onDismiss) { Text("Anuluj") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
                     Spacer(Modifier.width(8.dp))
                     TextButton(
                         enabled = label.isNotBlank(),
                         onClick = { onConfirm(label.trim(), center.latitude, center.longitude, radius) },
-                    ) { Text("Zapisz miejsce") }
+                    ) { Text(stringResource(R.string.map_save_place)) }
                 }
             }
         }

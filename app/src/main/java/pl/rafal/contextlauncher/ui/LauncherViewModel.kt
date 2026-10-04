@@ -1,6 +1,8 @@
 package pl.rafal.contextlauncher.ui
 
 import android.app.Application
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -315,7 +317,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val limit = appPrefs.maxPages.value
         if (target < 0) return
         if (target >= limit) {
-            Toast.makeText(getApplication(), "Limit stron: $limit (zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(getApplication(), AppText.get(R.string.vm_page_limit, limit), Toast.LENGTH_SHORT).show()
             return
         }
         viewModelScope.launch {
@@ -323,7 +325,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 val taken = pageItems(item.modeId, target).map { it.toRect() }
                 val want = wanted ?: item.toRect()
                 val spot = want.takeIf { CardGrid.canPlace(it, taken) } ?: CardGrid.nearestFreeSpot(want, taken)
-                    ?: return@withTransaction "Na stronie ${target + 1} nie ma miejsca"
+                    ?: return@withTransaction AppText.get(R.string.vm_page_no_space, target + 1)
                 cardItemDao.updatePage(item.id, target, spot.x, spot.y)
                 null
             }
@@ -502,7 +504,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun addPlaceRule(mode: ModeEntity, label: String, radiusMeters: Int) {
         val location = signalsReader.lastLocation()
         if (location == null) {
-            Toast.makeText(getApplication(), "Brak lokalizacji. Włącz lokalizację i spróbuj ponownie.", Toast.LENGTH_LONG).show()
+            Toast.makeText(getApplication(), AppText.get(R.string.vm_no_location), Toast.LENGTH_LONG).show()
             return
         }
         insertRule(mode, SuggestionRuleEntity.TYPE_PLACE, placeRuleParams(location.latitude, location.longitude, radiusMeters, label))
@@ -880,7 +882,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun deleteMode(mode: ModeEntity) {
         if (modes.value.size <= 1) {
-            Toast.makeText(getApplication(), "Musi zostać co najmniej jeden tryb", Toast.LENGTH_SHORT).show()
+            Toast.makeText(getApplication(), AppText.get(R.string.vm_need_one_mode), Toast.LENGTH_SHORT).show()
             return
         }
         if (mode.id == appPrefs.homeModeId.value) appPrefs.setHomeModeId(null) // usunięto stronę główną
@@ -973,12 +975,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                         w, h,
                     )
                     val plan = CardGrid.placeWithPush(existing.id, target, items.associate { it.id to it.toRect() })
-                    if (plan == null) return@withTransaction "Za mało miejsca na karcie na ten rozmiar"
+                    if (plan == null) return@withTransaction AppText.get(R.string.vm_folder_resize_no_space)
                     plan.forEach { (id, r) -> cardItemDao.updateRect(id, r.x, r.y, r.w, r.h) }
-                    "Zmieniono rozmiar folderu na karcie"
+                    AppText.get(R.string.vm_folder_resized)
                 } else {
                     val (target, spot) = PageSpace(all, appPrefs.maxPages.value).find(page, w, h)
-                        ?: return@withTransaction "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)"
+                        ?: return@withTransaction AppText.get(R.string.vm_card_pages_full)
                     cardItemDao.insert(
                         CardItemEntity(
                             modeId = mode.id, type = CardItemEntity.TYPE_CUSTOM,
@@ -990,7 +992,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                         ),
                     )
                     if (target != page) placedFolderOn = target
-                    "Dodano folder do trybu ${mode.name}"
+                    AppText.get(R.string.vm_folder_added_to_mode, mode.name)
                 }
             }
             Toast.makeText(getApplication(), message, Toast.LENGTH_SHORT).show()
@@ -1019,7 +1021,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         withTimeoutOrNull(700) { usedPages.first { it > page } }
         animateNextPage = true
         _currentPage.value = page
-        Toast.makeText(getApplication(), "Brak miejsca — dodano na stronie ${page + 1}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(getApplication(), AppText.get(R.string.vm_no_space_added_on_page, page + 1), Toast.LENGTH_SHORT).show()
     }
 
     private suspend fun pageSpace(modeId: Long) = PageSpace(cardItemDao.getForMode(modeId), appPrefs.maxPages.value)
@@ -1031,7 +1033,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val requested = _currentPage.value
         viewModelScope.launch {
             val placed = placeCustomWidget(cardItemDao, mode.id, kind, config, requested, appPrefs.maxPages.value)
-            if (placed == null) Toast.makeText(getApplication(), "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
+            if (placed == null) Toast.makeText(getApplication(), AppText.get(R.string.vm_card_pages_full), Toast.LENGTH_SHORT).show()
             else showPlacedPage(placed, requested)
         }
     }
@@ -1051,8 +1053,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 placed
             }
             when {
-                result.isFailure -> Toast.makeText(getApplication(), "Nie udało się dodać naklejki", Toast.LENGTH_SHORT).show()
-                result.getOrNull() == null -> Toast.makeText(getApplication(), "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
+                result.isFailure -> Toast.makeText(getApplication(), AppText.get(R.string.vm_sticker_add_failed), Toast.LENGTH_SHORT).show()
+                result.getOrNull() == null -> Toast.makeText(getApplication(), AppText.get(R.string.vm_card_pages_full), Toast.LENGTH_SHORT).show()
                 else -> showPlacedPage(result.getOrNull()!!, requested)
             }
         }
@@ -1081,11 +1083,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun pinFile(uri: Uri) = withActiveMode("Nie udało się przypiąć pliku") { pinned.pinFile(it, uri) }
+    fun pinFile(uri: Uri) = withActiveMode(AppText.get(R.string.vm_pin_file_failed)) { pinned.pinFile(it, uri) }
 
-    fun pinLink(url: String, title: String) = withActiveMode("Nie udało się przypiąć linku") { pinned.pinLink(it, url, title) }
+    fun pinLink(url: String, title: String) = withActiveMode(AppText.get(R.string.vm_pin_link_failed)) { pinned.pinLink(it, url, title) }
 
-    fun pinNote(title: String, text: String) = withActiveMode("Nie udało się zapisać notatki") { pinned.pinNote(it, title, text) }
+    fun pinNote(title: String, text: String) = withActiveMode(AppText.get(R.string.vm_note_save_failed)) { pinned.pinNote(it, title, text) }
 
     fun updateNote(item: PinnedItemEntity, title: String, text: String) {
         viewModelScope.launch { pinned.updateNote(item, title, text) }
@@ -1128,7 +1130,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val found = pageSpace(mode.id).find(page, w, h)
             if (found == null) {
                 widgets.deleteId(appWidgetId)
-                Toast.makeText(getApplication(), "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
+                Toast.makeText(getApplication(), AppText.get(R.string.vm_card_pages_full), Toast.LENGTH_SHORT).show()
                 return@launch
             }
             val (target, spot) = found
@@ -1212,7 +1214,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         // Aplikacja mogła zostać właśnie odinstalowana albo wyłączona, a lista jeszcze się nie odświeżyła.
         val started = runCatching { repository.launch(app) }.isSuccess
         if (!started) {
-            Toast.makeText(getApplication(), "Nie udało się otworzyć ${app.label}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(getApplication(), AppText.get(R.string.vm_app_open_failed, app.label), Toast.LENGTH_SHORT).show()
             appsDirty = true
             refresh()
             return
@@ -1269,7 +1271,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             // Wolne miejsce na bieżącej stronie, a gdy pełna — na kolejnej (także nowej, w limicie stron).
             val found = PageSpace(existing, appPrefs.maxPages.value).find(page, CardGrid.APP_SIZE, CardGrid.APP_SIZE)
             if (found == null) {
-                Toast.makeText(getApplication(), "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
+                Toast.makeText(getApplication(), AppText.get(R.string.vm_card_pages_full), Toast.LENGTH_SHORT).show()
                 return@launch
             }
             val (target, spot) = found
@@ -1285,7 +1287,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val all = cardItemDao.getForMode(mode.id)
             if (all.any { app.matches(it) }) {
-                Toast.makeText(getApplication(), "${app.label} już jest na karcie", Toast.LENGTH_SHORT).show()
+                Toast.makeText(getApplication(), AppText.get(R.string.vm_app_already_on_card, app.label), Toast.LENGTH_SHORT).show()
                 return@launch
             }
             val existing = all.filter { it.page == page }
@@ -1296,7 +1298,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val found = if (plan != null) page to wanted
                 else PageSpace(all, appPrefs.maxPages.value).find(page, CardGrid.APP_SIZE, CardGrid.APP_SIZE)
             if (found == null) {
-                Toast.makeText(getApplication(), "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)", Toast.LENGTH_SHORT).show()
+                Toast.makeText(getApplication(), AppText.get(R.string.vm_card_pages_full), Toast.LENGTH_SHORT).show()
                 return@launch
             }
             val (target, spot) = found
@@ -1391,7 +1393,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     cardItemDao.updateConfig(item.id, data.update(path) { it.copy(keys = it.keys - app.key) }.toJson())
                     taken0 += item.toRect()
                     if (!toCard) return@withTransaction null
-                    val spot = spotNear(item.x, item.y, taken0) ?: return@withTransaction "Brak miejsca na karcie dla ${app.label}"
+                    val spot = spotNear(item.x, item.y, taken0) ?: return@withTransaction AppText.get(R.string.vm_no_space_for_app, app.label)
                     appItemFor(item.modeId, app.key, spot, item.page)?.let { cardItemDao.insert(it) }
                     return@withTransaction null
                 }
@@ -1414,7 +1416,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     taken += item.toRect()
                 }
                 if (!toCard) return@withTransaction null
-                val spot = spotNear(item.x, item.y, taken) ?: return@withTransaction "Brak miejsca na karcie dla ${app.label}"
+                val spot = spotNear(item.x, item.y, taken) ?: return@withTransaction AppText.get(R.string.vm_no_space_for_app, app.label)
                 appItemFor(item.modeId, app.key, spot, item.page)?.let { cardItemDao.insert(it) }
                 null
             }
@@ -1443,7 +1445,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 }
                 missing
             }
-            if (skipped > 0) Toast.makeText(getApplication(), "Brak miejsca dla $skipped aplikacji", Toast.LENGTH_SHORT).show()
+            if (skipped > 0) Toast.makeText(getApplication(), AppText.plural(R.plurals.vm_no_space_for_apps, skipped, skipped), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1463,7 +1465,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 folder.children.forEach { insert(it, id) }
             }
             database.withTransaction { insert(data, null) } // wszystko albo nic (bez połowy drzewa po błędzie)
-            Toast.makeText(getApplication(), "Zapisano „${data.name}” w szufladzie (Foldery)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(getApplication(), AppText.get(R.string.vm_folder_saved_to_drawer, data.name), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1474,7 +1476,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val found = pageSpace(modeId).find(0, w, h) ?: pageSpace(modeId).find(0, CardGrid.APP_SIZE, CardGrid.APP_SIZE)
             val modeName = modes.value.firstOrNull { it.id == modeId }?.name.orEmpty()
             if (found == null) {
-                Toast.makeText(getApplication(), "Karta trybu $modeName jest pełna", Toast.LENGTH_SHORT).show()
+                Toast.makeText(getApplication(), AppText.get(R.string.vm_mode_card_full, modeName), Toast.LENGTH_SHORT).show()
                 return@launch
             }
             val (targetPage, spot) = found
@@ -1488,7 +1490,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     page = targetPage,
                 ),
             )
-            Toast.makeText(getApplication(), "Skopiowano „${data.name}” do trybu $modeName", Toast.LENGTH_SHORT).show()
+            Toast.makeText(getApplication(), AppText.get(R.string.vm_folder_copied_to_mode, data.name, modeName), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1516,13 +1518,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             var placedOn: Int? = null // inna strona, gdy bieżąca była pełna
             val message = database.withTransaction {
                 val all = cardItemDao.getForMode(mode.id)
-                if (all.any { it.isFolderWidget(folderId) }) return@withTransaction "Ten folder już jest na karcie"
+                if (all.any { it.isFolderWidget(folderId) }) return@withTransaction AppText.get(R.string.vm_folder_already_on_card)
                 val existing = all.filter { it.page == page }
                 val size = CardGrid.APP_SIZE
                 val wanted = GridRect(x, y, size, size)
                 val plan = CardGrid.placeWithPush(-1L, wanted, existing.associate { it.id to it.toRect() })
                 val (target, spot) = (if (plan != null) page to wanted else PageSpace(all, appPrefs.maxPages.value).find(page, size, size))
-                    ?: return@withTransaction "Wszystkie strony karty są pełne (limit stron zmienisz w Ustawieniach)"
+                    ?: return@withTransaction AppText.get(R.string.vm_card_pages_full)
                 if (target != page) placedOn = target
                 plan?.filterKeys { it != -1L }?.forEach { (id, r) -> cardItemDao.updateRect(id, r.x, r.y, r.w, r.h) }
                 cardItemDao.insert(
@@ -1627,9 +1629,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 lastPage = maxOf(lastPage, target)
                 cardItemDao.insert(app.cardItem(mode.id, spot, target))
             }
-            if (skipped > 0) Toast.makeText(getApplication(), "Brak miejsca dla $skipped aplikacji (limit stron)", Toast.LENGTH_SHORT).show()
+            if (skipped > 0) Toast.makeText(getApplication(), AppText.plural(R.plurals.vm_no_space_for_apps_page_limit, skipped, skipped), Toast.LENGTH_SHORT).show()
             if (lastPage != page) {
-                if (skipped == 0) Toast.makeText(getApplication(), "Część aplikacji trafiła na stronę ${lastPage + 1}", Toast.LENGTH_SHORT).show()
+                if (skipped == 0) Toast.makeText(getApplication(), AppText.get(R.string.vm_some_apps_on_page, lastPage + 1), Toast.LENGTH_SHORT).show()
                 withTimeoutOrNull(700) { usedPages.first { it > lastPage } }
                 animateNextPage = true
                 _currentPage.value = lastPage
@@ -1914,8 +1916,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 toExtra
             }
             when {
-                moved < 0 -> Toast.makeText(getApplication(), "Za mało miejsca, żeby rozdzielić stos", Toast.LENGTH_SHORT).show()
-                moved > 0 -> Toast.makeText(getApplication(), "Brak miejsca — $moved widżet(y) na nowej stronie", Toast.LENGTH_SHORT).show()
+                moved < 0 -> Toast.makeText(getApplication(), AppText.get(R.string.vm_stack_split_no_space), Toast.LENGTH_SHORT).show()
+                moved > 0 -> Toast.makeText(getApplication(), AppText.plural(R.plurals.vm_stack_widgets_new_page, moved, moved), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1932,7 +1934,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 val w = member.w.coerceAtMost(CardGrid.COLUMNS)
                 val wanted = GridRect(s.x.coerceAtMost(CardGrid.COLUMNS - w), s.y, w, member.h)
                 val spot = CardGrid.nearestFreeSpot(wanted, taken) ?: CardGrid.findFreeSpot(taken, w, member.h)
-                    ?: return@withTransaction "Brak miejsca na tej stronie karty"
+                    ?: return@withTransaction AppText.get(R.string.vm_no_space_on_page)
                 cardItemDao.updatePage(member.id, s.page, spot.x, spot.y)
                 val rest = data.members - memberId
                 if (rest.size <= 1) {
@@ -1962,7 +1964,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val modeId: Long,
         val previousModeId: Long?,
         val suggestionKey: String,
-        val reason: String = "automatycznie", // np. "koniec czasu"
+        val reason: String = AppText.get(R.string.vm_auto_reason_default), // np. "koniec czasu"
     )
 
     private val _autoNotice = MutableStateFlow<AutoSwitchNotice?>(null)
@@ -1999,7 +2001,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         // Wyjątek "zawsze pytaj": ani nie włączamy takiego trybu sami, ani sami go nie kończymy.
         val alwaysAsk = appPrefs.alwaysAskModes.value
         if (targetId.toString() in alwaysAsk || (leavingId != null && leavingId.toString() in alwaysAsk)) {
-            _autoStatus.value = "automat: ten tryb ma „zawsze pytaj”"
+            _autoStatus.value = AppText.get(R.string.vm_auto_status_always_ask)
             return
         }
 
@@ -2012,7 +2014,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         // Tryb włączony "na czas" ma pierwszeństwo — automat poczeka, aż czas minie.
         val timedUntil = appPrefs.timedUntil.value
         if (timedUntil > now) {
-            _autoStatus.value = "automat: tryb na czas do ${formatTime(timedUntil)}"
+            _autoStatus.value = AppText.get(R.string.vm_auto_status_timed, formatTime(timedUntil))
             scheduleAutoRecheck(timedUntil - now) // po końcu czasu sprawdzimy jeszcze raz (StateFlow sam nie powtórzy)
             return
         }
@@ -2027,14 +2029,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         // Dwa przypadki: sugestia wisiała już przy ręcznej zmianie ALBO chce wrócić do trybu, z którego właśnie wyszedłeś.
         val backToLeft = targetId == appPrefs.lastManualLeft.value
         if ((since <= lastManual || backToLeft) && graceLeft > 0) {
-            _autoStatus.value = "automat czeka ${graceLeft / 60_000 + 1} min po ręcznej zmianie"
+            _autoStatus.value = AppText.get(R.string.vm_auto_status_grace, graceLeft / 60_000 + 1)
             scheduleAutoRecheck(graceLeft)
             return
         }
 
         if (now - since < STABLE_MS) {
             // Sugestia może się już nie zmienić (StateFlow nie powtarza tej samej wartości), więc sprawdzamy ponownie sami.
-            _autoStatus.value = "automat przełączy za ${(STABLE_MS - (now - since)) / 1000 + 1} s"
+            _autoStatus.value = AppText.get(R.string.vm_auto_status_countdown, (STABLE_MS - (now - since)) / 1000 + 1)
             scheduleAutoRecheck(STABLE_MS - (now - since))
             return
         }
@@ -2094,15 +2096,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun exportTo(uri: Uri, withFiles: Boolean = false) {
         viewModelScope.launch {
             val ok = runCatching { Backup.export(getApplication(), uri, withFiles) }.isSuccess
-            Toast.makeText(getApplication(), if (ok) "Zapisano konfigurację" else "Nie udało się zapisać pliku", Toast.LENGTH_SHORT).show()
+            Toast.makeText(getApplication(), if (ok) AppText.get(R.string.vm_config_saved) else AppText.get(R.string.vm_file_save_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
     fun importFrom(uri: Uri) {
         viewModelScope.launch {
             val result = runCatching { Backup.import(getApplication(), uri) }
-            val message = result.exceptionOrNull()?.let { "Import nieudany: ${it.message ?: "błędny plik"}" }
-                ?: "Wczytano konfigurację"
+            val message = result.exceptionOrNull()?.let { AppText.get(R.string.vm_import_failed, it.message ?: AppText.get(R.string.vm_import_bad_file)) }
+                ?: AppText.get(R.string.vm_config_loaded)
             Toast.makeText(getApplication(), message, Toast.LENGTH_LONG).show()
             suggestionRefresh.value++
             // Tapety mogły przyjść z kopii — pokazujemy tapetę aktywnego trybu (i odświeżamy stan w ustawieniach).
@@ -2124,7 +2126,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun clearLaunchStats() {
         viewModelScope.launch {
             suggestionDao.clearStats()
-            Toast.makeText(getApplication(), "Wyczyszczono „często używane”", Toast.LENGTH_SHORT).show()
+            Toast.makeText(getApplication(), AppText.get(R.string.vm_frequent_cleared), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -2181,7 +2183,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (target == null || target.id == endedId) return
         viewModelScope.launch {
             ModeActivation.activate(getApplication(), target, manual = false)
-            _autoNotice.value = AutoSwitchNotice(target.id, endedId, "timer", reason = "koniec czasu")
+            _autoNotice.value = AutoSwitchNotice(target.id, endedId, "timer", reason = AppText.get(R.string.vm_auto_reason_timer_end))
             suggestionRefresh.value++
         }
     }
@@ -2203,7 +2205,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val ok = runCatching { wallpapers.set(modeId, uri) }.isSuccess
             if (!ok) {
-                Toast.makeText(getApplication(), "Nie udało się wczytać obrazka", Toast.LENGTH_SHORT).show()
+                Toast.makeText(getApplication(), AppText.get(R.string.vm_image_load_failed), Toast.LENGTH_SHORT).show()
                 return@launch
             }
             appPrefs.showWallpaper.set(true) // bez tego tapety nie widać pod kartą
@@ -2242,7 +2244,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             _wallpaperVersion.value++
             // Jeśli został inny obrazek (np. domyślny dla trybu bez własnego), od razu go ustawiamy.
             activeMode.value?.let { mode -> wallpapers.applyFor(mode.id) }
-            Toast.makeText(getApplication(), "Usunięto tapetę", Toast.LENGTH_SHORT).show()
+            Toast.makeText(getApplication(), AppText.get(R.string.vm_wallpaper_removed), Toast.LENGTH_SHORT).show()
         }
     }
 

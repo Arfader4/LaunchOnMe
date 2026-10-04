@@ -9,6 +9,8 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.LauncherDatabase
 import pl.rafal.contextlauncher.data.db.PinnedItemEntity
 import java.io.File
@@ -34,7 +36,7 @@ class PinnedRepository(private val context: Context) {
         val target = File(folder, "${UUID.randomUUID()}_$safeName")
 
         // use { } ≈ using (...) { } w C#: zamyka strumień nawet przy wyjątku.
-        val input = resolver.openInputStream(source) ?: error("Nie udało się odczytać pliku")
+        val input = resolver.openInputStream(source) ?: error(AppText.get(R.string.data_file_read_failed))
         input.use { inp -> target.outputStream().use { out -> inp.copyTo(out) } }
 
         dao.insert(

@@ -58,7 +58,7 @@ object StickerLibrary {
             .setType("image/png")
             .putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        context.startActivity(Intent.createChooser(send, "Udostępnij naklejkę").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        context.startActivity(Intent.createChooser(send, context.getString(R.string.som_lib_share_chooser)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     // Czy obraz ma już przezroczystość (gotowa naklejka, np. z czatu)? Wtedy nie wycinamy automatycznie.

@@ -32,6 +32,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.ModeEntity
 import pl.rafal.contextlauncher.suggest.Suggestion
 import pl.rafal.contextlauncher.system.ManualTask
@@ -55,10 +58,10 @@ fun SuggestionPrompt(
     // Para (kolor, tytuł, podtekst); ?: return — tryb z sugestii mógł zostać usunięty.
     val (color, title, subtitle) = when (suggestion) {
         is Suggestion.SwitchTo -> modes.firstOrNull { it.id == suggestion.modeId }?.let {
-            Triple(it.color, "Włączyć ${it.name}?", suggestion.reason.replaceFirstChar { c -> c.uppercase() })
+            Triple(it.color, stringResource(R.string.prompt_turn_on, it.name), suggestion.reason.replaceFirstChar { c -> c.uppercase() })
         }
         is Suggestion.EndMode -> modes.firstOrNull { it.id == suggestion.backToModeId }?.let {
-            Triple(it.color, "Zakończyć ${activeMode?.name.orEmpty()}?", "Reguły już nie pasują · wróć do ${it.name}")
+            Triple(it.color, stringResource(R.string.prompt_end_mode, activeMode?.name.orEmpty()), stringResource(R.string.prompt_rules_no_longer_match, it.name))
         }
     } ?: run {
         Spacer(modifier) // tryb z sugestii usunięto — zachowujemy miejsce, żeby ⋯ nie przeskoczyło
@@ -66,7 +69,7 @@ fun SuggestionPrompt(
     }
 
     val fullSubtitle = listOfNotNull(subtitle, autoStatus).joinToString(" · ")
-    HeaderPrompt(color, title, fullSubtitle, "Przełącz", onAccept, "Odrzuć sugestię", onDismiss, modifier)
+    HeaderPrompt(color, title, fullSubtitle, stringResource(R.string.prompt_switch), onAccept, stringResource(R.string.prompt_dismiss_suggestion), onDismiss, modifier)
 }
 
 // Po automatycznym przełączeniu: ✓ zostaw, ✗ cofnij do poprzedniego trybu.
@@ -81,11 +84,11 @@ fun AutoSwitchPrompt(
 ) {
     HeaderPrompt(
         color = mode.color,
-        title = "Włączono: ${mode.name}",
-        subtitle = reason.replaceFirstChar { it.uppercase() } + (previous?.let { " · ✕ wraca do ${it.name}" } ?: ""),
-        acceptLabel = "Zostaw tryb",
+        title = stringResource(R.string.prompt_turned_on, mode.name),
+        subtitle = reason.replaceFirstChar { it.uppercase() } + (previous?.let { " · " + stringResource(R.string.prompt_undo_returns_to, it.name) } ?: ""),
+        acceptLabel = stringResource(R.string.prompt_keep_mode),
         onAccept = onKeep,
-        rejectLabel = "Cofnij",
+        rejectLabel = stringResource(R.string.common_undo),
         onReject = onUndo,
         modifier = modifier,
     )
@@ -169,6 +172,7 @@ fun ManualTasksChip(
     onDismiss: () -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
+    val chipDesc = pluralStringResource(R.plurals.prompt_manual_tasks_desc, tasks.size, modeName, tasks.size)
     Box {
         Box(
             contentAlignment = Alignment.Center,
@@ -176,7 +180,7 @@ fun ManualTasksChip(
                 .size(48.dp)
                 .clip(CircleShape)
                 .clickable { open = true }
-                .semantics { contentDescription = "Tryb $modeName prosi o ${tasks.size} zmian w ustawieniach" },
+                .semantics { contentDescription = chipDesc },
         ) {
             Box(
                 contentAlignment = Alignment.Center,
@@ -195,7 +199,7 @@ fun ManualTasksChip(
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             Text(
-                "Tryb $modeName prosi o:",
+                stringResource(R.string.prompt_mode_asks_for, modeName),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -211,7 +215,7 @@ fun ManualTasksChip(
             }
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("Ukryj przypomnienie") },
+                text = { Text(stringResource(R.string.prompt_hide_reminder)) },
                 onClick = {
                     open = false
                     onDismiss()

@@ -4,7 +4,10 @@ import android.content.ComponentName
 import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.UserHandle
+import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.ImageBitmap
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.CardItemEntity
 import org.json.JSONObject
 import pl.rafal.contextlauncher.layout.GridRect
@@ -82,25 +85,28 @@ data class CardApp(override val item: CardItemEntity, val app: AppInfo) : CardEl
 data class CardWidget(override val item: CardItemEntity, val appWidgetId: Int) : CardElement
 
 // Rodzaje własnych widżetów. enum class = enum z C#, ale z polami i konstruktorem.
-enum class CustomWidgetKind(val title: String, val description: String, val w: Int, val h: Int) {
-    DUAL_CLOCK("Dwa zegary", "Czas tutaj i w drugiej strefie", 4, 3),
-    MODE_NOTE("Notatka trybu", "Krótki tekst widoczny na karcie", 4, 3),
-    HANDY("OnHand", "Najważniejsze przypięte rzeczy trybu", 8, 3),
-    FOLDER("Folder z szuflady", "Folder z zakładki Foldery (z podfolderami), wspólny dla wszystkich trybów", 4, 4),
-    STICKER("Naklejka", "Obrazek bez tła, np. naklejka albo zdjęcie", 3, 3),
-    CLOCK("Zegar", "Duża godzina i data", 4, 4),
-    WEATHER("Pogoda", "Temperatura i prognoza na kilka dni (Open-Meteo)", 4, 4),
-    MODE_DIAL("Tryby", "Mały: ikona i nazwa trybu (zamiast nagłówka). Duży: tarcza wszystkich trybów", 8, 6),
-    GLANCE("W skrócie", "Godzina, data, najbliższe wydarzenie, pogoda i budzik w jednym", 8, 3),
-    TODAY("Dziś", "Wydarzenia na dziś i jutro z kalendarza", 4, 4),
-    COUNTDOWN("Odliczanie", "Ile dni zostało do ważnej daty", 4, 3),
-    CHECKLIST("Lista", "Zadania albo zakupy do odhaczania", 4, 4),
-    QUICK_TOGGLES("Szybkie przełączniki", "Latarka, Nie przeszkadzać, dźwięk, obrót, internet, Bluetooth", 8, 2),
-    CONTACTS("Ulubione kontakty", "Kontakty z gwiazdką: telefon i SMS jednym dotknięciem", 8, 2),
+enum class CustomWidgetKind(@StringRes private val titleRes: Int, @StringRes private val descriptionRes: Int, val w: Int, val h: Int) {
+    DUAL_CLOCK(R.string.data_widget_dual_clock_title, R.string.data_widget_dual_clock_desc, 4, 3),
+    MODE_NOTE(R.string.data_widget_mode_note_title, R.string.data_widget_mode_note_desc, 4, 3),
+    HANDY(R.string.data_widget_handy_title, R.string.data_widget_handy_desc, 8, 3),
+    FOLDER(R.string.data_widget_folder_title, R.string.data_widget_folder_desc, 4, 4),
+    STICKER(R.string.data_widget_sticker_title, R.string.data_widget_sticker_desc, 3, 3),
+    CLOCK(R.string.data_widget_clock_title, R.string.data_widget_clock_desc, 4, 4),
+    WEATHER(R.string.data_widget_weather_title, R.string.data_widget_weather_desc, 4, 4),
+    MODE_DIAL(R.string.data_widget_mode_dial_title, R.string.data_widget_mode_dial_desc, 8, 6),
+    GLANCE(R.string.data_widget_glance_title, R.string.data_widget_glance_desc, 8, 3),
+    TODAY(R.string.data_widget_today_title, R.string.data_widget_today_desc, 4, 4),
+    COUNTDOWN(R.string.data_widget_countdown_title, R.string.data_widget_countdown_desc, 4, 3),
+    CHECKLIST(R.string.data_widget_checklist_title, R.string.data_widget_checklist_desc, 4, 4),
+    QUICK_TOGGLES(R.string.data_widget_quick_toggles_title, R.string.data_widget_quick_toggles_desc, 8, 2),
+    CONTACTS(R.string.data_widget_contacts_title, R.string.data_widget_contacts_desc, 8, 2),
     // Powstaje też z upuszczenia ikony na ikonę (zawartość w config, patrz CardFolder.kt).
-    CARD_FOLDER("Pusty folder", "Folder tylko dla tego trybu — aplikacje dodasz po otwarciu (albo upuść ikonę na ikonę)", 2, 2),
+    CARD_FOLDER(R.string.data_widget_card_folder_title, R.string.data_widget_card_folder_desc, 2, 2),
     // Nie ma go na liście widżetów: powstaje z upuszczenia widżetu na widżet w edycji (patrz CardStacks.kt).
-    STACK("Stos widżetów", "Kilka widżetów w jednym miejscu — przesuwasz palcem w górę i w dół", 4, 4),
+    STACK(R.string.data_widget_stack_title, R.string.data_widget_stack_desc, 4, 4);
+
+    val title: String get() = AppText.get(titleRes)
+    val description: String get() = AppText.get(descriptionRes)
 }
 
 // Własny widżet na karcie. Ustawienia czytamy z JSON-a (org.json jest wbudowany w Androida).

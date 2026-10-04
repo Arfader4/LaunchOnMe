@@ -2,6 +2,7 @@ package pl.rafal.stickonme
 
 import android.graphics.Path
 import android.graphics.RectF
+import androidx.annotation.StringRes
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
@@ -13,18 +14,21 @@ import kotlin.math.sin
 object StickerShapes {
     const val NONE = "none"
 
-    data class Shape(val id: String, val label: String, val square: Boolean)
+    // Etykieta jako getter z @StringRes (czytana przy użyciu, więc idzie za językiem systemu).
+    data class Shape(val id: String, @StringRes private val labelRes: Int, val square: Boolean) {
+        val label: String get() = StudioText.get(labelRes)
+    }
 
     val all = listOf(
-        Shape(NONE, "Bez", false),
-        Shape("rounded", "Zaokrąglony", false),
-        Shape("circle", "Koło", true),
-        Shape("oval", "Owal", false),
-        Shape("heart", "Serce", true),
-        Shape("star", "Gwiazda", true),
-        Shape("hexagon", "Sześciokąt", true),
-        Shape("flower", "Kwiatek", true),
-        Shape("arch", "Łuk", false),
+        Shape(NONE, R.string.som_shape_none, false),
+        Shape("rounded", R.string.som_shape_rounded, false),
+        Shape("circle", R.string.som_shape_circle, true),
+        Shape("oval", R.string.som_shape_oval, false),
+        Shape("heart", R.string.som_shape_heart, true),
+        Shape("star", R.string.som_shape_star, true),
+        Shape("hexagon", R.string.som_shape_hexagon, true),
+        Shape("flower", R.string.som_shape_flower, true),
+        Shape("arch", R.string.som_shape_arch, false),
     )
 
     fun of(id: String?): Shape = all.firstOrNull { it.id == id } ?: all.first()

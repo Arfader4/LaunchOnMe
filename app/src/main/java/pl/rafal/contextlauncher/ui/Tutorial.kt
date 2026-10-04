@@ -45,59 +45,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
+import androidx.annotation.StringRes
 
 // Jaki gest pokazuje animowana dłoń nad kartą samouczka.
 private enum class TutorialGesture { NONE, SWIPE_UP, SWIPE_DOWN, SWIPE_SIDE, HOLD, DROP }
 
-private data class TutorialStep(val title: String, val text: String, val gesture: TutorialGesture)
+private data class TutorialStep(@StringRes val title: Int, @StringRes val text: Int, val gesture: TutorialGesture)
 
 private val TutorialSteps = listOf(
-    TutorialStep(
-        "Witaj w LaunchOnMe",
-        "Każdy tryb ma własną kartę: aplikacje i widżety na jedną sytuację — pracę, dom, podróż. " +
-            "Pokażę Ci w minutę najważniejsze gesty.",
-        TutorialGesture.NONE,
-    ),
-    TutorialStep(
-        "Wszystkie aplikacje",
-        "Przesuń palcem w górę albo dotknij pola „Szukaj”. W szufladzie przesunięcie w bok przełącza na Foldery.",
-        TutorialGesture.SWIPE_UP,
-    ),
-    TutorialStep(
-        "Powiadomienia",
-        "Przesuń w dół: lewa połowa ekranu otwiera powiadomienia, prawa — szybkie ustawienia.",
-        TutorialGesture.SWIPE_DOWN,
-    ),
-    TutorialStep(
-        "Tryby",
-        "Klawisz ON (w rogu dolnego paska): dotknięcie = lista trybów i Ustawienia, przytrzymanie = łuk z trybami — " +
-            "przesuń palec po łuku i puść na wybranym. Na widżecie „Tryby” kręcisz tarczą. " +
-            "Tryb może też podpowiadać się sam — o stałych porach, po Wi-Fi, Bluetooth albo w danym miejscu.",
-        TutorialGesture.NONE,
-    ),
-    TutorialStep(
-        "Edycja układu",
-        "Przytrzymaj puste miejsce albo dowolny element. Potem przeciągasz elementy, zmieniasz rozmiar uchwytem w rogu, " +
-            "a ⚙ otwiera ustawienia widżetu. ✓ zapisuje, ✕ cofa zmiany.",
-        TutorialGesture.HOLD,
-    ),
-    TutorialStep(
-        "Foldery i stosy",
-        "W edycji upuść ikonę na ikonę — powstanie folder. Widżet na widżet — stos widżetów; zmieniasz je przesunięciem w pionie albo uchwytem z kropkami z prawej. " +
-            "Upuszczenie na pasku u góry usuwa element z karty.",
-        TutorialGesture.DROP,
-    ),
-    TutorialStep(
-        "Strony karty",
-        "Przesuń w bok, aby zmienić stronę. W edycji przytrzymaj przeciągany element przy lewej lub prawej krawędzi — strona się przewinie, a element pojedzie z Tobą. " +
-            "Przycisk Home wraca na pierwszą.",
-        TutorialGesture.SWIPE_SIDE,
-    ),
-    TutorialStep(
-        "Gotowe!",
-        "Samouczek obejrzysz ponownie w Ustawieniach. Miłego układania 🙂",
-        TutorialGesture.NONE,
-    ),
+    TutorialStep(R.string.tut_welcome_title, R.string.tut_welcome_text, TutorialGesture.NONE),
+    TutorialStep(R.string.tut_apps_title, R.string.tut_apps_text, TutorialGesture.SWIPE_UP),
+    TutorialStep(R.string.tut_notifications_title, R.string.tut_notifications_text, TutorialGesture.SWIPE_DOWN),
+    TutorialStep(R.string.tut_modes_title, R.string.tut_modes_text, TutorialGesture.NONE),
+    TutorialStep(R.string.tut_edit_title, R.string.tut_edit_text, TutorialGesture.HOLD),
+    TutorialStep(R.string.tut_folders_title, R.string.tut_folders_text, TutorialGesture.DROP),
+    TutorialStep(R.string.tut_pages_title, R.string.tut_pages_text, TutorialGesture.SWIPE_SIDE),
+    TutorialStep(R.string.tut_done_title, R.string.tut_done_text, TutorialGesture.NONE),
 )
 
 // Samouczek pierwszego uruchomienia: przyciemniona karta, animowana dłoń i krótkie opisy gestów.
@@ -133,8 +98,8 @@ fun TutorialOverlay(onFinish: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             val current = TutorialSteps[step]
-            Text(current.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            Text(current.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(current.title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(current.text), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 // Kropki postępu.
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.weight(1f)) {
@@ -148,10 +113,10 @@ fun TutorialOverlay(onFinish: () -> Unit) {
                     }
                 }
                 if (step < TutorialSteps.lastIndex) {
-                    TextButton(onClick = onFinish) { Text("Pomiń") }
-                    Button(onClick = { step++ }) { Text("Dalej") }
+                    TextButton(onClick = onFinish) { Text(stringResource(R.string.common_skip)) }
+                    Button(onClick = { step++ }) { Text(stringResource(R.string.common_next)) }
                 } else {
-                    Button(onClick = onFinish) { Text("Zaczynamy") }
+                    Button(onClick = onFinish) { Text(stringResource(R.string.tut_lets_go)) }
                 }
             }
         }
@@ -205,11 +170,11 @@ private fun AnimatedGesture(gesture: TutorialGesture) {
         Spacer(Modifier.height(4.dp))
         Text(
             when (gesture) {
-                TutorialGesture.SWIPE_UP -> "w górę"
-                TutorialGesture.SWIPE_DOWN -> "w dół"
-                TutorialGesture.SWIPE_SIDE -> "w bok"
-                TutorialGesture.HOLD -> "przytrzymaj"
-                TutorialGesture.DROP -> "przeciągnij i upuść"
+                TutorialGesture.SWIPE_UP -> stringResource(R.string.tut_gesture_up)
+                TutorialGesture.SWIPE_DOWN -> stringResource(R.string.tut_gesture_down)
+                TutorialGesture.SWIPE_SIDE -> stringResource(R.string.tut_gesture_side)
+                TutorialGesture.HOLD -> stringResource(R.string.tut_gesture_hold)
+                TutorialGesture.DROP -> stringResource(R.string.tut_gesture_drop)
                 TutorialGesture.NONE -> ""
             },
             color = Color.White.copy(alpha = 0.8f),

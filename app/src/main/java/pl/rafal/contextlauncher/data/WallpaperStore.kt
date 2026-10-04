@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.Rect
 import android.graphics.RectF
 import android.net.Uri
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -73,7 +75,7 @@ class WallpaperStore(context: Context) {
     suspend fun set(modeId: Long?, source: Uri) = withContext(Dispatchers.IO) {
         val target = File(folder(), "${UUID.randomUUID()}.jpg")
         app.contentResolver.openInputStream(source)?.use { input -> target.outputStream().use { input.copyTo(it) } }
-            ?: error("Nie udało się odczytać obrazka")
+            ?: error(AppText.get(R.string.data_image_read_failed))
         pathFor(modeId)?.let { File(it).delete() }
         // Nowy obraz = nowy kadr (stary dotyczył innego zdjęcia).
         prefs.edit().putString(key(modeId), target.absolutePath).remove("crop2_${key(modeId)}").remove(KEY_APPLIED).apply()

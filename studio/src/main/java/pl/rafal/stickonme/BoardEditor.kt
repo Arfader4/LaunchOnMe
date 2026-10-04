@@ -81,6 +81,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -103,8 +104,10 @@ private val Gradients = listOf(
     0xFF101214 to 0xFF3A2A5A, 0xFFFFE066 to 0xFFFF5A5F, 0xFFF5F1E8 to 0xFFCDEBFF,
 )
 private val Fonts = listOf(
-    "sans-serif" to "Zwykła", "serif" to "Szeryfowa", "monospace" to "Maszyna", "cursive" to "Odręczna",
-    "casual" to "Luźna", "sans-serif-condensed" to "Wąska", "sans-serif-black" to "Gruba", "sans-serif-light" to "Cienka",
+    "sans-serif" to R.string.som_board_font_regular, "serif" to R.string.som_board_font_serif,
+    "monospace" to R.string.som_board_font_mono, "cursive" to R.string.som_board_font_handwritten,
+    "casual" to R.string.som_board_font_casual, "sans-serif-condensed" to R.string.som_board_font_condensed,
+    "sans-serif-black" to R.string.som_board_font_heavy, "sans-serif-light" to R.string.som_board_font_light,
 )
 private val EmojiSet = listOf(
     "😀", "😂", "🥰", "😎", "🤩", "😴", "🥳", "😇", "🤔", "😱", "👍", "👏", "🙏", "💪", "✌️", "🤞",
@@ -201,7 +204,7 @@ fun BoardEditorScreen(
     Column(Modifier.fillMaxSize().backPreview(backProgress)) {
         // Pasek górny: zamknij (zapisuje), cofnij, eksport.
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
-            TextButton(enabled = !closing, onClick = { close() }) { Text("‹ Gotowe") }
+            TextButton(enabled = !closing, onClick = { close() }) { Text(stringResource(R.string.som_board_done_back)) }
             Text(board.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             TextButton(enabled = historySize > 0, onClick = {
                 history.removeLastOrNull()?.let { board = it }
@@ -220,9 +223,9 @@ fun BoardEditorScreen(
                             closing = false
                         }
                     }
-                }) { Text("✓ Na tapetę") }
+                }) { Text(stringResource(R.string.som_board_set_wallpaper)) }
             } else {
-                TextButton(onClick = { dialog = BoardDialog.EXPORT }) { Text("Zapisz jako…") }
+                TextButton(onClick = { dialog = BoardDialog.EXPORT }) { Text(stringResource(R.string.som_board_save_as)) }
             }
         }
 
@@ -249,33 +252,33 @@ fun BoardEditorScreen(
                 .padding(12.dp),
         ) {
             if (selected == null) {
-                ToolButton("+ Naklejka") { dialog = BoardDialog.STICKER }
-                ToolButton("+ Zdjęcie") { photoForBackground = false; pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-                ToolButton("+ Tekst") {
+                ToolButton(stringResource(R.string.som_board_add_sticker)) { dialog = BoardDialog.STICKER }
+                ToolButton(stringResource(R.string.som_board_add_photo)) { photoForBackground = false; pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                ToolButton(stringResource(R.string.som_board_add_text)) {
                     val (cx, cy) = center()
                     textDraft = Layer(kind = Layer.KIND_TEXT, x = cx, y = cy, text = "", size = board.width * 0.09f, color = 0xFFFFFFFF, outlineWidth = board.width * 0.004f)
                     dialog = BoardDialog.TEXT
                 }
-                ToolButton("+ Emoji / z klawiatury") { dialog = BoardDialog.EMOJI }
-                ToolButton("Tło") { dialog = BoardDialog.BACKGROUND }
+                ToolButton(stringResource(R.string.som_board_add_emoji)) { dialog = BoardDialog.EMOJI }
+                ToolButton(stringResource(R.string.som_board_background)) { dialog = BoardDialog.BACKGROUND }
             } else {
-                if (selected.kind == Layer.KIND_TEXT) ToolButton("✎ Styl tekstu") { textDraft = selected; dialog = BoardDialog.TEXT }
-                else ToolButton("▢ Ramka") { dialog = BoardDialog.FRAME }
-                ToolButton("⤒ Na wierzch") {
+                if (selected.kind == Layer.KIND_TEXT) ToolButton(stringResource(R.string.som_board_text_style)) { textDraft = selected; dialog = BoardDialog.TEXT }
+                else ToolButton(stringResource(R.string.som_board_frame)) { dialog = BoardDialog.FRAME }
+                ToolButton(stringResource(R.string.som_board_to_front)) {
                     change(board.copy(layers = board.layers.filter { it.id != selected.id } + selected))
                 }
-                ToolButton("⤓ Na spód") {
+                ToolButton(stringResource(R.string.som_board_to_back)) {
                     change(board.copy(layers = listOf(selected) + board.layers.filter { it.id != selected.id }))
                 }
-                ToolButton("⧉ Duplikuj") {
+                ToolButton(stringResource(R.string.som_board_duplicate)) {
                     addLayer(selected.copy(id = java.util.UUID.randomUUID().toString(), x = selected.x + board.width * 0.04f, y = selected.y + board.width * 0.04f))
                 }
-                ToolButton("⟲ Prosto") { change(board.updateLayer(selected.id) { it.copy(rotation = 0f) }) }
-                ToolButton("✕ Usuń") {
+                ToolButton(stringResource(R.string.som_board_straighten)) { change(board.updateLayer(selected.id) { it.copy(rotation = 0f) }) }
+                ToolButton(stringResource(R.string.som_board_delete_layer)) {
                     change(board.copy(layers = board.layers.filter { it.id != selected.id }))
                     selectedId = null
                 }
-                ToolButton("Gotowe") { selectedId = null }
+                ToolButton(stringResource(R.string.som_done)) { selectedId = null }
             }
         }
     }
@@ -321,7 +324,7 @@ fun BoardEditorScreen(
                     // Naklejka / GIF z klawiatury: pierwsza klatka jako PNG w bibliotece i od razu na tablicę.
                     val bmp = StickerLibrary.decode(context, uri, 1024)
                     if (bmp == null) {
-                        message = "Nie udało się wczytać naklejki z klawiatury."
+                        message = context.getString(R.string.som_board_keyboard_failed)
                         return@launch
                     }
                     val file = StickerLibrary.save(context, bmp)
@@ -355,11 +358,11 @@ fun BoardEditorScreen(
                 scope.launch {
                     val sticker = withContext(Dispatchers.Default) { runCatching { renderer.renderSticker(board) }.getOrNull() }
                     if (sticker == null) {
-                        message = "Tablica jest pusta — nie ma czego zapisać."
+                        message = context.getString(R.string.som_board_empty)
                     } else {
                         saveBoard()
                         onStickerSaved(StickerLibrary.save(context, sticker))
-                        message = "Zapisano naklejkę w bibliotece."
+                        message = context.getString(R.string.som_board_sticker_saved)
                     }
                 }
             },
@@ -369,8 +372,8 @@ fun BoardEditorScreen(
                     val ok = withContext(Dispatchers.IO) {
                         runCatching { saveToGallery(context, renderer.render(board), board.name) }.isSuccess
                     }
-                    message = if (ok) "Zapisano w Galerii (Obrazy › StickOnMe) — ustawisz jako tapetę trybu w LaunchOnMe."
-                        else "Nie udało się zapisać w Galerii."
+                    message = if (ok) context.getString(R.string.som_board_gallery_saved)
+                        else context.getString(R.string.som_board_gallery_failed)
                 }
             },
             onDismiss = { dialog = BoardDialog.NONE },
@@ -558,12 +561,12 @@ private fun StickerPickDialog(onPick: (File) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Naklejka z biblioteki") },
+        title = { Text(stringResource(R.string.som_board_sticker_dialog_title)) },
         text = {
             val list = files
             when {
-                list == null -> Text("Wczytywanie…")
-                list.isEmpty() -> Text("Biblioteka jest pusta — najpierw zrób naklejkę („+ Nowa naklejka”).")
+                list == null -> Text(stringResource(R.string.som_board_loading))
+                list.isEmpty() -> Text(stringResource(R.string.som_board_library_empty))
                 else -> LazyVerticalGrid(columns = GridCells.Adaptive(80.dp), modifier = Modifier.heightIn(max = 420.dp)) {
                     items(list, key = { it.absolutePath }) { file ->
                         val image by produceState<ImageBitmap?>(null, file) { value = withContext(Dispatchers.IO) { StickerLibrary.thumbnail(file, 200) } }
@@ -575,12 +578,12 @@ private fun StickerPickDialog(onPick: (File) -> Unit, onDismiss: () -> Unit) {
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable { onPick(file) }
                                 .padding(6.dp),
-                        ) { image?.let { Image(it, contentDescription = "Naklejka", modifier = Modifier.fillMaxSize()) } }
+                        ) { image?.let { Image(it, contentDescription = stringResource(R.string.som_lib_sticker), modifier = Modifier.fillMaxSize()) } }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Zamknij") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_close)) } },
     )
 }
 
@@ -618,39 +621,39 @@ private fun TextStyleDialog(initial: Layer, onDone: (Layer) -> Unit, onDismiss: 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Tekst") },
+        title = { Text(stringResource(R.string.som_board_text_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = layer.text, onValueChange = { layer = layer.copy(text = it) }, label = { Text("Napis (Enter = nowa linia)") })
-                Text("Czcionka", style = MaterialTheme.typography.labelLarge)
+                OutlinedTextField(value = layer.text, onValueChange = { layer = layer.copy(text = it) }, label = { Text(stringResource(R.string.som_board_text_label)) })
+                Text(stringResource(R.string.som_board_font), style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     Fonts.forEach { (family, label) ->
-                        FilterChip(selected = layer.font == family, onClick = { layer = layer.copy(font = family) }, label = { Text(label) })
+                        FilterChip(selected = layer.font == family, onClick = { layer = layer.copy(font = family) }, label = { Text(stringResource(label)) })
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = layer.bold, onClick = { layer = layer.copy(bold = !layer.bold) }, label = { Text("B", fontWeight = FontWeight.Bold) })
                     FilterChip(selected = layer.italic, onClick = { layer = layer.copy(italic = !layer.italic) }, label = { Text("I") })
                 }
-                Text("Kolor", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.som_board_color), style = MaterialTheme.typography.labelLarge)
                 Swatches(Palette, layer.color, { layer = layer.copy(color = it) })
-                Text("Wielkość", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.som_board_size), style = MaterialTheme.typography.labelLarge)
                 Slider(value = layer.size, onValueChange = { layer = layer.copy(size = it) }, valueRange = base * 0.3f..base * 3f)
-                Text("Obrys liter", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.som_board_outline), style = MaterialTheme.typography.labelLarge)
                 Slider(value = layer.outlineWidth, onValueChange = { layer = layer.copy(outlineWidth = it) }, valueRange = 0f..base * 0.15f)
                 Swatches(Palette, layer.outlineColor, { layer = layer.copy(outlineColor = it) })
-                Text("Podkreślenie (grubość)", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.som_board_underline), style = MaterialTheme.typography.labelLarge)
                 Slider(value = layer.underline, onValueChange = { layer = layer.copy(underline = it) }, valueRange = 0f..base * 0.2f)
-                Text("Zakreślacz", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.som_board_highlight), style = MaterialTheme.typography.labelLarge)
                 Swatches(Palette.map { (it and 0x00FFFFFFL) or 0xCC000000L }, layer.highlight, { layer = layer.copy(highlight = it) }, allowNone = true, onNone = { layer = layer.copy(highlight = null) })
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Cień", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.som_board_shadow), modifier = Modifier.weight(1f))
                     Switch(checked = layer.shadow, onCheckedChange = { layer = layer.copy(shadow = it) })
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onDone(layer) }) { Text("Gotowe") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        confirmButton = { TextButton(onClick = { onDone(layer) }) { Text(stringResource(R.string.som_done)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_cancel)) } },
     )
 }
 
@@ -677,7 +680,7 @@ private fun EmojiDialog(onEmoji: (String) -> Unit, onKeyboardImage: (Uri) -> Uni
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Emoji i naklejki z klawiatury") },
+        title = { Text(stringResource(R.string.som_board_emoji_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 LazyVerticalGrid(columns = GridCells.Adaptive(44.dp), modifier = Modifier.heightIn(max = 240.dp)) {
@@ -692,7 +695,7 @@ private fun EmojiDialog(onEmoji: (String) -> Unit, onKeyboardImage: (Uri) -> Uni
                     }
                 }
                 Text(
-                    "Albo dotknij pola poniżej i wybierz z klawiatury: emoji (wpisz i „Dodaj”) albo naklejkę / GIF — wskoczy od razu.",
+                    stringResource(R.string.som_board_emoji_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -713,9 +716,9 @@ private fun EmojiDialog(onEmoji: (String) -> Unit, onKeyboardImage: (Uri) -> Uni
             TextButton(onClick = {
                 val text = field.text.toString().trim()
                 if (text.isNotEmpty()) onEmoji(text)
-            }) { Text("Dodaj") }
+            }) { Text(stringResource(R.string.som_add)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Zamknij") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_close)) } },
     )
 }
 
@@ -724,16 +727,16 @@ private fun BackgroundDialog(board: Board, onChange: (Board) -> Unit, onPhoto: (
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Tło tablicy") },
+        title = { Text(stringResource(R.string.som_board_bg_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    FilterChip(selected = board.bgType == Board.BG_TRANSPARENT, onClick = { onChange(board.copy(bgType = Board.BG_TRANSPARENT)) }, label = { Text("Przezroczyste") })
-                    FilterChip(selected = board.bgType == Board.BG_IMAGE, onClick = onPhoto, label = { Text("Zdjęcie z galerii…") })
+                    FilterChip(selected = board.bgType == Board.BG_TRANSPARENT, onClick = { onChange(board.copy(bgType = Board.BG_TRANSPARENT)) }, label = { Text(stringResource(R.string.som_board_bg_transparent)) })
+                    FilterChip(selected = board.bgType == Board.BG_IMAGE, onClick = onPhoto, label = { Text(stringResource(R.string.som_board_bg_photo)) })
                 }
-                Text("Kolor", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.som_board_color), style = MaterialTheme.typography.labelLarge)
                 Swatches(Palette, board.bgColor.takeIf { board.bgType == Board.BG_COLOR }, { onChange(board.copy(bgType = Board.BG_COLOR, bgColor = it)) })
-                Text("Gradient", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.som_board_gradient), style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     Gradients.forEach { (a, b) ->
                         val sel = board.bgType == Board.BG_GRADIENT && board.bgColor == a && board.bgColor2 == b
@@ -749,7 +752,7 @@ private fun BackgroundDialog(board: Board, onChange: (Board) -> Unit, onPhoto: (
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Gotowe") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_done)) } },
     )
 }
 
@@ -758,7 +761,7 @@ private fun FrameDialog(layer: Layer, onChange: (Layer) -> Unit, onDismiss: () -
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Ramka") },
+        title = { Text(stringResource(R.string.som_board_frame_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
@@ -767,12 +770,12 @@ private fun FrameDialog(layer: Layer, onChange: (Layer) -> Unit, onDismiss: () -
                     }
                 }
                 if (Layer.hasColor(layer.frame)) {
-                    Text("Kolor ramki", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.som_board_frame_color), style = MaterialTheme.typography.labelLarge)
                     Swatches(Palette, layer.frameColor, { onChange(layer.copy(frameColor = it)) })
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Gotowe") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_done)) } },
     )
 }
 
@@ -781,20 +784,20 @@ private fun ExportDialog(onSticker: () -> Unit, onGallery: () -> Unit, onDismiss
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Zapisz jako…") },
+        title = { Text(stringResource(R.string.som_board_save_as)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Tablica zapisuje się sama przy wyjściu. Tu robisz z niej gotowy obraz:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick = onSticker) { Text("Naklejka (bez tła, przycięta) → biblioteka") }
-                TextButton(onClick = onGallery) { Text("Obraz do Galerii (kolaż, tapeta, do druku)") }
+                Text(stringResource(R.string.som_board_export_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = onSticker) { Text(stringResource(R.string.som_board_export_sticker)) }
+                TextButton(onClick = onGallery) { Text(stringResource(R.string.som_board_export_gallery)) }
                 Text(
-                    "Tapetę trybu ustawisz potem w launcherze: edycja trybu → Tapeta → obraz z albumu „StickOnMe”.",
+                    stringResource(R.string.som_board_export_wallpaper_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Zamknij") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_close)) } },
     )
 }
 
@@ -808,27 +811,27 @@ fun NewBoardDialog(onCreate: (Board) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Nowa tablica") },
+        title = { Text(stringResource(R.string.som_board_new_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 presets.forEach { p ->
                     TextButton(onClick = {
                         onCreate(Board(name = p.label, width = p.width, height = p.height, bgType = if (p.transparent) Board.BG_TRANSPARENT else Board.BG_COLOR))
-                    }) { Text("${p.label} · ${p.width}×${p.height}") }
+                    }) { Text(stringResource(R.string.som_board_preset_chip, p.label, p.width, p.height)) }
                 }
-                Text("Własny rozmiar (px)", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                Text(stringResource(R.string.som_board_custom_size), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(value = customW, onValueChange = { customW = it.filter(Char::isDigit).take(4) }, label = { Text("szer.") }, modifier = Modifier.width(96.dp))
+                    OutlinedTextField(value = customW, onValueChange = { customW = it.filter(Char::isDigit).take(4) }, label = { Text(stringResource(R.string.som_board_width)) }, modifier = Modifier.width(96.dp))
                     Text("  ×  ")
-                    OutlinedTextField(value = customH, onValueChange = { customH = it.filter(Char::isDigit).take(4) }, label = { Text("wys.") }, modifier = Modifier.width(96.dp))
+                    OutlinedTextField(value = customH, onValueChange = { customH = it.filter(Char::isDigit).take(4) }, label = { Text(stringResource(R.string.som_board_height)) }, modifier = Modifier.width(96.dp))
                 }
                 TextButton(onClick = {
                     val w = customW.toIntOrNull()?.coerceIn(128, 5000) ?: 1500
                     val h = customH.toIntOrNull()?.coerceIn(128, 5000) ?: 1500
-                    onCreate(Board(name = "Tablica $w×$h", width = w, height = h, bgType = Board.BG_COLOR))
-                }) { Text("Utwórz własną") }
+                    onCreate(Board(name = context.getString(R.string.som_board_custom_name, w, h), width = w, height = h, bgType = Board.BG_COLOR))
+                }) { Text(stringResource(R.string.som_board_create_custom)) }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_cancel)) } },
     )
 }

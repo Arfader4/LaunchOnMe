@@ -33,7 +33,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import pl.rafal.contextlauncher.AppText
 import pl.rafal.contextlauncher.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.compositionLocalOf
@@ -131,19 +133,19 @@ private val TimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 // --- Dwa zegary ---
 
-// Strefy do wyboru: identyfikator IANA + polska nazwa miasta.
-val ClockZones = listOf(
-    "Europe/London" to "Londyn",
-    "Europe/Lisbon" to "Lizbona",
-    "Europe/Paris" to "Paryż",
-    "Europe/Athens" to "Ateny",
-    "Europe/Istanbul" to "Stambuł",
-    "Asia/Dubai" to "Dubaj",
+// Strefy do wyboru: identyfikator IANA + nazwa miasta w języku telefonu (getter: zawsze w bieżącym języku).
+val ClockZones: List<Pair<String, String>> get() = listOf(
+    "Europe/London" to AppText.get(R.string.w_city_london),
+    "Europe/Lisbon" to AppText.get(R.string.w_city_lisbon),
+    "Europe/Paris" to AppText.get(R.string.w_city_paris),
+    "Europe/Athens" to AppText.get(R.string.w_city_athens),
+    "Europe/Istanbul" to AppText.get(R.string.w_city_istanbul),
+    "Asia/Dubai" to AppText.get(R.string.w_city_dubai),
     "Asia/Kolkata" to "Delhi",
     "Asia/Bangkok" to "Bangkok",
-    "Asia/Tokyo" to "Tokio",
+    "Asia/Tokyo" to AppText.get(R.string.w_city_tokyo),
     "Australia/Sydney" to "Sydney",
-    "America/New_York" to "Nowy Jork",
+    "America/New_York" to AppText.get(R.string.w_city_new_york),
     "America/Chicago" to "Chicago",
     "America/Los_Angeles" to "Los Angeles",
     "America/Sao_Paulo" to "São Paulo",
@@ -162,8 +164,9 @@ fun DualClockWidget(zoneId: String, onClick: (() -> Unit)?) {
 
     // Różnica w godzinach, np. -1 albo +5,5 (Indie mają przesunięcie o pół godziny).
     val diffSeconds = there.rules.getOffset(now).totalSeconds - here.rules.getOffset(now).totalSeconds
+    val sameTime = stringResource(R.string.w_dual_same_time)
     val diffText = when {
-        diffSeconds == 0 -> "ten sam czas"
+        diffSeconds == 0 -> sameTime
         diffSeconds % 3600 == 0 -> "%+d h".format(diffSeconds / 3600).replace('-', '−')
         else -> "%+.1f h".format(diffSeconds / 3600f).replace('-', '−').replace('.', ',')
     }
@@ -206,7 +209,7 @@ fun DualClockWidget(zoneId: String, onClick: (() -> Unit)?) {
             return@BoxWithConstraints
         }
       Column {
-        Text("Tutaj", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.w_dual_here), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(now.atZone(here).format(TimeFormat), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         HorizontalDivider(
             color = MaterialTheme.colorScheme.outline,
@@ -236,7 +239,7 @@ fun ZonePickerDialog(onPick: (zoneId: String) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Druga strefa czasowa") },
+        title = { Text(stringResource(R.string.w_zone_picker_title)) },
         text = {
             LazyColumn(Modifier.heightIn(max = 400.dp)) {
                 items(ClockZones) { (id, label) -> // dekonstrukcja pary w parametrach lambdy
@@ -253,7 +256,7 @@ fun ZonePickerDialog(onPick: (zoneId: String) -> Unit, onDismiss: () -> Unit) {
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -261,23 +264,25 @@ fun ZonePickerDialog(onPick: (zoneId: String) -> Unit, onDismiss: () -> Unit) {
 
 @Composable
 fun ModeNoteWidget(text: String, onClick: (() -> Unit)?) {
+  val noteLabel = stringResource(R.string.w_note_title)
+  val notePlaceholder = stringResource(R.string.w_note_placeholder)
   AdaptiveWidget { size, _, _ ->
     // 1×1 / 2×2: sama ikonka notatki — delikatnie "mruga", gdy coś jest zapisane.
     if (size == WidgetSize.TINY || size == WidgetSize.SMALL) {
         CompactTile(
             icon = R.drawable.ic_w_note,
             onClick = onClick,
-            label = if (size == WidgetSize.SMALL) text.lineSequence().firstOrNull { it.isNotBlank() }?.take(20) ?: "Notatka" else null,
+            label = if (size == WidgetSize.SMALL) text.lineSequence().firstOrNull { it.isNotBlank() }?.take(20) ?: noteLabel else null,
             pulse = text.isNotBlank(),
             tint = if (text.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
         )
         return@AdaptiveWidget
     }
     WidgetSurface(onClick = onClick) {
-        Text("Notatka", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(noteLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(6.dp))
         Text(
-            text.ifBlank { "Dotknij, aby napisać" },
+            text.ifBlank { notePlaceholder },
             style = MaterialTheme.typography.bodyMedium,
             color = if (text.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             overflow = TextOverflow.Ellipsis,
@@ -292,12 +297,12 @@ fun NoteWidgetDialog(initialText: String, onSave: (String) -> Unit, onDismiss: (
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Notatka trybu") },
+        title = { Text(stringResource(R.string.w_note_dialog_title)) },
         text = {
             OutlinedTextField(value = text, onValueChange = { text = it }, minLines = 4, modifier = Modifier.fillMaxWidth())
         },
-        confirmButton = { TextButton(onClick = { onSave(text) }) { Text("Zapisz") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        confirmButton = { TextButton(onClick = { onSave(text) }) { Text(stringResource(R.string.common_save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -328,7 +333,7 @@ fun HandyWidget(
         Spacer(Modifier.height(6.dp))
         if (items.isEmpty()) {
             Text(
-                "Pusto. Przypnij bilet albo link przez „Udostępnij”.",
+                stringResource(R.string.w_handy_empty),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -385,7 +390,7 @@ fun FolderWidget(
 ) {
     if (folder == null) {
         WidgetSurface(onClick = null) {
-            FitText("Folder usunięty", maxSize = 13.sp, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FitText(stringResource(R.string.w_folder_deleted), maxSize = 13.sp, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
@@ -649,45 +654,43 @@ fun StickerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Naklejka") },
+        title = { Text(stringResource(R.string.w_sticker_title)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.verticalScroll(rememberScrollState()),
             ) {
                 if (onEditInStudio != null) {
-                    Button(onClick = onEditInStudio, modifier = Modifier.fillMaxWidth()) { Text("Edytuj w StickOnMe") }
+                    Button(onClick = onEditInStudio, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.w_sticker_edit_in_studio)) }
                     Text(
-                        "Wycięcie, kształt, ramka i krawędź." +
-                            if (legacyLook) " Kształt i ramka z karty przejdą do edytora." else "",
+                        if (legacyLook) stringResource(R.string.w_sticker_studio_hint_legacy) else stringResource(R.string.w_sticker_studio_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (hasOriginal) TextButton(onClick = onRestore) { Text("Przywróć pierwszą wersję") }
+                if (hasOriginal) TextButton(onClick = onRestore) { Text(stringResource(R.string.w_sticker_restore_original)) }
 
-                Text("Obrót: ${rotation.toInt()}°", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.w_sticker_rotation, rotation.toInt()), style = MaterialTheme.typography.titleSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = { onChange((rotation - 15f) % 360f, flipped) }) { Text("↺ 15°") }
                     TextButton(onClick = { onChange((rotation + 15f) % 360f, flipped) }) { Text("↻ 15°") }
-                    TextButton(onClick = { onChange(0f, false) }) { Text("Zeruj") }
+                    TextButton(onClick = { onChange(0f, false) }) { Text(stringResource(R.string.w_sticker_reset_rotation)) }
                 }
-                TextButton(onClick = { onChange(rotation, !flipped) }) { Text(if (flipped) "Cofnij odbicie" else "Odbij lustrzanie") }
-                Text("Po dotknięciu", style = MaterialTheme.typography.titleSmall)
+                TextButton(onClick = { onChange(rotation, !flipped) }) { Text(if (flipped) stringResource(R.string.w_sticker_unflip) else stringResource(R.string.w_sticker_flip)) }
+                Text(stringResource(R.string.w_sticker_on_tap), style = MaterialTheme.typography.titleSmall)
                 Text(
-                    actionLabel ?: "Nic — tylko ozdoba",
+                    actionLabel ?: stringResource(R.string.w_sticker_no_action),
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (actionLabel != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(onClick = onPickAction) { Text(if (actionLabel != null) "Zmień akcję" else "Ustaw akcję") }
+                TextButton(onClick = onPickAction) { Text(if (actionLabel != null) stringResource(R.string.w_sticker_change_action) else stringResource(R.string.w_sticker_set_action)) }
                 Text(
-                    "Z akcją: dotknięcie ją wykonuje, a te ustawienia otworzysz przytrzymaniem naklejki. " +
-                        "Rozmiar i miejsce zmienisz w edycji układu (przytrzymaj kartę).",
+                    stringResource(R.string.w_sticker_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Gotowe") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_done)) } },
     )
 }

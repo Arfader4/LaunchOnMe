@@ -39,11 +39,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.ModePhoneSettings
 import pl.rafal.contextlauncher.data.db.ModeEntity
 import pl.rafal.contextlauncher.data.db.SuggestionRuleEntity
@@ -68,21 +70,22 @@ fun SuggestionBanner(
     onAccept: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val dismissDescription = stringResource(R.string.msug_banner_dismiss_cd)
     val text = when (suggestion) {
         is Suggestion.SwitchTo -> modes.firstOrNull { it.id == suggestion.modeId }?.let { target ->
             BannerText(
                 color = target.color,
-                title = "Przełączyć na ${target.name}?",
+                title = stringResource(R.string.msug_banner_switch_title, target.name),
                 subtitle = suggestion.reason.replaceFirstChar { it.uppercase() },
-                action = "Przełącz",
+                action = stringResource(R.string.msug_banner_switch_action),
             )
         }
         is Suggestion.EndMode -> modes.firstOrNull { it.id == suggestion.backToModeId }?.let { back ->
             BannerText(
                 color = back.color,
-                title = "Zakończyć tryb ${activeMode?.name.orEmpty()}?",
-                subtitle = "Żadna z jego reguł już nie pasuje",
-                action = "Wróć do ${back.name}",
+                title = stringResource(R.string.msug_banner_end_title, activeMode?.name.orEmpty()),
+                subtitle = stringResource(R.string.msug_banner_end_subtitle),
+                action = stringResource(R.string.msug_banner_end_action, back.name),
             )
         }
     } ?: return // tryb z sugestii mógł zostać usunięty
@@ -116,7 +119,7 @@ fun SuggestionBanner(
                 .size(44.dp)
                 .clip(CircleShape)
                 .clickable(onClick = onDismiss)
-                .semantics { contentDescription = "Odrzuć sugestię" },
+                .semantics { contentDescription = dismissDescription },
         ) { Text("×", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.titleMedium) }
     }
 }
@@ -180,18 +183,18 @@ fun ModeSettingsSheet(
             }
 
             // Każda zmiana zapisuje się od razu, a karta za arkuszem przemalowuje się na żywo.
-            Text("Ikona", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.msug_icon), style = MaterialTheme.typography.titleSmall)
             IconPicker(selected = icon, color = mode.color) { onAppearanceChange(it.key, mode.color, palette, mode.accent) }
 
-            Text("Kolor ikony", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.msug_icon_color), style = MaterialTheme.typography.titleSmall)
             ColorSwatches(colors = ModeColors, selected = mode.color, modeBadge = true, onSelect = { c ->
                 if (c != null) onAppearanceChange(mode.icon, c, palette, mode.accent)
             })
 
-            Text("Schemat kolorów", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.msug_color_scheme), style = MaterialTheme.typography.titleSmall)
             PaletteRow(selected = palette, onSelect = { onAppearanceChange(mode.icon, mode.color, it, mode.accent) }, allowDefault = true)
 
-            Text("Kolor główny", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.msug_accent_color), style = MaterialTheme.typography.titleSmall)
             ColorSwatches(
                 colors = AccentColors,
                 selected = mode.accent,
@@ -202,29 +205,34 @@ fun ModeSettingsSheet(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 6.dp))
 
             // Układ karty tylko tego trybu (np. "Praca" gęsto z małymi ikonami, "Dom" luźno z dużymi).
-            Text("Układ karty", style = MaterialTheme.typography.titleSmall)
-            Text("Rozmiar ikon aplikacji", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.msug_card_layout), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.msug_app_icon_size), style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                 FilterChip(
                     selected = layout.iconCells == null,
                     onClick = { onLayoutChange(layout.copy(iconCells = null)) },
-                    label = { Text("Jak w Ustawieniach (${globalIconCells}×$globalIconCells)") },
+                    label = { Text(stringResource(R.string.msug_icon_size_global, globalIconCells)) },
                 )
                 FilterChip(selected = layout.iconCells == 1, onClick = { onLayoutChange(layout.copy(iconCells = 1)) }, label = { Text("1×1") })
                 FilterChip(selected = layout.iconCells == 2, onClick = { onLayoutChange(layout.copy(iconCells = 2)) }, label = { Text("2×2") })
             }
-            Text("Odstępy między elementami", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.msug_spacing), style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                listOf(0 to "Brak", 4 to "Małe", 8 to "Średnie", 14 to "Duże").forEach { (gap, label) ->
+                listOf(
+                    0 to stringResource(R.string.common_none),
+                    4 to stringResource(R.string.msug_spacing_small),
+                    8 to stringResource(R.string.msug_spacing_medium),
+                    14 to stringResource(R.string.msug_spacing_large),
+                ).forEach { (gap, label) ->
                     FilterChip(selected = layout.gap == gap, onClick = { onLayoutChange(layout.copy(gap = gap)) }, label = { Text(label) })
                 }
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 6.dp))
 
-            Text("Kiedy podpowiadać ten tryb", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.msug_when_title), style = MaterialTheme.typography.titleSmall)
             Text(
-                "Gdy któraś reguła pasuje, w nagłówku pojawi się podpowiedź ✓ / ✕ albo — jeśli w Ustawieniach włączono automat — tryb przełączy się sam.",
+                stringResource(R.string.msug_when_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -240,9 +248,9 @@ fun ModeSettingsSheet(
                     .padding(horizontal = 4.dp),
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Zawsze pytaj przed włączeniem", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.msug_always_ask), style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Automat nie włączy ani nie wyłączy tego trybu bez Ciebie",
+                        stringResource(R.string.msug_always_ask_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -251,6 +259,7 @@ fun ModeSettingsSheet(
             }
 
             rules.forEach { rule ->
+                val deleteRuleDescription = stringResource(R.string.msug_delete_rule_cd)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -261,7 +270,7 @@ fun ModeSettingsSheet(
                         .padding(start = 14.dp),
                 ) {
                     Text(
-                        rule.toRule()?.let { SuggestionEngine.describe(it) }?.replaceFirstChar { it.uppercase() } ?: "Nieznana reguła",
+                        rule.toRule()?.let { SuggestionEngine.describe(it) }?.replaceFirstChar { it.uppercase() } ?: stringResource(R.string.msug_unknown_rule),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
@@ -271,36 +280,36 @@ fun ModeSettingsSheet(
                             .size(48.dp)
                             .clip(CircleShape)
                             .clickable { onDeleteRule(rule) }
-                            .semantics { contentDescription = "Usuń regułę" },
+                            .semantics { contentDescription = deleteRuleDescription },
                     ) { Text("×", style = MaterialTheme.typography.titleMedium) }
                 }
             }
 
             // Rodzaje reguł w dwóch rzędach, żeby zmieściły się na wąskim ekranie.
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = onAddTimeRule, label = { Text("+ Pora dnia") })
-                AssistChip(onClick = onAddCalendarRule, label = { Text("+ Kalendarz") })
-                AssistChip(onClick = onAddPlaceRule, label = { Text("+ Miejsce") })
+                AssistChip(onClick = onAddTimeRule, label = { Text(stringResource(R.string.msug_add_time)) })
+                AssistChip(onClick = onAddCalendarRule, label = { Text(stringResource(R.string.msug_add_calendar)) })
+                AssistChip(onClick = onAddPlaceRule, label = { Text(stringResource(R.string.msug_add_place)) })
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssistChip(onClick = onAddBluetoothRule, label = { Text("+ Bluetooth") })
                 AssistChip(onClick = onAddWifiRule, label = { Text("+ Wi-Fi") })
-                AssistChip(onClick = onAddHeadphonesRule, label = { Text("+ Słuchawki") })
+                AssistChip(onClick = onAddHeadphonesRule, label = { Text(stringResource(R.string.msug_add_headphones)) })
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = onAddChargingRule, label = { Text("+ Ładowanie") })
-                AssistChip(onClick = onAddBatteryRule, label = { Text("+ Bateria") })
+                AssistChip(onClick = onAddChargingRule, label = { Text(stringResource(R.string.msug_add_charging)) })
+                AssistChip(onClick = onAddBatteryRule, label = { Text(stringResource(R.string.msug_add_battery)) })
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 6.dp))
 
             // Tapeta ustawiana przy włączeniu trybu (tryby bez własnej dostają domyślną z Ustawień).
-            Text("Tapeta trybu", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.msug_wallpaper), style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                AssistChip(onClick = onPickWallpaper, label = { Text(if (wallpaperSet) "Zmień obraz" else "Wybierz obraz") })
-                AssistChip(onClick = onBoardWallpaper, label = { Text("Z tablicy StickOnMe") })
-                if (wallpaperSet) AssistChip(onClick = onCropWallpaper, label = { Text("Dopasuj") })
-                if (wallpaperSet) AssistChip(onClick = onClearWallpaper, label = { Text("Usuń") })
+                AssistChip(onClick = onPickWallpaper, label = { Text(if (wallpaperSet) stringResource(R.string.msug_wallpaper_change) else stringResource(R.string.msug_wallpaper_pick)) })
+                AssistChip(onClick = onBoardWallpaper, label = { Text(stringResource(R.string.msug_wallpaper_board)) })
+                if (wallpaperSet) AssistChip(onClick = onCropWallpaper, label = { Text(stringResource(R.string.msug_wallpaper_crop)) })
+                if (wallpaperSet) AssistChip(onClick = onClearWallpaper, label = { Text(stringResource(R.string.common_delete)) })
             }
             if (wallpaperSet) {
                 Row(
@@ -309,7 +318,7 @@ fun ModeSettingsSheet(
                         .fillMaxWidth()
                         .clickable { onWallpaperLockChange(!wallpaperOnLock) },
                 ) {
-                    Text("Też na ekranie blokady", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.msug_wallpaper_lock), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(checked = wallpaperOnLock, onCheckedChange = onWallpaperLockChange)
                 }
             }
@@ -327,7 +336,7 @@ fun ModeSettingsSheet(
                     .padding(horizontal = 4.dp),
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Blokowanie i ukrywanie aplikacji", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.msug_app_rules), style = MaterialTheme.typography.bodyLarge)
                     Text(appRulesSummary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -347,16 +356,17 @@ fun ModeSettingsSheet(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 6.dp))
 
             Row {
-                TextButton(onClick = onRename) { Text("Zmień nazwę") }
-                TextButton(onClick = onDelete) { Text("Usuń tryb", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onRename) { Text(stringResource(R.string.common_rename)) }
+                TextButton(onClick = onDelete) { Text(stringResource(R.string.msug_delete_mode), color = MaterialTheme.colorScheme.error) }
             }
         }
     }
 }
 
 private val DayNames = listOf(
-    DayOfWeek.MONDAY to "Pn", DayOfWeek.TUESDAY to "Wt", DayOfWeek.WEDNESDAY to "Śr", DayOfWeek.THURSDAY to "Cz",
-    DayOfWeek.FRIDAY to "Pt", DayOfWeek.SATURDAY to "Sb", DayOfWeek.SUNDAY to "Nd",
+    DayOfWeek.MONDAY to R.string.msug_day_mon, DayOfWeek.TUESDAY to R.string.msug_day_tue,
+    DayOfWeek.WEDNESDAY to R.string.msug_day_wed, DayOfWeek.THURSDAY to R.string.msug_day_thu,
+    DayOfWeek.FRIDAY to R.string.msug_day_fri, DayOfWeek.SATURDAY to R.string.msug_day_sat, DayOfWeek.SUNDAY to R.string.msug_day_sun,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -372,18 +382,18 @@ fun TimeRuleDialog(onConfirm: (Set<DayOfWeek>, LocalTime, LocalTime) -> Unit, on
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Pora dnia") },
+        title = { Text(stringResource(R.string.msug_time_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Dni", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.msug_time_days), style = MaterialTheme.typography.labelLarge)
                 // 7 dni w dwóch rzędach, bo w jednym się nie mieszczą.
                 DayNames.chunked(4).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        row.forEach { (day, label) ->
+                        row.forEach { (day, labelRes) ->
                             FilterChip(
                                 selected = day in days,
                                 onClick = { days = if (day in days) days - day else days + day },
-                                label = { Text(label) },
+                                label = { Text(stringResource(labelRes)) },
                             )
                         }
                     }
@@ -392,7 +402,7 @@ fun TimeRuleDialog(onConfirm: (Set<DayOfWeek>, LocalTime, LocalTime) -> Unit, on
                     OutlinedTextField(
                         value = startText,
                         onValueChange = { startText = it },
-                        label = { Text("Od") },
+                        label = { Text(stringResource(R.string.msug_time_from)) },
                         isError = start == null,
                         singleLine = true,
                         modifier = Modifier.weight(1f),
@@ -400,14 +410,14 @@ fun TimeRuleDialog(onConfirm: (Set<DayOfWeek>, LocalTime, LocalTime) -> Unit, on
                     OutlinedTextField(
                         value = endText,
                         onValueChange = { endText = it },
-                        label = { Text("Do") },
+                        label = { Text(stringResource(R.string.msug_time_to)) },
                         isError = end == null,
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Text(
-                    "Format 8:00. „Do” wcześniej niż „Od” oznacza okno przez północ, np. 22:00–6:00.",
+                    stringResource(R.string.msug_time_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -415,10 +425,10 @@ fun TimeRuleDialog(onConfirm: (Set<DayOfWeek>, LocalTime, LocalTime) -> Unit, on
         },
         confirmButton = {
             TextButton(enabled = valid, onClick = { if (start != null && end != null) onConfirm(days, start, end) }) {
-                Text("Dodaj")
+                Text(stringResource(R.string.common_add))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -428,26 +438,25 @@ fun CalendarRuleDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Wydarzenie w kalendarzu") },
+        title = { Text(stringResource(R.string.msug_calendar_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Tryb będzie podpowiadany, gdy w kalendarzu jest wydarzenie z tym słowem w tytule, " +
-                        "trwające albo zaczynające się w ciągu 3 godzin.",
+                    stringResource(R.string.msug_calendar_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
                     value = keyword,
                     onValueChange = { keyword = it },
-                    label = { Text("Słowo, np. lot, pociąg, zjazd") },
+                    label = { Text(stringResource(R.string.msug_calendar_keyword)) },
                     singleLine = true,
                 )
             }
         },
         confirmButton = {
-            TextButton(enabled = keyword.isNotBlank(), onClick = { onConfirm(keyword) }) { Text("Dodaj") }
+            TextButton(enabled = keyword.isNotBlank(), onClick = { onConfirm(keyword) }) { Text(stringResource(R.string.common_add)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }

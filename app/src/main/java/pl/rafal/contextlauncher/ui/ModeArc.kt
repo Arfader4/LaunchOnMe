@@ -38,6 +38,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.ModeEntity
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -246,18 +248,18 @@ private fun ArcContent(state: ModeArcState, modes: List<ModeEntity>, activeId: L
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            if (mode.id == activeId) "To jest aktywny tryb" else "Puść, aby włączyć",
+                            if (mode.id == activeId) stringResource(R.string.mode_arc_is_active) else stringResource(R.string.mode_arc_release_to_enable),
                             style = MaterialTheme.typography.bodyMedium,
                             color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
                         )
                     } else {
                         Text(
-                            "Przesuń palec na tryb",
+                            stringResource(R.string.mode_arc_slide_to_mode),
                             style = MaterialTheme.typography.titleLarge,
                             color = androidx.compose.ui.graphics.Color.White,
                         )
                         Text(
-                            "Puść na klawiszu = anuluj",
+                            stringResource(R.string.mode_arc_release_cancel),
                             style = MaterialTheme.typography.bodyMedium,
                             color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
                         )

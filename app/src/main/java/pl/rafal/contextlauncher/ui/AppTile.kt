@@ -50,6 +50,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.AppInfo
 import pl.rafal.contextlauncher.data.db.FolderEntity
 
@@ -178,6 +180,8 @@ fun AppTile(
                 .padding(vertical = metrics.pad),
         ) {
             val blocked = app.appKey in LocalBlockedApps.current
+            val notifiedDesc = stringResource(R.string.drawer_has_notifications)
+            val blockedDesc = stringResource(R.string.drawer_blocked_in_mode)
             Box {
                 Image(
                     bitmap = app.icon,
@@ -208,7 +212,7 @@ fun AppTile(
                             .padding(2.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary)
-                            .semantics { contentDescription = "ma powiadomienia" },
+                            .semantics { contentDescription = notifiedDesc },
                     )
                 }
                 if (blocked) {
@@ -219,7 +223,7 @@ fun AppTile(
                             .size(20.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surface)
-                            .semantics { contentDescription = "zablokowana w tym trybie" },
+                            .semantics { contentDescription = blockedDesc },
                     ) { Text("🔒", style = MaterialTheme.typography.labelSmall) }
                 }
             }

@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlin.math.roundToInt
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.R
 
 // Proporcje ekranu telefonu (szerokość / wysokość w pionie) — ramka kadru ma dokładnie taki kształt.
 private fun screenAspect(context: Context): Float {
@@ -140,9 +142,9 @@ fun WallpaperCropDialog(
                 .systemBarsPadding()
                 .padding(16.dp),
         ) {
-            Text("Dopasuj tapetę", color = Color.White, style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.crop_title), color = Color.White, style = MaterialTheme.typography.titleLarge)
             Text(
-                "Rozsuń palce, aby powiększyć, i przesuń obraz. Ramka to ekran telefonu.",
+                stringResource(R.string.crop_hint),
                 color = Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -155,7 +157,7 @@ fun WallpaperCropDialog(
             ) {
                 val bmp = bitmap
                 if (bmp == null && failed) {
-                    Text("Nie udało się wczytać obrazu tapety.", color = Color.White)
+                    Text(stringResource(R.string.crop_load_failed), color = Color.White)
                 } else if (bmp == null) {
                     CircularProgressIndicator()
                 } else {
@@ -195,10 +197,10 @@ fun WallpaperCropDialog(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                TextButton(onClick = onDismiss) { Text("Anuluj", color = Color.White) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel), color = Color.White) }
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = { holder[0]?.reset() }, enabled = bitmap != null) { Text("Wypełnij ekran", color = Color.White) }
-                Button(onClick = { holder[0]?.let { onSave(it.crop()) } }, enabled = bitmap != null) { Text("Zapisz") }
+                TextButton(onClick = { holder[0]?.reset() }, enabled = bitmap != null) { Text(stringResource(R.string.crop_fill_screen), color = Color.White) }
+                Button(onClick = { holder[0]?.let { onSave(it.crop()) } }, enabled = bitmap != null) { Text(stringResource(R.string.common_save)) }
             }
         }
     }

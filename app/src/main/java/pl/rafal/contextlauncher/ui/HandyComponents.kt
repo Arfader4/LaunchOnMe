@@ -47,6 +47,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.PinnedItemEntity
 import pl.rafal.contextlauncher.data.db.PinnedItemEntity.Companion.KIND_FILE
 import pl.rafal.contextlauncher.data.db.PinnedItemEntity.Companion.KIND_LINK
@@ -69,6 +72,9 @@ fun HandySheet(
     // partition ≈ podział listy na dwie według warunku; (a, b) = dekonstrukcja pary.
     val (active, archived) = items.partition { it.archivedAt == null }
     var showArchive by remember { mutableStateOf(false) }
+    val archiveLabel = stringResource(R.string.handy_archive_action)
+    val deleteLabel = stringResource(R.string.common_delete)
+    val restoreLabel = stringResource(R.string.common_restore)
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         LazyColumn(
@@ -77,23 +83,22 @@ fun HandySheet(
         ) {
             item {
                 Text(
-                    "OnHand · $modeName",
+                    stringResource(R.string.handy_sheet_title, modeName),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
                 )
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AssistChip(onClick = onAddFile, label = { Text("+ Plik") })
-                    AssistChip(onClick = onAddLink, label = { Text("+ Link") })
-                    AssistChip(onClick = onAddNote, label = { Text("+ Notatka") })
+                    AssistChip(onClick = onAddFile, label = { Text(stringResource(R.string.handy_add_file)) })
+                    AssistChip(onClick = onAddLink, label = { Text(stringResource(R.string.handy_add_link)) })
+                    AssistChip(onClick = onAddNote, label = { Text(stringResource(R.string.handy_add_note)) })
                 }
             }
             if (active.isEmpty()) {
                 item {
                     Text(
-                        "Nic tu jeszcze nie ma. Dodaj plik, link albo notatkę, albo w dowolnej aplikacji wybierz " +
-                            "„Udostępnij → Przypnij do trybu”.",
+                        stringResource(R.string.handy_empty),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(8.dp),
@@ -105,15 +110,15 @@ fun HandySheet(
                     item = item,
                     onOpen = { onOpen(item) },
                     menu = listOf(
-                        MenuAction("Archiwizuj") { onArchive(item) },
-                        MenuAction("Usuń") { onDelete(item) },
+                        MenuAction(archiveLabel) { onArchive(item) },
+                        MenuAction(deleteLabel) { onDelete(item) },
                     ),
                 )
             }
             if (archived.isNotEmpty()) {
                 item {
                     TextButton(onClick = { showArchive = !showArchive }) {
-                        Text(if (showArchive) "Ukryj archiwum" else "Archiwum (${archived.size})")
+                        Text(if (showArchive) stringResource(R.string.handy_hide_archive) else stringResource(R.string.handy_archive_count, archived.size))
                     }
                 }
                 if (showArchive) {
@@ -122,8 +127,8 @@ fun HandySheet(
                             item = item,
                             onOpen = { onOpen(item) },
                             menu = listOf(
-                                MenuAction("Przywróć") { onRestore(item) },
-                                MenuAction("Usuń") { onDelete(item) },
+                                MenuAction(restoreLabel) { onRestore(item) },
+                                MenuAction(deleteLabel) { onDelete(item) },
                             ),
                             dimmed = true,
                         )
@@ -142,6 +147,7 @@ private fun PinnedRow(
     dimmed: Boolean = false,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    val moreOptionsDesc = stringResource(R.string.handy_more_options)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -172,7 +178,7 @@ private fun PinnedRow(
                     .size(48.dp)
                     .clip(CircleShape)
                     .clickable { menuOpen = true }
-                    .semantics { contentDescription = "Więcej opcji" },
+                    .semantics { contentDescription = moreOptionsDesc },
             ) { Text("⋮", style = MaterialTheme.typography.titleLarge) }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 menu.forEach { action ->
@@ -191,9 +197,9 @@ private fun PinnedRow(
 fun KindBadge(item: PinnedItemEntity, size: Int = 40) {
     // Kolor rodzaju + jego półprzezroczysta wersja jako tło: czytelne w jasnym i ciemnym motywie.
     val (letter, fg) = when (item.kind) {
-        KIND_FILE -> "P" to MaterialTheme.colorScheme.primary
-        KIND_LINK -> "L" to Color(0xFF5B8DEF)
-        else -> "N" to Color(0xFF3FA07A)
+        KIND_FILE -> stringResource(R.string.handy_badge_file) to MaterialTheme.colorScheme.primary
+        KIND_LINK -> stringResource(R.string.handy_badge_link) to Color(0xFF5B8DEF)
+        else -> stringResource(R.string.handy_badge_note) to Color(0xFF3FA07A)
     }
     val bg = fg.copy(alpha = 0.18f)
     Box(
@@ -210,8 +216,8 @@ fun KindBadge(item: PinnedItemEntity, size: Int = 40) {
 private fun subtitle(item: PinnedItemEntity): String = when (item.kind) {
     KIND_FILE -> when {
         item.mimeType?.contains("pdf") == true -> "PDF"
-        item.mimeType?.startsWith("image/") == true -> "Obraz"
-        else -> "Plik"
+        item.mimeType?.startsWith("image/") == true -> AppText.get(R.string.handy_kind_image)
+        else -> AppText.get(R.string.handy_kind_file)
     }
     KIND_LINK -> item.uri.orEmpty()
     else -> item.text?.lineSequence()?.firstOrNull().orEmpty()
@@ -225,17 +231,17 @@ fun LinkDialog(onConfirm: (url: String, title: String) -> Unit, onDismiss: () ->
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Nowy link") },
+        title = { Text(stringResource(R.string.handy_new_link)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("Adres") }, singleLine = true)
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Nazwa (opcjonalnie)") }, singleLine = true)
+                OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text(stringResource(R.string.handy_link_address)) }, singleLine = true)
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text(stringResource(R.string.handy_link_name_optional)) }, singleLine = true)
             }
         },
         confirmButton = {
-            TextButton(enabled = url.isNotBlank(), onClick = { onConfirm(url, title) }) { Text("Przypnij") }
+            TextButton(enabled = url.isNotBlank(), onClick = { onConfirm(url, title) }) { Text(stringResource(R.string.handy_pin)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -286,24 +292,24 @@ fun NoteDialog(
                         .padding(24.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    Text("Notatka", style = MaterialTheme.typography.headlineSmall)
+                    Text(stringResource(R.string.handy_note_title), style = MaterialTheme.typography.headlineSmall)
                     OutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
-                        label = { Text("Tytuł (opcjonalnie)") },
+                        label = { Text(stringResource(R.string.handy_note_title_optional)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         value = text,
                         onValueChange = { text = it },
-                        label = { Text("Treść") },
+                        label = { Text(stringResource(R.string.handy_note_content)) },
                         minLines = 4,
                         maxLines = 14,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                        TextButton(onClick = onDismiss) { Text("Anuluj") }
+                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
                         TextButton(enabled = text.isNotBlank(), onClick = { onConfirm(title, text) }) { Text(confirmLabel) }
                     }
                 }

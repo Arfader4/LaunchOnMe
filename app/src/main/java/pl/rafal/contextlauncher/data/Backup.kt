@@ -11,6 +11,8 @@ import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import pl.rafal.contextlauncher.AppText
+import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.AppRestrictionEntity
 import pl.rafal.contextlauncher.data.db.CardItemEntity
 import pl.rafal.contextlauncher.data.db.FolderAppEntity
@@ -115,7 +117,7 @@ object Backup {
             }
         }
 
-        val stream = context.contentResolver.openOutputStream(target, "wt") ?: error("Nie można zapisać pliku")
+        val stream = context.contentResolver.openOutputStream(target, "wt") ?: error(AppText.get(R.string.data_backup_cannot_write))
         if (!withFiles) {
             stream.bufferedWriter().use { it.write(json.toString(2)) }
         } else {
@@ -138,18 +140,18 @@ object Backup {
     // Czy plik to .zip (zaczyna się od "PK"), a nie sam JSON.
     private fun isZip(context: Context, source: Uri): Boolean =
         context.contentResolver.openInputStream(source)?.use { it.read() == 0x50 && it.read() == 0x4B }
-            ?: error("Nie można odczytać pliku")
+            ?: error(AppText.get(R.string.data_backup_cannot_read))
 
     // Rozpakowanie .zip: config.json musi być pierwszy (sprawdzamy wersję, zanim cokolwiek zapiszemy),
     // pliki trafiają tylko do stickers/ i wallpapers/ w folderze aplikacji (ochrona przed "../" w nazwach).
     private fun unzip(context: Context, source: Uri, root: File): String {
-        val stream = context.contentResolver.openInputStream(source) ?: error("Nie można odczytać pliku")
+        val stream = context.contentResolver.openInputStream(source) ?: error(AppText.get(R.string.data_backup_cannot_read))
         return ZipInputStream(stream.buffered()).use { zip ->
-            val first = zip.nextEntry ?: error("Pusty plik")
-            require(first.name == CONFIG) { "To nie jest kopia LaunchOnMe" }
+            val first = zip.nextEntry ?: error(AppText.get(R.string.data_backup_empty_file))
+            require(first.name == CONFIG) { AppText.get(R.string.data_backup_not_a_backup) }
             val text = zip.readBytes().toString(Charsets.UTF_8)
             val version = JSONObject(text).optInt("version")
-            require(version in 1..VERSION) { "Nieobsługiwana wersja pliku" }
+            require(version in 1..VERSION) { AppText.get(R.string.data_backup_unsupported_version) }
             val allowed = listOf(File(root, "stickers"), File(root, "wallpapers")).map { it.canonicalPath + File.separator }
             while (true) {
                 val entry = zip.nextEntry ?: break
@@ -171,9 +173,9 @@ object Backup {
         val zipped = isZip(context, source)
         val text = if (zipped) unzip(context, source, root)
             else context.contentResolver.openInputStream(source)?.bufferedReader()?.use { it.readText() }
-                ?: error("Nie można odczytać pliku")
+                ?: error(AppText.get(R.string.data_backup_cannot_read))
         val json = JSONObject(text)
-        require(json.optInt("version") in 1..VERSION) { "Nieobsługiwana wersja pliku" }
+        require(json.optInt("version") in 1..VERSION) { AppText.get(R.string.data_backup_unsupported_version) }
         val home = context.filesDir // ścieżki budujemy w tej samej pisowni, której używa reszta aplikacji
         val oldRoots = listOf(json.optString("filesDir"), json.optString("filesDirCanonical")).filter { it.isNotBlank() }
 

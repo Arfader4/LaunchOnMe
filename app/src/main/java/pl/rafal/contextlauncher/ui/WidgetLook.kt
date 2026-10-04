@@ -15,7 +15,9 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import pl.rafal.contextlauncher.R
 
 // Kolory tła do wyboru dla pojedynczego widżetu (plus "A" = ze schematu i "+" = dowolny).
 private val WidgetBgColors = listOf(
@@ -42,21 +44,21 @@ fun WidgetLookDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (onOpenContent != null) {
-                    TextButton(onClick = onOpenContent) { Text("⚙ Ustawienia widżetu…") }
+                    TextButton(onClick = onOpenContent) { Text(stringResource(R.string.wlook_widget_settings)) }
                 }
-                Text("Kolor tła", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.wlook_bg_color), style = MaterialTheme.typography.labelLarge)
                 ColorSwatches(WidgetBgColors, background, { onChange(it, opacity) }, allowNone = true)
-                Text("Przezroczystość tła", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.wlook_bg_transparency), style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(
                         selected = opacity == null,
                         onClick = { onChange(background, null) },
-                        label = { Text("Jak w Ustawieniach ($globalOpacity%)") },
+                        label = { Text(stringResource(R.string.wlook_as_in_settings, globalOpacity)) },
                     )
                 }
                 // Suwak trzyma wartość lokalnie, a zapis idzie dopiero po puszczeniu palca (bez zapisu przy każdym pikselu).
                 var local by remember(opacity, globalOpacity) { mutableFloatStateOf((opacity ?: globalOpacity).toFloat()) }
-                Text("Krycie: ${(local / 5).toInt() * 5}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.wlook_opacity_value, (local / 5).toInt() * 5), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Slider(
                     value = local,
                     onValueChange = { local = it },
@@ -66,6 +68,6 @@ fun WidgetLookDialog(
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Gotowe") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_done)) } },
     )
 }
