@@ -52,6 +52,7 @@
     </queries>
 
     <application
+        android:name=".LaunchOnMeApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -154,7 +155,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Udostępnia kopie plików z "Pod ręką" czytnikom PDF itp. na czas otwarcia. -->
+        <!-- Udostępnia kopie plików z OnHand czytnikom PDF itp. na czas otwarcia. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

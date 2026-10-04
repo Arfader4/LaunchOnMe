@@ -150,11 +150,25 @@ val FolderColors: List<Long> = listOf(
 
 // Wygląd folderu w jednym miejscu: kolorowe tło w kształcie ikon z Ustawień + symbol / litera / ikona aplikacji / miniatura.
 @Composable
-fun FolderBadge(folder: FolderEntity?, preview: List<AppInfo>, size: Dp, modifier: Modifier = Modifier, grid: Int = 2) =
-    FolderBadge(folder?.icon, folder?.color, preview, size, modifier, grid)
+fun FolderBadge(
+    folder: FolderEntity?,
+    preview: List<AppInfo>,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    grid: Int = 2,
+    subfolders: List<Pair<FolderEntity, List<AppInfo>>> = emptyList(), // zagnieżdżone foldery: miniatury w miniaturze
+) = FolderBadge(folder?.icon, folder?.color, preview, size, modifier, grid, subfolders)
 
 @Composable
-fun FolderBadge(iconKey: String?, color: Long?, preview: List<AppInfo>, size: Dp, modifier: Modifier = Modifier, grid: Int = 2) {
+fun FolderBadge(
+    iconKey: String?,
+    color: Long?,
+    preview: List<AppInfo>,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    grid: Int = 2,
+    subfolders: List<Pair<FolderEntity, List<AppInfo>>> = emptyList(),
+) {
     val bg = color?.let { Color(it) } ?: MaterialTheme.colorScheme.surfaceVariant
     val fg = if (bg.luminance() > 0.5f) Color(0xFF1A1206) else Color.White
     val symbol = FolderIcon.of(iconKey)
@@ -181,7 +195,7 @@ fun FolderBadge(iconKey: String?, color: Long?, preview: List<AppInfo>, size: Dp
                 )
             }
             appIcon != null -> Image(appIcon.icon, contentDescription = null, modifier = Modifier.size(size * 0.7f))
-            symbol != null || preview.isEmpty() -> Icon(
+            symbol != null || (preview.isEmpty() && subfolders.isEmpty()) -> Icon(
                 // Pusty folder bez symbolu też dostaje symbol "folder", żeby nie był pustym kwadratem.
                 painter = painterResource((symbol ?: FolderIcon.FOLDER).res),
                 contentDescription = null,
@@ -192,10 +206,20 @@ fun FolderBadge(iconKey: String?, color: Long?, preview: List<AppInfo>, size: Dp
                 // 2×2: cztery większe ikony, 3×3: dziewięć mniejszych (więcej widać bez otwierania).
                 val cell = size * (if (grid == 3) 0.25f else 0.34f)
                 val gap = size * (if (grid == 3) 0.035f else 0.05f)
+                // Podfoldery najpierw (jak w otwartym folderze), każdy jako malutka miniatura swojej zawartości.
+                val entries: List<Any> = (subfolders + preview).take(grid * grid)
                 Column(verticalArrangement = Arrangement.spacedBy(gap)) {
-                    preview.take(grid * grid).chunked(grid).forEach { row ->
+                    entries.chunked(grid).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                            row.forEach { app -> Image(app.icon, contentDescription = null, modifier = Modifier.size(cell)) }
+                            row.forEach { entry ->
+                                if (entry is AppInfo) {
+                                    Image(entry.icon, contentDescription = null, modifier = Modifier.size(cell))
+                                } else {
+                                    val pair = entry as Pair<*, *>
+                                    @Suppress("UNCHECKED_CAST")
+                                    FolderBadge(pair.first as FolderEntity, pair.second as List<AppInfo>, cell, grid = 2)
+                                }
+                            }
                         }
                     }
                 }

@@ -108,12 +108,15 @@ fun modeBadgeColor(color: Long, dark: Boolean): Color {
     val hsl = FloatArray(3)
     ColorUtils.colorToHSL(color.toInt(), hsl) // Long ARGB → Int, jak (int)kolor w C#
     fun lum() = Color(ColorUtils.HSLToColor(hsl)).luminance()
+    // Symbol to grafika, nie drobny tekst — wystarcza kontrast 3:1 (WCAG dla elementów graficznych).
+    // Wcześniej było 5:1 i prawie każdy kolor zjeżdżał do podobnej ciemnej (albo pastelowej) barwy,
+    // więc własny kolor wyglądał jak sąsiedni z listy. Teraz kolor zmienia się tylko tyle, ile trzeba.
     if (dark) {
-        // Jasny symbol: tło o luminancji ≤ 0.14 (kontrast ok. 5:1 z symbolem 0xFFF4F5F7).
-        while (lum() > 0.14f && hsl[2] > 0.05f) hsl[2] -= 0.02f
+        // Jasny symbol (luminancja ok. 0.91): tło ≤ 0.27.
+        while (lum() > 0.27f && hsl[2] > 0.05f) hsl[2] -= 0.02f
     } else {
-        // Ciemny symbol: tło jasne (pastel), luminancja ≥ ok. 0.5.
-        while (lum() < 0.5f && hsl[2] < 0.97f) hsl[2] += 0.02f
+        // Ciemny symbol (luminancja ok. 0.01): tło ≥ 0.13.
+        while (lum() < 0.13f && hsl[2] < 0.97f) hsl[2] += 0.02f
     }
     return Color(ColorUtils.HSLToColor(hsl))
 }
@@ -239,6 +242,7 @@ fun ColorSwatches(
     if (pickerOpen) {
         ColorPickerDialog(
             initial = selected,
+            badgePreview = modeBadge,
             onPick = {
                 onSelect(it)
                 pickerOpen = false

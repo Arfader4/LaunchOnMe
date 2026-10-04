@@ -37,6 +37,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pl.rafal.contextlauncher.data.db.ModeEntity
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+
+private val ModeRowHeight = 52.dp // wysokość wiersza trybu na liście (też krok przy przeciąganiu)
 
 // Rozwijany przycisk trybu na dole ekranu (w zasięgu kciuka).
 // Dotknięcie rozwija listę trybów do góry; ⋮ przy trybie otwiera jego ustawienia.
@@ -54,6 +63,7 @@ fun ModeSwitcherButton(
     extraActions: List<MenuAction> = emptyList(), // akcje pod listą trybów
     menuHeader: String? = null,                   // np. "Podróż · do 17:30"
     badge: Boolean = false,                       // kropka: coś czeka (np. ręczne przełączniki)
+    onReorder: ((List<ModeEntity>) -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     LaunchedEffect(closeSignal) { expanded = false }
@@ -149,6 +159,7 @@ fun ModeSwitcherButton(
             onTimed = onTimed,
             extraActions = extraActions,
             header = menuHeader,
+            onReorder = onReorder,
         )
     }
 }
@@ -166,6 +177,7 @@ fun ModeDropdown(
     onTimed: ((ModeEntity) -> Unit)? = null,
     extraActions: List<MenuAction> = emptyList(),
     header: String? = null,
+    onReorder: ((List<ModeEntity>) -> Unit)? = null, // przytrzymanie + przeciągnięcie trybu na liście
 ) {
     // DropdownMenu sam otwiera się do góry, gdy pod przyciskiem brakuje miejsca.
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
@@ -177,32 +189,120 @@ fun ModeDropdown(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
-        modes.forEach { mode ->
-            val isActive = mode.id == active?.id
-            DropdownMenuItem(
-                leadingIcon = { ModeBadge(mode, size = 30.dp) },
-                text = {
+        // Kolejność na żywo w trakcie przeciągania (przytrzymaj tryb i przesuń palcem w górę / w dół).
+        // Stały stan (gest żyje dłużej niż jedno przerysowanie); synchronizacja z bazą tylko poza przeciąganiem.
+        var draggingId by remember { mutableStateOf<Long?>(null) }
+        val orderState = remember { mutableStateOf(modes) }
+        var order by orderState
+        val latestModes by androidx.compose.runtime.rememberUpdatedState(modes)
+        LaunchedEffect(modes) { if (draggingId == null) orderState.value = modes }
+        var dragOffset by remember { mutableFloatStateOf(0f) }
+        val rowPx = with(androidx.compose.ui.platform.LocalDensity.current) { ModeRowHeight.toPx() }
+        val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+        val currentOnReorder by androidx.compose.runtime.rememberUpdatedState(onReorder)
+        val currentOnSelect by androidx.compose.runtime.rememberUpdatedState(onSelect)
+        val currentOnDismiss by androidx.compose.runtime.rememberUpdatedState(onDismiss)
+        for (mode in order) {
+            key(mode.id) {
+                val isActive = mode.id == active?.id
+                val dragged = draggingId == mode.id
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .zIndex(if (dragged) 1f else 0f)
+                        .graphicsLayer {
+                            translationY = if (dragged) dragOffset else 0f
+                            val s = if (dragged) 1.03f else 1f
+                            scaleX = s
+                            scaleY = s
+                            shadowElevation = if (dragged) 8.dp.toPx() else 0f
+                            shape = RoundedCornerShape(14.dp)
+                            clip = dragged
+                        }
+                        .background(if (dragged) MaterialTheme.colorScheme.surfaceVariant else androidx.compose.ui.graphics.Color.Transparent)
+                        .widthIn(min = 220.dp)
+                        .height(ModeRowHeight)
+                        .semantics {
+                            role = androidx.compose.ui.semantics.Role.Button
+                            onClick(label = mode.name) {
+                                onDismiss()
+                                onSelect(mode)
+                                true
+                            }
+                        }
+                        // Jeden gest: krótkie dotknięcie = włącz tryb, przytrzymanie + ruch = zmiana kolejności.
+                        .pointerInput(mode.id) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                var lifted = false
+                                var consumedUp = false
+                                var moved = false
+                                val held = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id }
+                                        if (change == null || !change.pressed) {
+                                            lifted = true
+                                            consumedUp = change?.isConsumed == true // ⏱ / ⋮ obsłużyły dotyk same
+                                            break
+                                        }
+                                        if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                                            moved = true // przewijanie listy — nie nasze
+                                            break
+                                        }
+                                    }
+                                } == null
+                                if (!held) {
+                                    if (lifted && !consumedUp && !moved) {
+                                        currentOnDismiss()
+                                        currentOnSelect(mode)
+                                    }
+                                } else if (currentOnReorder != null) {
+                                    haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    draggingId = mode.id
+                                    dragOffset = 0f
+                                    try {
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        if (!change.pressed) break
+                                        // × 1.03: wiersz jest powiększony, więc lokalny ruch palca jest o 3% mniejszy.
+                                        dragOffset += (change.position.y - change.previousPosition.y) * 1.03f
+                                        change.consume()
+                                        // Przesunięcie o pół wiersza = zamiana z sąsiadem (wiersz "przeskakuje" pod palcem).
+                                        val list = order
+                                        val index = list.indexOfFirst { it.id == mode.id }
+                                        if (dragOffset > rowPx / 2 && index < list.size - 1) {
+                                            order = list.toMutableList().apply { add(index + 1, removeAt(index)) }
+                                            dragOffset -= rowPx
+                                            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                        } else if (dragOffset < -rowPx / 2 && index > 0) {
+                                            order = list.toMutableList().apply { add(index - 1, removeAt(index)) }
+                                            dragOffset += rowPx
+                                            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                        }
+                                    }
+                                    } finally {
+                                        draggingId = null
+                                        dragOffset = 0f
+                                    }
+                                    if (order.map { it.id } != latestModes.map { it.id }) currentOnReorder?.invoke(order)
+                                }
+                            }
+                        }
+                        .padding(start = 12.dp),
+                ) {
+                    ModeBadge(mode, size = 30.dp)
+                    Spacer(Modifier.width(12.dp))
                     Text(
                         mode.name,
                         fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
                         color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
-                },
-                trailingIcon = {
-                    Row {
-                        if (onTimed != null && !isActive) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .clickable {
-                                        onDismiss()
-                                        onTimed(mode)
-                                    }
-                                    .semantics { contentDescription = "Włącz ${mode.name} na czas" },
-                            ) { Text("⏱", style = MaterialTheme.typography.titleMedium) }
-                        }
+                    if (onTimed != null && !isActive) {
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
@@ -210,16 +310,32 @@ fun ModeDropdown(
                                 .clip(CircleShape)
                                 .clickable {
                                     onDismiss()
-                                    onManage(mode)
+                                    onTimed(mode)
                                 }
-                                .semantics { contentDescription = "Ustawienia trybu ${mode.name}" },
-                        ) { Text("⋮", style = MaterialTheme.typography.titleMedium) }
+                                .semantics { contentDescription = "Włącz ${mode.name} na czas" },
+                        ) { Text("⏱", style = MaterialTheme.typography.titleMedium) }
                     }
-                },
-                onClick = {
-                    onDismiss()
-                    onSelect(mode)
-                },
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                onDismiss()
+                                onManage(mode)
+                            }
+                            .semantics { contentDescription = "Ustawienia trybu ${mode.name}" },
+                    ) { Text("⋮", style = MaterialTheme.typography.titleMedium) }
+                    Spacer(Modifier.width(4.dp))
+                }
+            }
+        }
+        if (onReorder != null && modes.size > 1) {
+            Text(
+                "Przytrzymaj tryb i przesuń, aby zmienić kolejność",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
             )
         }
         DropdownMenuItem(

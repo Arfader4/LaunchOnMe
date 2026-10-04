@@ -1,6 +1,6 @@
 # LaunchOnMe
 
-**Launcher na Androida, który zmienia się razem z sytuacją.** Zamiast przewijanych stron ekranu głównego masz *tryby* — Praca, Dom, Podróż, Studia, Trening albo własne. Każdy tryb ma swoją kartę z widżetami i aplikacjami, swoje „Pod ręką” (bilety, faktury, notatki), swoje ustawienia telefonu, tapetę i blokady aplikacji. Launcher sam podpowiada — albo sam włącza — tryb, który pasuje do chwili.
+**Launcher na Androida, który zmienia się razem z sytuacją.** Zamiast przewijanych stron ekranu głównego masz *tryby* — Praca, Dom, Podróż, Studia, Trening albo własne. Każdy tryb ma swoją kartę z widżetami i aplikacjami, swoje OnHand (bilety, faktury, notatki), swoje ustawienia telefonu, tapetę i blokady aplikacji. Launcher sam podpowiada — albo sam włącza — tryb, który pasuje do chwili.
 
 *An Android launcher built around context modes instead of home-screen pages. Kotlin + Jetpack Compose, learning & portfolio project.*
 
@@ -10,7 +10,7 @@
 
 **Tryby i karta trybu**
 - Swobodny układ na siatce 8×12: przeciąganie, zmiana rozmiaru, usuwanie; przeciąganie ikon z szuflady prosto na kartę i do folderów.
-- Widżety systemowe (AppWidgetHost) i 14 własnych: *W skrócie* (godzina, data, wydarzenie, pogoda, budzik — każda część otwiera inną aplikację), Dziś, Odliczanie, Lista, Szybkie przełączniki, Ulubione kontakty, Zegar, Pogoda (Open-Meteo), Dwa zegary, Notatka, Pod ręką, Folder, Tarcza trybów, Naklejka z akcją po dotknięciu.
+- Widżety systemowe (AppWidgetHost) i 14 własnych: *W skrócie* (godzina, data, wydarzenie, pogoda, budzik — każda część otwiera inną aplikację), Dziś, Odliczanie, Lista, Szybkie przełączniki, Ulubione kontakty, Zegar, Pogoda (Open-Meteo), Dwa zegary, Notatka, OnHand, Folder, Tarcza trybów, Naklejka z akcją po dotknięciu.
 - Szablony trybów i krótki kreator pierwszego uruchomienia.
 
 **Kontekst**
@@ -24,7 +24,7 @@
 - Blokowanie i ukrywanie aplikacji per tryb (miękka blokada z 5 s na namysł), zaznaczanie grupami (społecznościowe, gry, wideo…), szablon blokad dla nowych trybów.
 
 **Reszta**
-- „Pod ręką”: pliki, linki i notatki przypięte do trybu, także z systemowego „Udostępnij”.
+- OnHand: pliki, linki i notatki przypięte do trybu, także z systemowego „Udostępnij”.
 - Kafelek w szybkich ustawieniach, skróty „Włącz tryb …” (np. dla procedur Samsunga), kropki powiadomień.
 - Eksport i import całej konfiguracji do JSON, obsługa leworęcznych.
 

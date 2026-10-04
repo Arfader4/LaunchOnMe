@@ -149,7 +149,7 @@ private fun WelcomeStep() {
         )
         Spacer(Modifier.height(8.dp))
         Feature("Tryby", "Praca, Dom, Podróż… Każdy ma własną kartę z aplikacjami i widżetami.")
-        Feature("Pod ręką", "Bilety, faktury i notatki przypięte do trybu, zawsze na wierzchu.")
+        Feature("OnHand", "Bilety, faktury i notatki przypięte do trybu, zawsze na wierzchu.")
         Feature("Podpowiedzi", "Launcher sam zaproponuje tryb o właściwej porze albo przed podróżą z kalendarza.")
     }
 }

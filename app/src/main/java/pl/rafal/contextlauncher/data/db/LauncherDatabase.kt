@@ -64,7 +64,7 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
-// Wersja 4: nowa tabela "Pod ręką". Room po migracji porównuje schemat z encją,
+// Wersja 4: nowa tabela OnHand. Room po migracji porównuje schemat z encją,
 // więc kolumny, typy i NOT NULL muszą dokładnie odpowiadać PinnedItemEntity.
 private val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {

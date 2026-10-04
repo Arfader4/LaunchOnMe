@@ -30,12 +30,15 @@ interface ModeDao {
     @Query("UPDATE modes SET settings = :settings WHERE id = :id")
     suspend fun updateSettings(id: Long, settings: String?)
 
+    @Query("UPDATE modes SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun updateSortOrder(id: Long, sortOrder: Int)
+
     // Jednorazowy odczyt (dla kafelka w szybkich ustawieniach, który nie obserwuje zmian).
     @Query("SELECT * FROM modes ORDER BY sortOrder, id")
     suspend fun getAll(): List<ModeEntity>
 
     @Query("DELETE FROM modes WHERE id = :id")
-    suspend fun delete(id: Long) // elementy karty, Pod ręką i reguły znikną kaskadowo
+    suspend fun delete(id: Long) // elementy karty, OnHand i reguły znikną kaskadowo
 
     @Query("DELETE FROM modes")
     suspend fun deleteAll()

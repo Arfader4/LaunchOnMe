@@ -235,6 +235,31 @@ private fun ArcContent(state: ModeArcState, modes: List<ModeEntity>, activeId: L
                     size = androidx.compose.ui.geometry.Size(radiusPx * 2, radiusPx * 2),
                     style = Stroke(width = 2.dp.toPx()),
                 )
+                // Strzałki na końcach łuku: w tę stronę są jeszcze tryby (palec przy końcu przewija łuk).
+                val extra = (modes.size - VISIBLE).coerceAtLeast(0).toFloat()
+                if (extra > 0f) {
+                    val arrowR = radiusPx + ArcBadge.toPx() * 0.62f // na zewnątrz toru, nie pod znaczkami
+                    fun arrow(slot: Float, forward: Boolean) {
+                        val deg = if (state.opensLeft) 180f + 90f * slot else 360f - 90f * slot
+                        val a = Math.toRadians(deg.toDouble())
+                        val p = c + Offset(cos(a).toFloat(), sin(a).toFloat()) * arrowR
+                        // Styczna w stronę rosnącego "slot" (kierunek przewijania łuku) i normalna (od środka).
+                        val sign = (if (state.opensLeft) 1f else -1f) * (if (forward) 1f else -1f)
+                        val t = Offset(-sin(a).toFloat(), cos(a).toFloat()) * sign
+                        val n = Offset(cos(a).toFloat(), sin(a).toFloat())
+                        val tip = p + t * 6.dp.toPx()
+                        val base = p - t * 4.dp.toPx()
+                        val path = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(tip.x, tip.y)
+                            lineTo(base.x + n.x * 5.dp.toPx(), base.y + n.y * 5.dp.toPx())
+                            lineTo(base.x - n.x * 5.dp.toPx(), base.y - n.y * 5.dp.toPx())
+                            close()
+                        }
+                        drawPath(path, glow.copy(alpha = 0.85f))
+                    }
+                    if (state.scroll < extra - 0.05f) arrow(1.04f, forward = true)
+                    if (state.scroll > 0.05f) arrow(-0.04f, forward = false)
+                }
                 // Wskaźnik kierunku palca.
                 if (state.active) {
                     val deg = if (state.opensLeft) 180f + 90f * state.t else 360f - 90f * state.t
@@ -246,7 +271,7 @@ private fun ArcContent(state: ModeArcState, modes: List<ModeEntity>, activeId: L
             for (i in modes.indices) {
                 val mode = modes[i]
                 val slot = slotOf(i, modes.size, state.scroll)
-                if (slot >= -0.25f && slot <= 1.25f) { // poza łukiem (przewinięte) — nie rysujemy
+                if (slot >= -0.39f && slot <= 1.39f) { // dalej poza łukiem (przewinięte) — nie rysujemy
                 key(mode.id) { // stan animacji (powiększenie wybranego) należy do trybu, nie do pozycji w pętli
                 // Wachlarz: znaczek zaczyna na początku łuku, blisko klawisza, i rozjeżdża się na swoje miejsce.
                 val delay = slot.coerceIn(0f, 1f) * 0.45f
@@ -261,18 +286,20 @@ private fun ArcContent(state: ModeArcState, modes: List<ModeEntity>, activeId: L
                 val selScale by androidx.compose.animation.core.animateFloatAsState(
                     if (isSel) 1.25f else 1f, Motion.press(), label = "wybrany tryb",
                 )
+                // Sąsiad tuż za końcem łuku "wystaje" przygaszony i mniejszy — widać, że dalej są kolejne tryby.
                 val fade = when {
-                    slot < 0f -> 1f + slot * 4f  // wyjeżdża za początek łuku
-                    slot > 1f -> 1f - (slot - 1f) * 4f
+                    slot < 0f -> 1f + slot * 2.6f
+                    slot > 1f -> 1f - (slot - 1f) * 2.6f
                     else -> 1f
                 }.coerceIn(0f, 1f)
+                val peekScale = 0.72f + 0.28f * fade
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
                         .graphicsLayer {
                             alpha = fade * e
-                            val s = selScale * (0.6f + 0.4f * e)
+                            val s = selScale * (0.6f + 0.4f * e) * peekScale
                             scaleX = s
                             scaleY = s
                         }

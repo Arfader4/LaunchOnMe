@@ -37,7 +37,12 @@ import androidx.compose.ui.unit.dp
 // Wybór dowolnego koloru: barwa (koło kolorów rozwinięte w pasek), nasycenie, jasność + kod HEX.
 // HSV to ten sam model co w Paint/Photoshopie: łatwiej "dojść" do koloru niż suwakami R, G, B.
 @Composable
-fun ColorPickerDialog(initial: Long?, onPick: (Long) -> Unit, onDismiss: () -> Unit) {
+fun ColorPickerDialog(
+    initial: Long?,
+    onPick: (Long) -> Unit,
+    onDismiss: () -> Unit,
+    badgePreview: Boolean = false, // kolor trybu: obok podgląd, jak wyjdzie na znaczku w tym motywie
+) {
     val start = remember {
         FloatArray(3).also { android.graphics.Color.colorToHSV((initial ?: 0xFF4DF5CD).toInt(), it) }
     }
@@ -61,6 +66,17 @@ fun ColorPickerDialog(initial: Long?, onPick: (Long) -> Unit, onDismiss: () -> U
                             .background(Color(argb))
                             .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
                     )
+                    if (badgePreview) {
+                        Spacer(Modifier.width(8.dp))
+                        val dark = isThemeDark()
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(LocalIconShape.current.shape(48.dp))
+                                .background(modeBadgeColor(argb.toLong() and 0xFFFFFFFFL, dark)),
+                        ) { Text("✓", color = modeBadgeSymbol(dark), style = MaterialTheme.typography.titleMedium) }
+                    }
                     Spacer(Modifier.width(16.dp))
                     OutlinedTextField(
                         value = hex,

@@ -27,7 +27,7 @@ import pl.rafal.contextlauncher.ui.theme.ThemeMode
 // biblioteka i tablice StickOnMe. Ścieżki plików w JSON-ie zapisujemy względnie ("@FILES@/…"), bo na innym
 // telefonie (albo profilu) folder aplikacji może się nazywać inaczej.
 // Nigdy nie przenosimy: widżetów innych aplikacji (ich identyfikatory działają tylko na jednym telefonie),
-// plików z "Pod ręką" (to tylko odnośniki) i statystyk uruchomień.
+// plików z OnHand (to tylko odnośniki) i statystyk uruchomień.
 object Backup {
     private const val VERSION = 2          // 2 = naklejki, tapety i układy trybów (czytamy też 1)
     private const val FILES = "@FILES@"   // znacznik folderu aplikacji w ścieżkach
@@ -195,7 +195,7 @@ object Backup {
         val modeIds = mutableMapOf<Long, Long>()
 
         db.withTransaction {
-            db.modeDao().deleteAll()   // kaskadowo: karty, Pod ręką, reguły, statystyki
+            db.modeDao().deleteAll()   // kaskadowo: karty, OnHand, reguły, statystyki
             db.folderDao().deleteAll() // kaskadowo: aplikacje w folderach
 
             json.getJSONArray("modes").objects().forEach { o ->

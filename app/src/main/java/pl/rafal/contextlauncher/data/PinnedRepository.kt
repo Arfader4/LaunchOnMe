@@ -14,7 +14,7 @@ import pl.rafal.contextlauncher.data.db.PinnedItemEntity
 import java.io.File
 import java.util.UUID
 
-// "Pod ręką": przypinanie plików, linków i notatek do trybu.
+// OnHand: przypinanie plików, linków i notatek do trybu.
 // Pliki kopiujemy do prywatnej pamięci aplikacji, bo dostęp do cudzego pliku z "Udostępnij"
 // jest tylko chwilowy. Kopia działa po restarcie telefonu i po usunięciu oryginału.
 class PinnedRepository(private val context: Context) {

@@ -850,6 +850,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     // --- Zarządzanie trybami ---
 
+    // Nowa kolejność trybów (przeciąganie na liście przycisku ON) — jedna transakcja, lista odświeży się sama.
+    fun reorderModes(ordered: List<ModeEntity>) {
+        viewModelScope.launch {
+            database.withTransaction {
+                ordered.forEachIndexed { index, mode -> modeDao.updateSortOrder(mode.id, index) }
+            }
+        }
+    }
+
     fun renameMode(mode: ModeEntity, name: String) {
         viewModelScope.launch { modeDao.rename(mode.id, name.trim()) }
     }
@@ -1038,9 +1047,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { cardItemDao.updateConfig(widget.item.id, config) }
     }
 
-    // --- Pod ręką ---
+    // --- OnHand ---
 
-    // Elementy "Pod ręką" aktywnego trybu (aktywne i zarchiwizowane; UI je rozdziela).
+    // Elementy OnHand aktywnego trybu (aktywne i zarchiwizowane; UI je rozdziela).
     val pinnedItems: StateFlow<List<PinnedItemEntity>> =
         activeMode
             .flatMapLatest { mode -> if (mode == null) flowOf(emptyList()) else pinned.observe(mode.id) }

@@ -301,7 +301,7 @@ fun NoteWidgetDialog(initialText: String, onSave: (String) -> Unit, onDismiss: (
     )
 }
 
-// --- Pod ręką jako widżet ---
+// --- OnHand jako widżet ---
 
 @Composable
 fun HandyWidget(
@@ -310,19 +310,19 @@ fun HandyWidget(
     onOpenAll: (() -> Unit)?,
 ) {
   AdaptiveWidget { size, _, _ ->
-    // Mały: spinacz z liczbą przypiętych rzeczy; dotknięcie otwiera całe "Pod ręką".
+    // Mały: spinacz z liczbą przypiętych rzeczy; dotknięcie otwiera całe OnHand.
     if (size == WidgetSize.TINY || size == WidgetSize.SMALL) {
         CompactTile(
             icon = R.drawable.ic_w_pin,
             onClick = onOpenAll,
-            label = if (size == WidgetSize.SMALL) "Pod ręką" else null,
+            label = if (size == WidgetSize.SMALL) "OnHand" else null,
             badge = items.size.takeIf { it > 0 }?.toString(),
         )
         return@AdaptiveWidget
     }
     WidgetSurface(onClick = onOpenAll) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Pod ręką", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("OnHand", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Text("${items.size}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
         }
         Spacer(Modifier.height(6.dp))
@@ -397,22 +397,50 @@ fun FolderWidget(
     AdaptiveWidget { measured, w, h ->
         // 4×2 ma ok. 90–100 dp wysokości — dla folderu to jeszcze pasek, nie siatka.
         val size = if (measured == WidgetSize.LARGE && h < 110.dp && w > h * 1.6f) WidgetSize.STRIP else measured
-        when (size) {
-            WidgetSize.TINY, WidgetSize.SMALL -> FolderAsIcon(folder, preview, showName, w, h, open, dot, grid)
+        // Wąski i wysoki (1×n): znaczek u góry, a pod nim aplikacje w jednej kolumnie.
+        val tall = size == WidgetSize.LARGE && w < 125.dp && h > w * 1.6f
+        // Marginesy WidgetSurface: mały widżet 2+8 w poziomie / 2+4 w pionie z każdej strony, duży 4+14.
+        val smallPad = h < 96.dp || w < 96.dp
+        val padH = if (smallPad) 20.dp else 36.dp
+        val padV = if (smallPad) 12.dp else 36.dp
+        if (tall) {
+            WidgetSurface(onClick = open) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxSize()) {
+                    val badge = (w - padH).coerceIn(20.dp, 44.dp)
+                    Box {
+                        FolderBadge(folder, preview, badge, grid = grid, subfolders = subfolders)
+                        if (dot) NotificationDot(Modifier.align(Alignment.TopEnd), badge * 0.22f)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    val room = h - padV - badge - 6.dp
+                    val slots = (room / (badge * 0.85f)).toInt().coerceAtLeast(0)
+                    val entries: List<Any> = subfolders + apps
+                    if (slots > 0 && entries.isNotEmpty()) {
+                        val slot = minOf(room / slots, w - padH)
+                        entries.take(slots).forEach { entry -> FolderEntryIcon(entry, slot, onLaunch, onOpenFolder) }
+                    }
+                }
+            }
+        } else when (size) {
+            WidgetSize.TINY, WidgetSize.SMALL -> FolderAsIcon(folder, preview, showName, w, h, open, dot, grid, subfolders)
             WidgetSize.STRIP -> WidgetSurface(onClick = open) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
-                    val badge = (h - 12.dp).coerceIn(20.dp, 44.dp)
+                    val badge = (h - padV).coerceIn(20.dp, 44.dp)
                     Box {
-                        FolderBadge(folder, preview, badge, grid = grid)
+                        FolderBadge(folder, preview, badge, grid = grid, subfolders = subfolders)
                         if (dot) NotificationDot(Modifier.align(Alignment.TopEnd), badge * 0.22f)
                     }
                     Spacer(Modifier.width(8.dp))
-                    // Tyle ikon, ile zmieści się obok symbolu; gdy nie ma aplikacji — sama nazwa.
-                    val slots = ((w - badge - 32.dp) / badge).toInt().coerceAtLeast(0)
-                    if (apps.isEmpty() || slots == 0) {
+                    // Miejsce na ikony: szerokość minus marginesy widżetu (2+8 z każdej strony), znaczek i odstęp.
+                    // Ikony mogą być ok. 15% mniejsze od znaczka — mieści się o jedną więcej, a i tak wypełniają rząd.
+                    val room = w - padH - badge - 8.dp
+                    val slots = (room / (badge * 0.85f)).toInt().coerceAtLeast(0)
+                    val entries: List<Any> = subfolders + apps
+                    if (entries.isEmpty() || slots == 0) {
                         FitText(folder.name, modifier = Modifier.weight(1f), maxSize = 16.sp)
                     } else {
-                        apps.take(slots).forEach { app -> AppIcon(app, badge, onLaunch) }
+                        val slot = room / slots
+                        entries.take(slots).forEach { entry -> FolderEntryIcon(entry, slot, onLaunch, onOpenFolder) }
                     }
                 }
             }
@@ -481,6 +509,26 @@ fun FolderWidget(
     }
 }
 
+// Pozycja w pasku folderu: aplikacja albo podfolder (miniatura, dotknięcie go otwiera).
+@Composable
+private fun FolderEntryIcon(entry: Any, slot: Dp, onLaunch: ((AppInfo) -> Unit)?, onOpenFolder: ((Long) -> Unit)?) {
+    if (entry is AppInfo) {
+        AppIcon(entry, slot, onLaunch)
+    } else {
+        val pair = entry as Pair<*, *>
+        val sub = pair.first as FolderEntity
+        @Suppress("UNCHECKED_CAST")
+        val subPreview = pair.second as List<AppInfo>
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(slot)
+                .clip(RoundedCornerShape(12.dp))
+                .then(if (onOpenFolder != null) Modifier.clickable { onOpenFolder(sub.id) } else Modifier),
+        ) { FolderBadge(sub, subPreview, slot * 0.8f) }
+    }
+}
+
 // Folder w rozmiarze ikony: bez tła widżetu, jak aplikacja na karcie.
 @Composable
 private fun FolderAsIcon(
@@ -492,6 +540,7 @@ private fun FolderAsIcon(
     onClick: (() -> Unit)?,
     dot: Boolean,
     grid: Int,
+    subfolders: List<Pair<FolderEntity, List<AppInfo>>> = emptyList(),
 ) {
     // Te same wymiary co ikona aplikacji (AppTile) — folder i aplikacje obok stoją w jednej linii.
     val appLabels = LocalShowAppLabels.current
@@ -506,7 +555,7 @@ private fun FolderAsIcon(
             .padding(vertical = metrics.pad),
     ) {
         Box {
-            FolderBadge(folder, preview, metrics.icon, grid = grid)
+            FolderBadge(folder, preview, metrics.icon, grid = grid, subfolders = subfolders)
             if (dot) NotificationDot(Modifier.align(Alignment.TopEnd), metrics.icon * 0.22f)
         }
         when {

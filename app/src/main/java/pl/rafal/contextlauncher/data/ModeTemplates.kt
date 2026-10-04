@@ -88,7 +88,7 @@ object ModeTemplates {
         name = "Podróż",
         icon = "travel",
         color = 0xFFF0A844,
-        description = "Mapy, bilety i noclegi, dwa zegary, odliczanie do wyjazdu, lista do spakowania i Pod ręką. Podpowiadany, gdy w kalendarzu jest lot albo pociąg.",
+        description = "Mapy, bilety i noclegi, dwa zegary, odliczanie do wyjazdu, lista do spakowania i OnHand. Podpowiadany, gdy w kalendarzu jest lot albo pociąg.",
         appHints = listOf(
             "com.google.android.apps.maps", "booking", "intercity", "translate", "uber", "bolt", "airbnb", "weather",
         ),

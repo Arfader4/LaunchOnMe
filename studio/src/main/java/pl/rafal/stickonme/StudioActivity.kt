@@ -126,6 +126,7 @@ private object DirectLoadingKey
 class StudioActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        StudioText.init(this) // teksty spoza Compose (na wypadek startu bez klasy aplikacji launchera)
         enableEdgeToEdge()
         val pickMode = intent.getBooleanExtra(StickOnMe.EXTRA_PICK, false)
         val wallpaperMode = intent.getBooleanExtra(StickOnMe.EXTRA_WALLPAPER, false)

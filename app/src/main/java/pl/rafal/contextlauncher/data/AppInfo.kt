@@ -85,7 +85,7 @@ data class CardWidget(override val item: CardItemEntity, val appWidgetId: Int) :
 enum class CustomWidgetKind(val title: String, val description: String, val w: Int, val h: Int) {
     DUAL_CLOCK("Dwa zegary", "Czas tutaj i w drugiej strefie", 4, 3),
     MODE_NOTE("Notatka trybu", "Krótki tekst widoczny na karcie", 4, 3),
-    HANDY("Pod ręką", "Najważniejsze przypięte rzeczy trybu", 8, 3),
+    HANDY("OnHand", "Najważniejsze przypięte rzeczy trybu", 8, 3),
     FOLDER("Folder z szuflady", "Folder z zakładki Foldery (z podfolderami), wspólny dla wszystkich trybów", 4, 4),
     STICKER("Naklejka", "Obrazek bez tła, np. naklejka albo zdjęcie", 3, 3),
     CLOCK("Zegar", "Duża godzina i data", 4, 4),

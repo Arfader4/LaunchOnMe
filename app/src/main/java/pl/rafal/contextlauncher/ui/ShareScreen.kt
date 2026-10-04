@@ -70,7 +70,7 @@ fun ShareScreen(
     onPin: (mode: ModeEntity, title: String, asSticker: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
-    // Obrazek można przypiąć do "Pod ręką" albo położyć na karcie jako naklejkę.
+    // Obrazek można przypiąć do OnHand albo położyć na karcie jako naklejkę.
     val canBeSticker = content is SharedContent.File && content.isImage
     var asSticker by remember { mutableStateOf(false) }
     val modes by modesFlow.collectAsState(initial = emptyList())
@@ -97,7 +97,7 @@ fun ShareScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
-            Text("Przypnij do Pod ręką", style = MaterialTheme.typography.titleLarge)
+            Text("Przypnij do OnHand", style = MaterialTheme.typography.titleLarge)
             Text(
                 content.description,
                 style = MaterialTheme.typography.bodyMedium,
@@ -107,7 +107,7 @@ fun ShareScreen(
             )
             if (canBeSticker) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = !asSticker, onClick = { asSticker = false }, label = { Text("Pod ręką") })
+                    FilterChip(selected = !asSticker, onClick = { asSticker = false }, label = { Text("OnHand") })
                     FilterChip(selected = asSticker, onClick = { asSticker = true }, label = { Text("Naklejka na kartę") })
                 }
             }

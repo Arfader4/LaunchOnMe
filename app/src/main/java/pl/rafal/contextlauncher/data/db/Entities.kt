@@ -59,7 +59,7 @@ data class CardItemEntity(
     }
 }
 
-// Element "Pod ręką": plik, link albo notatka przypięta do trybu.
+// Element OnHand: plik, link albo notatka przypięta do trybu.
 @Entity(
     tableName = "pinned_items",
     foreignKeys = [

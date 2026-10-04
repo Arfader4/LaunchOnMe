@@ -8,7 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -72,7 +77,7 @@ fun HandySheet(
         ) {
             item {
                 Text(
-                    "Pod ręką · $modeName",
+                    "OnHand · $modeName",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
                 )
@@ -245,25 +250,64 @@ fun NoteDialog(
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var text by remember { mutableStateOf(initialText) }
-    AlertDialog(
+    // Własne okno zamiast AlertDialog: edge-to-edge + imePadding, więc okno przesuwa się nad klawiaturę,
+    // a długa treść przewija się w środku (AlertDialog bywał częściowo zasłonięty przez klawiaturę).
+    androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Notatka") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Tytuł (opcjonalnie)") }, singleLine = true)
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    label = { Text("Treść") },
-                    minLines = 4,
-                    modifier = Modifier.fillMaxWidth(),
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
                 )
+                .systemBarsPadding()
+                .imePadding()
+                .padding(16.dp),
+        ) {
+            androidx.compose.material3.Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // Dotknięcie wewnątrz okna nie może go zamykać.
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                    ) {},
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    Text("Notatka", style = MaterialTheme.typography.headlineSmall)
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("Tytuł (opcjonalnie)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        label = { Text("Treść") },
+                        minLines = 4,
+                        maxLines = 14,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                        TextButton(onClick = onDismiss) { Text("Anuluj") }
+                        TextButton(enabled = text.isNotBlank(), onClick = { onConfirm(title, text) }) { Text(confirmLabel) }
+                    }
+                }
             }
-        },
-        confirmButton = {
-            TextButton(enabled = text.isNotBlank(), onClick = { onConfirm(title, text) }) { Text(confirmLabel) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
-    )
+        }
+    }
 }

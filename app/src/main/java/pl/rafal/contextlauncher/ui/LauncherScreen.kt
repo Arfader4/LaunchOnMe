@@ -263,7 +263,7 @@ private fun LauncherContent(
     var drawerFocus by remember { mutableStateOf(false) }            // true = szuflada od razu z klawiaturą
     var newModeOpen by remember { mutableStateOf(false) }
     var widgetPickerOpen by remember { mutableStateOf(false) }
-    // Pod ręką
+    // OnHand
     var handyOpen by remember { mutableStateOf(false) }
     var linkDialogOpen by remember { mutableStateOf(false) }
     var newNoteOpen by remember { mutableStateOf(false) }
@@ -621,7 +621,7 @@ private fun LauncherContent(
             add(MenuAction("Zakończ tryb na czas") { viewModel.endTimedNow() })
         }
         // Widżety, układ i foldery są teraz pod przytrzymaniem karty (edycja) i w szufladzie — tu zostaje reszta.
-        add(MenuAction("Pod ręką") { handyOpen = true })
+        add(MenuAction("OnHand") { handyOpen = true })
         add(MenuAction("Ustawienia") { settingsOpen = true })
     }
     val modeMenuHeader = activeMode?.let { mode ->
@@ -730,6 +730,7 @@ private fun LauncherContent(
                     extraActions = cardActions,
                     menuHeader = modeMenuHeader,
                     badge = manualTasks.isNotEmpty(),
+                    onReorder = viewModel::reorderModes,
                 )
             },
             leftHanded = leftHanded,
@@ -894,6 +895,7 @@ private fun LauncherContent(
                                 onTimed = { timedModeFor = it },
                                 extraActions = cardActions,
                                 header = modeMenuHeader,
+                                onReorder = viewModel::reorderModes,
                             )
                         },
                     )
@@ -1299,7 +1301,7 @@ private fun LauncherContent(
                 onDismissRequest = { deletingMode = false },
                 containerColor = MaterialTheme.colorScheme.surface,
                 title = { Text("Usunąć tryb ${mode.name}?") },
-                text = { Text("Znikną jego karta, Pod ręką i reguły. Aplikacje i foldery zostaną.") },
+                text = { Text("Znikną jego karta, OnHand i reguły. Aplikacje i foldery zostaną.") },
                 confirmButton = {
                     TextButton(onClick = {
                         viewModel.deleteMode(mode)

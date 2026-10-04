@@ -161,3 +161,42 @@ naklejkę (obrót, akcje po dotknięciu), a cała obróbka jest w Studiu.
       wypychani sąsiedzi przesuwają się sprężyście. Stos: głębia (odjeżdżający widżet maleje i gaśnie).
       Łuk trybów rozkłada się jak wachlarz (znaczki wysuwają się po kolei). StickOnMe: przejścia ekranów
       (biblioteka ↔ edytor ↔ tablica), miniatury falą, zapisana naklejka „odkleja się”, cofanie z podglądem (Android 14+).
+
+## Runda uwag z 04.10 (po kilku dniach używania)
+Kolejność ustalona 04.10: paczka 1 → paczka 2 → tłumaczenie → duże tematy (każdy najlepiej w osobnym czacie, kolejno).
+
+### Paczka 1 — szybkie poprawki
+- [x] „Pod ręką” → **OnHand** (nazwa w całej aplikacji).
+- [x] Miniatura zagnieżdżonego folderu w widżecie folderu (ikona, pasek, miniatura 2×2/3×3).
+- [x] Okno notatki OnHand nie chowa się pod klawiaturą (własne okno z imePadding, treść przewijana).
+- [x] Widżet folderu 1×n mieści jedną aplikację więcej; nowy układ n×1 (wąski i wysoki: znaczek + kolumna ikon).
+- [x] Łuk trybów: przy >5 trybach widać przygaszony kawałek kolejnego znaczka i strzałki na końcach łuku.
+- [x] Kolor ikony trybu: znaczek mniej przekształca kolor (kontrast 3:1 zamiast 5:1), własny kolor widać;
+      w oknie „Własny kolor” podgląd znaczka.
+- [x] Lista trybów (dotknięcie klawisza ON): przytrzymaj tryb i przesuń, żeby zmienić kolejność.
+
+### Paczka 2 — klawisz ON i wyszukiwarka
+- [ ] Klawisz ON: bardziej organiczny wygląd, animacja; lista trybów jako owalne „klawisze”, OnHand i Ustawienia
+      jako mniejsze przyciski pod spodem.
+- [ ] Przytrzymanie klawisza: zamiast etykiety pod kciukiem — przygaszona karta, duży znaczek i nazwa trybu na środku.
+- [ ] Pasek wyszukiwania w trybie czuwania: przewija ostatnio używane aplikacje (np. z ostatniej godziny),
+      nieprzeczytane powiadomienia, propozycję zmiany trybu (zamiast okienka nad menu), najbliższe wydarzenie,
+      budzik, niską baterię. Dotknięcie lupy = klawiatura i wyszukiwanie.
+
+### Paczka 3 — tłumaczenie
+- [ ] Wszystkie teksty do zasobów (res/values = angielski, res/values-pl = polski). Fundament gotowy:
+      `LaunchOnMeApp`, `AppText`, `StudioText`. Kolejne języki potem = po jednym pliku.
+
+### Duże tematy (osobne czaty, kolejno)
+- [ ] OnHand jako pełne notatki: przyjmowanie z „Udostępnij” (Keep, Samsung Notes…), wysyłanie do nich, eksport do pliku.
+      (Keep ma API tylko dla firmowych kont Workspace, Samsung Notes nie ma API — synchronizacji nie robimy.)
+- [ ] Motywy (aplikacja jak StickOnMe): High Contrast (czarne/białe tło ikon + kolorowy symbol), Luxury (złoto,
+      srebro, miedź, brąz + butelkowa zieleń, purpura…, połysk metalu), Black & White, Vintage, Standard, Night,
+      Własny (+ propozycje: Pastel, AMOLED). Uporządkowana lista kolorów i krótka paleta na motyw. Kolory systemu:
+      Good Lock nie ma API — pośrednio przez tapetę (Android 12+/One UI biorą kolory z tapety).
+- [ ] StickOnMe: wydajność przy wielu zdjęciach (mniejsze kopie robocze, dekodowanie w tle, limit pamięci).
+- [ ] KeepMeOn (oszczędzanie energii): tryb włączany przy słabej baterii, blokada zmiany trybu (odblokowanie odciskiem),
+      najważniejsze aplikacje, bez animacji/tapety/odświeżania widżetów, ciemny motyw; propozycja w samouczku.
+      Systemowego oszczędzania baterii aplikacja sama nie włączy (wymaga uprawnienia nadanego przez adb).
+- [ ] Optymalizacja baterii i procesora w całym launcherze.
+- [ ] Blokada folderów w szufladzie odciskiem palca / PIN-em (systemowy BiometricPrompt).

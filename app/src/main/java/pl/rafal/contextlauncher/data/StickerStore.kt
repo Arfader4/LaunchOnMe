@@ -8,7 +8,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 
-// Naklejki: kopie obrazków w prywatnej pamięci launchera (jak pliki "Pod ręką" — oryginał może zniknąć).
+// Naklejki: kopie obrazków w prywatnej pamięci launchera (jak pliki OnHand — oryginał może zniknąć).
 object StickerStore {
 
     private fun folder(context: Context) = File(context.filesDir, "stickers").apply { mkdirs() }
