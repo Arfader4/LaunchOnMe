@@ -2,4 +2,6 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_onhand_background" />
     <foreground android:drawable="@drawable/ic_onhand_foreground" />
+    <!-- Ikony tematyczne (Android 13+): sam kształt, kolor nadaje system. -->
+    <monochrome android:drawable="@drawable/ic_onhand_monochrome" />
 </adaptive-icon>
