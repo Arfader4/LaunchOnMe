@@ -5,9 +5,6 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -72,7 +69,7 @@ class ThemeSpec(
     private val light: Roles,
     private val dark: Roles,
     palette: List<Long>,
-    val badge: BadgeStyle = BadgeStyle.TINTED,
+    private val badgeStyle: BadgeStyle = BadgeStyle.TINTED,
     val finish: Finish = Finish.FLAT,
     val darkOnly: Boolean = false, // np. AMOLED: zawsze ciemny, przełącznik Jasny/Ciemny go nie zmienia
     val metal: Metal? = null,           // Luxury: metal (akcent, obwódki i symbole znaczków)
@@ -81,15 +78,25 @@ class ThemeSpec(
 ) {
     private val basePalette: List<Long> = sortByHue(palette)
 
+    // Styl znaczków; motyw własny ma go w swojej definicji (do zmiany w kreatorze).
+    val badge: BadgeStyle
+        get() = if (family == ThemeFamily.CUSTOM) CustomThemes.def(id)?.badge ?: badgeStyle else badgeStyle
+
+    // Kolory motywu własnego (z listy CustomThemes); dla pozostałych null.
+    private val customColors: CustomColors?
+        get() = if (family == ThemeFamily.CUSTOM) CustomThemes.def(id)?.colors ?: CustomColors() else null
+
     // Luxury dopisuje metal i bazę, np. "Luxury · Miedź / Granat".
+    // Motyw własny ma swoją nazwę (albo "Własny", gdy bez nazwy).
     val label: String
-        get() = OnThemesText.get(labelRes) + if (metal != null && luxuryBase != null) " · ${metal.label} / ${luxuryBase.label}" else ""
+        get() = if (family == ThemeFamily.CUSTOM) CustomThemes.def(id)?.name?.takeIf { it.isNotBlank() } ?: OnThemesText.get(labelRes)
+        else OnThemesText.get(labelRes) + if (metal != null && luxuryBase != null) " · ${metal.label} / ${luxuryBase.label}" else ""
 
     // Krótka paleta motywu (kolory trybów, akcent). Własny motyw dokłada swój akcent na początek listy.
     // Systemowy bierze kolory z One UI / Material You (SystemColors), gdy są dostępne.
     val palette: List<Long>
         get() = when (family) {
-            ThemeFamily.CUSTOM -> sortByHue((listOf(CustomTheme.colors.accent) + basePalette).distinct())
+            ThemeFamily.CUSTOM -> sortByHue((listOf((customColors ?: CustomColors()).accent) + basePalette).distinct())
             ThemeFamily.SYSTEM -> SystemColors.palette.takeIf { it.isNotEmpty() } ?: basePalette
             else -> basePalette
         }
@@ -97,7 +104,7 @@ class ThemeSpec(
     // Role dla wariantu. Własny motyw jest jeden (bez osobnej wersji jasnej/ciemnej), systemowy pyta Androida,
     // "tylko ciemny" (AMOLED) zawsze daje wersję ciemną.
     fun roles(dark: Boolean): Roles = when {
-        family == ThemeFamily.CUSTOM -> CustomTheme.colors.roles()
+        family == ThemeFamily.CUSTOM -> (customColors ?: CustomColors()).roles()
         family == ThemeFamily.SYSTEM -> SystemColors.roles(dark) ?: if (dark) this.dark else light
         darkOnly -> this.dark
         dark -> this.dark
@@ -189,9 +196,10 @@ data class CustomColors(
 
 internal fun mix(a: Long, b: Long, t: Float): Long = lerp(Color(a), Color(b), t).toArgb().toLong() and 0xFFFFFFFFL
 
-// Globalny stan własnego motywu. mutableStateOf = stan Compose: ekrany, które go czytają, przerysują się same.
+// Pierwszy motyw własny ("CUSTOM") — dla starszego kodu i kopii zapasowej (pole "customTheme").
+// Pozostałe motywy własne: CustomThemes. Zmiana kolorów: ThemeStore.setCustomColors / saveCustom.
 object CustomTheme {
-    var colors by mutableStateOf(CustomColors())
+    val colors: CustomColors get() = CustomThemes.def(CustomThemes.LEGACY_ID)?.colors ?: CustomColors()
 }
 
 // Kolory uporządkowane "po tęczy": najpierw barwne według odcienia (czerwony → żółty → zielony → niebieski → fiolet),

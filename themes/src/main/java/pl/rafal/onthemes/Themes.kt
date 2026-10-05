@@ -32,7 +32,7 @@ object Themes {
         light = Roles(0xFFFFFFFF, 0xFFF4F4F4, 0xFFE6E6E6, 0xFFBDBDBD, 0xFF0A0A0A, 0xFF555555, 0xFF1A1A1A, 0xFFFFFFFF),
         dark = Roles(0xFF0B0B0B, 0xFF171717, 0xFF222222, 0xFF3A3A3A, 0xFFF2F2F2, 0xFFA8A8A8, 0xFFE6E6E6, 0xFF0B0B0B),
         palette = listOf(0xFF1A1A1A, 0xFF3D3D3D, 0xFF666666, 0xFF8F8F8F, 0xFFB8B8B8, 0xFFE0E0E0),
-        badge = BadgeStyle.MONO,
+        badgeStyle = BadgeStyle.MONO,
     )
 
     // Jasne, mało nasycone kolory; ciemna wersja to "pastele nocą" (śliwkowe tło).
@@ -81,18 +81,11 @@ object Themes {
         light = Roles(0xFFFFFFFF, 0xFFFFFFFF, 0xFFF0F0F0, 0xFF7A7A7A, 0xFF000000, 0xFF333333, 0xFF000000, 0xFFFFFFFF),
         dark = Roles(0xFF000000, 0xFF0D0D0D, 0xFF1A1A1A, 0xFF5A5A5A, 0xFFFFFFFF, 0xFFD0D0D0, 0xFFFFFFFF, 0xFF000000),
         palette = listOf(0xFFFF2D55, 0xFFFF9F0A, 0xFFFFD60A, 0xFF30D158, 0xFF00E5FF, 0xFF0A84FF, 0xFFBF5AF2),
-        badge = BadgeStyle.INVERTED, // czarne / białe tło znaczka + kolorowy symbol
+        badgeStyle = BadgeStyle.INVERTED, // czarne / białe tło znaczka + kolorowy symbol
     )
 
-    // Własny motyw z kreatora. Role są tylko zastępcze — prawdziwe kolory bierze z CustomTheme.
-    val CUSTOM = ThemeSpec(
-        id = "CUSTOM",
-        labelRes = R.string.ot_theme_custom,
-        family = ThemeFamily.CUSTOM,
-        light = CustomColors().roles(),
-        dark = CustomColors().roles(),
-        palette = listOf(0xFFEF476F, 0xFFFFD166, 0xFF84CC16, 0xFF4DF5CD, 0xFF118AB2, 0xFFA78BFA),
-    )
+    // Pierwszy motyw własny (dawny jedyny "Własny schemat"). Kolejne: CustomThemes.
+    val CUSTOM: ThemeSpec get() = CustomThemes.spec(CustomThemes.LEGACY_ID)
 
     // Dawniej "ELEGANT" (złoto na butelkowej zieleni). Pozostałe połączenia metal × baza: Luxury.spec(...).
     val LUXURY: ThemeSpec = Luxury.spec(Metal.GOLD, LuxuryBase.BOTTLE)
@@ -100,10 +93,11 @@ object Themes {
     // Kolejność kart: od codziennych, przez wyraziste, do systemowego i własnego.
     // Systemowy tylko na Androidzie 12+ (wcześniej system nie liczy kolorów z tapety).
     private val catalog: List<ThemeSpec> =
-        listOf(STANDARD, NIGHT, AMOLED, HIGH_CONTRAST, BW, VINTAGE, PASTEL, LUXURY, SYSTEM, CUSTOM)
+        listOf(STANDARD, NIGHT, AMOLED, HIGH_CONTRAST, BW, VINTAGE, PASTEL, LUXURY, SYSTEM)
 
+    // Wbudowane + motywy własne (na końcu, w kolejności tworzenia).
     val all: List<ThemeSpec>
-        get() = if (SystemColors.available) catalog else catalog.filter { it.family != ThemeFamily.SYSTEM }
+        get() = (if (SystemColors.available) catalog else catalog.filter { it.family != ThemeFamily.SYSTEM }) + CustomThemes.all
 
     // Stare nazwy schematów z wersji ≤ 1.4 → nowe id. Dzięki temu baza i kopie zapasowe nie wymagają migracji.
     private val ALIASES = mapOf("CONTRAST" to "HIGH_CONTRAST", "ELEGANT" to "LUXURY")
@@ -115,6 +109,8 @@ object Themes {
         val key = normalizeId(id) ?: return null
         // Warianty Luxury nie są osobno na liście — budujemy je z id ("LUXURY:<METAL>:<BAZA>").
         if (key == Luxury.CATALOG_ID || key.startsWith(Luxury.CATALOG_ID + ":")) return Luxury.fromId(key)
+        // Motyw własny tylko, jeśli jeszcze istnieje (usunięty → null → tryb wraca do motywu globalnego).
+        if (CustomThemes.isCustomId(key)) return if (CustomThemes.def(key) != null) CustomThemes.spec(key) else null
         return all.firstOrNull { it.id == key }
     }
 }

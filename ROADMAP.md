@@ -250,7 +250,12 @@ motyw „System” (kolory dynamiczne), „Kopiuj HEX”.
       trybu (mocniej przyciemnione / rozjaśnione), symbol w kolorze metalu, metalowa obwódka z refleksami (też klawisz ON).
       „Połysk w ruchu” (domyślnie wyłączony): wolny refleks na klawiszu ON i dużych znaczkach (`metalSheen`).
       Wybór metalu i bazy w OnThemes pod kartą Luxury; w launcherze karta Luxury pokazuje wybrany wariant.
-- [ ] T4 — aplikacja: galeria, ekran motywu z podglądem na żywo, motyw globalny i per tryb, wiele motywów własnych
-      (kreator przeniesiony do modułu razem z wyborem koloru).
+- [x] T4 — aplikacja: galeria (podgląd bieżącego wyglądu z Twoimi trybami, jasność, karty motywów, tryby),
+      ekran motywu (podgląd launchera na żywo z przełącznikiem jasny/ciemny, paleta, Luxury do przymierzenia,
+      „Ustaw jako globalny”, „Ustaw dla trybów…”, „Duplikuj i edytuj”, edycja/usuwanie własnych), wybór motywu
+      dla trybu po dotknięciu trybu (też z okna trybu w launcherze: „Więcej w OnThemes”). Wiele motywów własnych
+      (`CustomThemes`, JSON `custom_themes`; pierwszy ma stare id `CUSTOM`, kolejne `custom:N`) z nazwą i stylem
+      znaczków. Kreator przeniesiony do modułu (własny wybór koloru HSV + HEX); z launchera usunięty `ThemeCreator.kt`,
+      Ustawienia → „Kreator…” otwiera kreator w OnThemes.
 - [ ] T5 — kolory systemu (tapeta z palety, HEX), kopia zapasowa, wersja 1.5.0 + tag, checklista testów całości.
 - [ ] (opcjonalnie T6) barwione ikony aplikacji z warstwy monochromatycznej (Android 13+).

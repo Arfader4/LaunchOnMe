@@ -241,21 +241,12 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     PaletteRow(selected = defaultPalette, onSelect = { it?.let(viewModel::setDefaultPalette) }, allowDefault = false)
-                    var creatorOpen by remember { mutableStateOf(false) }
-                    TextButton(onClick = { creatorOpen = true }) { Text(stringResource(R.string.set_theme_creator)) }
-                    // Motywy mają teraz własną aplikację (moduł :themes, ikona w szufladzie).
+                    // Kreator i wszystkie motywy mieszkają w OnThemes (moduł :themes, ikona w szufladzie).
+                    TextButton(onClick = { context.startActivity(pl.rafal.onthemes.OnThemes.editIntent(context)) }) {
+                        Text(stringResource(R.string.set_theme_creator))
+                    }
                     TextButton(onClick = { context.startActivity(pl.rafal.onthemes.OnThemes.openIntent(context)) }) {
                         Text(stringResource(R.string.set_open_onthemes))
-                    }
-                    if (creatorOpen) {
-                        ThemeCreatorDialog(
-                            initial = pl.rafal.onthemes.CustomTheme.colors,
-                            onSave = {
-                                viewModel.saveCustomTheme(it)
-                                creatorOpen = false
-                            },
-                            onDismiss = { creatorOpen = false },
-                        )
                     }
                 }
             }

@@ -193,6 +193,11 @@ fun ModeSettingsSheet(
 
             Text(stringResource(R.string.msug_color_scheme), style = MaterialTheme.typography.titleSmall)
             PaletteRow(selected = palette, onSelect = { onAppearanceChange(mode.icon, mode.color, it, mode.accent) }, allowDefault = true)
+            // Pełny wybór (warianty Luxury, motywy własne, podgląd na żywo) — OnThemes, od razu dla tego trybu.
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            TextButton(onClick = { ctx.startActivity(pl.rafal.onthemes.OnThemes.openIntent(ctx, mode.id)) }) {
+                Text(stringResource(R.string.msug_more_in_onthemes))
+            }
 
             Text(stringResource(R.string.msug_accent_color), style = MaterialTheme.typography.titleSmall)
             ThemeColorSwatches(

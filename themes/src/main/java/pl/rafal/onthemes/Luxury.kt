@@ -87,7 +87,7 @@ object Luxury {
             dark = dark,
             // cztery metale + klejnoty baz (butelkowa zieleń, purpura, granat, bordo) — po odcieniu
             palette = Metal.entries.map { it.main } + LuxuryBase.entries.filter { it != LuxuryBase.BLACK }.map { it.jewel },
-            badge = BadgeStyle.METAL,
+            badgeStyle = BadgeStyle.METAL,
             finish = Finish.METAL,
             metal = metal,
             luxuryBase = base,

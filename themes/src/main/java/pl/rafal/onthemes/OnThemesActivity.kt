@@ -1,75 +1,63 @@
 package pl.rafal.onthemes
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 // OnThemes — aplikacja motywów z własną ikoną w szufladzie (ten sam APK co launcher).
-// T1: galeria motywów (wybór motywu globalnego), jasność i podgląd, jakie motywy mają tryby.
-// Podgląd na żywo, motyw per tryb i kreator przychodzą w T4.
+// Ekrany: galeria (podgląd, jasność, motywy, tryby) → ekran motywu (podgląd na żywo, globalny / dla trybów,
+// duplikuj) → kreator motywu własnego. Nawigacja to prosty stos ekranów w stanie Compose (bez biblioteki).
 class OnThemesActivity : ComponentActivity() {
+    // Prośba z launchera: otwórz wybór motywu dla trybu albo kreator (extras w intencji).
+    private val request = mutableStateOf<OnThemesRequest?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         OnThemesText.init(this) // na wypadek startu bez klasy aplikacji launchera (nie powinno się zdarzyć)
         enableEdgeToEdge()
-        setContent { OnThemesApp() }
+        request.value = OnThemesRequest.from(intent)
+        setContent {
+            val req by request
+            OnThemesApp(req, onRequestHandled = { request.value = null })
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        request.value = OnThemesRequest.from(intent)
     }
 
     override fun onResume() {
@@ -78,8 +66,27 @@ class OnThemesActivity : ComponentActivity() {
     }
 }
 
+// Co otworzyć po starcie z launchera.
+internal data class OnThemesRequest(val modeId: Long?, val editId: String?) {
+    companion object {
+        fun from(intent: Intent?): OnThemesRequest? {
+            if (intent == null) return null
+            val modeId = intent.getLongExtra(OnThemes.EXTRA_MODE_ID, -1L).takeIf { it >= 0 }
+            val editId = intent.getStringExtra(OnThemes.EXTRA_EDIT_ID)
+            return if (modeId == null && editId == null) null else OnThemesRequest(modeId, editId)
+        }
+    }
+}
+
+// Ekran na stosie nawigacji.
+private sealed interface Screen {
+    data object Gallery : Screen
+    data class Detail(val id: String) : Screen
+    data class Editor(val def: CustomThemeDef) : Screen
+}
+
 @Composable
-private fun OnThemesApp() {
+private fun OnThemesApp(request: OnThemesRequest?, onRequestHandled: () -> Unit) {
     val store = ThemeStore.get(LocalContext.current)
     val mode by store.themeMode.collectAsState()
     val theme by store.defaultTheme.collectAsState()
@@ -117,320 +124,105 @@ private fun OnThemesApp() {
         }
     }
 
+    // Tryby z launchera (przez OnThemesHost). Wczytujemy na starcie i po każdej zmianie (modesVersion++).
+    var modes by remember { mutableStateOf<List<HostMode>?>(null) }
+    var modesVersion by remember { mutableIntStateOf(0) }
+    LaunchedEffect(modesVersion, theme.id) {
+        modes = try {
+            OnThemes.host?.modes() ?: emptyList()
+        } catch (e: CancellationException) {
+            throw e // anulowanie korutyny przepuszczamy dalej (jak OperationCanceledException w .NET)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    var stack by remember { mutableStateOf<List<Screen>>(listOf(Screen.Gallery)) }
+    var modeForPicker by remember { mutableStateOf<HostMode?>(null) }
+    val scope = rememberCoroutineScope()
+    fun push(s: Screen) { stack = stack + s }
+    fun pop() { if (stack.size > 1) stack = stack.dropLast(1) }
+    BackHandler(enabled = stack.size > 1) { pop() }
+
+    // Prośba z launchera: wybór motywu trybu (gdy tryby już wczytane) albo kreator.
+    val copyName = stringResource(R.string.ot_copy_name)
+    LaunchedEffect(request, modes) {
+        val req = request
+        val list = modes
+        if (req != null && list != null) {
+            if (req.modeId != null) modeForPicker = list.firstOrNull { it.id == req.modeId }
+            if (req.editId != null) {
+                val def = CustomThemes.def(req.editId) ?: CustomThemeDef(req.editId, null, CustomTheme.colors)
+                stack = listOf(Screen.Gallery, Screen.Editor(def))
+            }
+            onRequestHandled()
+        }
+    }
+
     MaterialTheme(colorScheme = colors) {
         CompositionLocalProvider(LocalContentColor provides colors.onBackground, LocalThemeSpec provides theme) {
             Box(Modifier.fillMaxSize().background(colors.background)) {
-                GalleryScreen(store, mode, theme, dark)
-            }
-        }
-    }
-}
-
-@Composable
-private fun GalleryScreen(store: ThemeStore, mode: ThemeMode, selected: ThemeSpec, dark: Boolean) {
-    // Tryby z launchera (przez OnThemesHost). Wczytujemy przy starcie i po zmianie motywu globalnego.
-    var modes by remember { mutableStateOf<List<HostMode>?>(null) }
-    LaunchedEffect(selected.id) {
-        modes = runCatching { OnThemes.host?.modes() }.getOrNull() ?: emptyList()
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(stringResource(R.string.ot_app_name), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    stringResource(R.string.ot_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        item { SectionTitle(stringResource(R.string.ot_brightness)) }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemeMode.entries.forEach { m ->
-                    FilterChip(selected = m == mode, onClick = { store.setThemeMode(m) }, label = { Text(m.label) })
-                }
-            }
-        }
-
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                SectionTitle(stringResource(R.string.ot_global_theme))
-                Text(
-                    stringResource(R.string.ot_global_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        // Karty po catalogId: wszystkie warianty Luxury to jedna karta (pokazuje wybrany wariant).
-        items(Themes.all, key = { it.catalogId }) { base ->
-            val isSelected = base.catalogId == selected.catalogId
-            val shown = if (isSelected) selected else base
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemeCard(spec = shown, dark = dark, selected = isSelected, onClick = { if (!isSelected) store.setDefaultTheme(base) })
-                if (isSelected && shown.family == ThemeFamily.LUXURY) LuxuryPicker(store, shown)
-            }
-        }
-
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                SectionTitle(stringResource(R.string.ot_modes))
-                Text(
-                    stringResource(R.string.ot_modes_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        val list = modes
-        if (list != null && list.isEmpty()) {
-            item {
-                Text(
-                    stringResource(R.string.ot_modes_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (list != null) {
-            items(list, key = { it.id }) { m -> ModeRow(m, dark) }
-        }
-    }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
-}
-
-// Karta motywu: miniatura ekranu w jego kolorach + nazwa + krótka paleta (po odcieniu).
-@Composable
-private fun ThemeCard(spec: ThemeSpec, dark: Boolean, selected: Boolean, onClick: () -> Unit) {
-    val selectedLabel = stringResource(R.string.ot_selected)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(
-                width = if (selected) 2.dp else 1.dp,
-                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                shape = RoundedCornerShape(18.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(10.dp)
-            .semantics { if (selected) contentDescription = selectedLabel },
-    ) {
-        MiniPreview(spec, dark)
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    spec.label,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (selected) {
-                    Spacer(Modifier.width(6.dp))
-                    Text("✓", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                spec.palette.take(8).forEach { c ->
-                    Box(
-                        Modifier
-                            .size(14.dp)
-                            .clip(CircleShape)
-                            .background(Color(c))
-                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f), CircleShape),
+                when (val screen = stack.last()) {
+                    is Screen.Gallery -> GalleryScreen(
+                        store = store,
+                        mode = mode,
+                        global = theme,
+                        dark = dark,
+                        modes = modes,
+                        onOpen = { push(Screen.Detail(it)) },
+                        onNewCustom = {
+                            val base = CustomTheme.colors
+                            push(Screen.Editor(CustomThemeDef(CustomThemes.nextId(), null, base)))
+                        },
+                        onPickForMode = { modeForPicker = it },
+                    )
+                    is Screen.Detail -> ThemeDetailScreen(
+                        store = store,
+                        startId = screen.id,
+                        dark = dark,
+                        modes = modes,
+                        onBack = { pop() },
+                        onEdit = { id -> CustomThemes.def(id)?.let { push(Screen.Editor(it)) } },
+                        onDuplicate = { spec, previewDark ->
+                            // Kopia jako motyw własny: 4 kolory z wersji, którą widać na podglądzie.
+                            val r = spec.roles(previewDark)
+                            val def = CustomThemeDef(
+                                id = CustomThemes.nextId(),
+                                name = copyName.format(spec.label).take(30),
+                                colors = CustomColors(r.background, r.surface, r.primary, r.onBackground),
+                                badge = if (spec.badge == BadgeStyle.METAL) BadgeStyle.TINTED else spec.badge,
+                            )
+                            push(Screen.Editor(def))
+                        },
+                        onModesChanged = { modesVersion++ },
+                    )
+                    is Screen.Editor -> CustomEditorScreen(
+                        store = store,
+                        initial = screen.def,
+                        modes = modes,
+                        onBack = { pop() },
+                        onSaved = { id ->
+                            // Po zapisie: ekran tego motywu (zamiast kreatora) — od razu "Użyj" / "Dla trybów".
+                            stack = stack.dropLast(1).filterNot { it is Screen.Detail && it.id == id } + Screen.Detail(id)
+                        },
                     )
                 }
             }
-        }
-    }
-}
-
-// Miniatura launchera w kolorach motywu: tło, karta z dwiema "liniami tekstu", akcent i trzy znaczki z palety.
-@Composable
-private fun MiniPreview(spec: ThemeSpec, dark: Boolean) {
-    val r = spec.roles(dark)
-    val isDark = spec.isDark(dark)
-    Column(
-        verticalArrangement = Arrangement.spacedBy(5.dp),
-        modifier = Modifier
-            .size(width = 104.dp, height = 74.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(r.background))
-            .border(1.dp, Color(r.outline), RoundedCornerShape(12.dp))
-            .padding(7.dp),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(7.dp))
-                .background(Color(r.surface))
-                .padding(5.dp),
-        ) {
-            Box(Modifier.size(width = 46.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(Color(r.onBackground)))
-            Box(Modifier.size(width = 30.dp, height = 3.dp).clip(RoundedCornerShape(2.dp)).background(Color(r.onSurfaceVariant)))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            spec.palette.take(3).forEach { c ->
-                val outline = badgeOutline(isDark, spec.badge)
-                val rim = badgeRim(spec.badge, spec.metal)
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(15.dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(badgeBackground(c, isDark, spec.badge))
-                        .then(
-                            if (rim != null) Modifier.border(1.dp, rim, RoundedCornerShape(5.dp))
-                            else Modifier.border(1.dp, outline ?: Color.Transparent, RoundedCornerShape(5.dp)),
-                        ),
-                ) {
-                    Box(Modifier.size(5.dp).clip(CircleShape).background(badgeSymbol(isDark, spec.badge, c, spec.metal)))
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            Box(Modifier.size(width = 22.dp, height = 10.dp).clip(RoundedCornerShape(5.dp)).background(Color(r.primary)))
-        }
-    }
-}
-
-// Wiersz trybu: znaczek (jak w launcherze), nazwa i motyw, którego tryb używa.
-@Composable
-private fun ModeRow(mode: HostMode, dark: Boolean) {
-    val spec = Themes.find(mode.themeId)
-    val badgeDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    // Znaczek w stylu motywu, którego tryb używa (własny albo globalny).
-    val modeSpec = spec ?: LocalThemeSpec.current
-    val style = modeSpec.badge
-    val outline = badgeOutline(badgeDark, style)
-    val rim = badgeRim(style, modeSpec.metal)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(11.dp))
-                .background(badgeBackground(mode.color, badgeDark, style))
-                .then(
-                    if (rim != null) Modifier.border(1.5.dp, rim, RoundedCornerShape(11.dp))
-                    else Modifier.border(1.dp, outline ?: Color.Transparent, RoundedCornerShape(11.dp)),
-                ),
-        ) {
-            Icon(
-                painter = painterResource(mode.iconRes),
-                contentDescription = null,
-                tint = badgeSymbol(badgeDark, style, mode.color, modeSpec.metal),
-                modifier = Modifier.size(21.dp),
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Text(mode.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Spacer(Modifier.width(8.dp))
-        if (spec != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                spec.swatches(dark).forEach { c ->
-                    Box(Modifier.padding(end = 2.dp).size(10.dp).clip(CircleShape).background(c))
-                }
-                Spacer(Modifier.width(6.dp))
-                Text(spec.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        } else {
-            Text(
-                stringResource(R.string.ot_mode_global),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-// Luxury: wybór metalu i bazy (każde połączenie to osobny motyw) + przełącznik ruchomego refleksu.
-@Composable
-private fun LuxuryPicker(store: ThemeStore, current: ThemeSpec) {
-    val metal = current.metal ?: Metal.GOLD
-    val base = current.luxuryBase ?: LuxuryBase.BOTTLE
-    val sheen by store.luxurySheen.collectAsState()
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(14.dp),
-    ) {
-        Text(stringResource(R.string.ot_luxury_metal), style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-            Metal.entries.forEach { m ->
-                FilterChip(
-                    selected = m == metal,
-                    onClick = { store.setDefaultTheme(Luxury.spec(m, base)) },
-                    label = { Text(m.label) },
-                    leadingIcon = { Box(Modifier.size(16.dp).clip(CircleShape).background(m.brush())) },
-                )
-            }
-        }
-        Text(stringResource(R.string.ot_luxury_base), style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-            LuxuryBase.entries.forEach { b ->
-                FilterChip(
-                    selected = b == base,
-                    onClick = { store.setDefaultTheme(Luxury.spec(metal, b)) },
-                    label = { Text(b.label) },
-                    leadingIcon = {
-                        Box(
-                            Modifier
-                                .size(16.dp)
-                                .clip(CircleShape)
-                                .background(Color(b.surfaceVariant))
-                                .border(2.dp, Color(b.jewel), CircleShape),
-                        )
+            val picked = modeForPicker
+            if (picked != null) {
+                ModeThemeDialog(
+                    mode = picked,
+                    global = theme,
+                    onPick = { themeId ->
+                        modeForPicker = null
+                        scope.launch {
+                            OnThemes.host?.setModeTheme(picked.id, themeId)
+                            modesVersion++
+                        }
                     },
+                    onDismiss = { modeForPicker = null },
                 )
             }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.ot_luxury_sheen), style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    stringResource(R.string.ot_luxury_sheen_sub),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            // Podgląd refleksu: mały metalowy kafelek, który błyszczy, gdy przełącznik jest włączony.
-            Box(
-                Modifier
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(metal.brush())
-                    .then(if (sheen) Modifier.metalSheen() else Modifier),
-            )
-            Spacer(Modifier.width(12.dp))
-            Switch(checked = sheen, onCheckedChange = { store.setLuxurySheen(it) })
         }
     }
 }

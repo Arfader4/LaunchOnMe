@@ -92,7 +92,6 @@ import pl.rafal.contextlauncher.ModeTileService
 import pl.rafal.onthemes.ThemeMode
 import pl.rafal.onthemes.ThemeSpec
 import pl.rafal.onthemes.ThemeStore
-import pl.rafal.onthemes.Themes
 import kotlinx.coroutines.flow.drop
 import pl.rafal.contextlauncher.layout.GridRect
 import pl.rafal.contextlauncher.data.db.SuggestionRuleEntity
@@ -854,11 +853,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setDefaultPalette(palette: ThemeSpec) = themePrefs.setDefaultTheme(palette)
 
-    // Kreator motywów: zapis własnych kolorów i od razu użycie ich jako domyślnego schematu.
-    fun saveCustomTheme(colors: pl.rafal.onthemes.CustomColors) {
-        themePrefs.setCustomColors(colors)
-        themePrefs.setDefaultTheme(Themes.CUSTOM)
-    }
 
     fun updateModeAppearance(mode: ModeEntity, icon: String?, color: Long, palette: ThemeSpec?, accent: Long?) {
         viewModelScope.launch {
