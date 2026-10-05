@@ -245,7 +245,11 @@ motyw „System” (kolory dynamiczne), „Kopiuj HEX”.
       (kolory Material You / One UI z tapety, Android 12+, odświeżane po powrocie na ekran). Styl znaczka idzie z motywu
       przez `LocalThemeSpec` (ustawia go `ContextLauncherTheme`). Wybór koloru trybu i akcentu: rząd „Z motywu”
       (krótka paleta) + „Wszystkie kolory” (po odcieniu) + „+”.
-- [ ] T3 — Luxury: metale (złoto, srebro, miedź, brąz) × bazy (butelkowa zieleń, purpura, granat, bordo, czerń), połysk.
+- [x] T3 — Luxury: metale (złoto, srebro, miedź, brąz) × bazy (butelkowa zieleń, purpura, granat, bordo, czerń) —
+      20 połączeń, id `LUXURY:<METAL>:<BAZA>` (złoto / butelkowa zieleń = stare `LUXURY`). Znaczki METAL: tło w kolorze
+      trybu (mocniej przyciemnione / rozjaśnione), symbol w kolorze metalu, metalowa obwódka z refleksami (też klawisz ON).
+      „Połysk w ruchu” (domyślnie wyłączony): wolny refleks na klawiszu ON i dużych znaczkach (`metalSheen`).
+      Wybór metalu i bazy w OnThemes pod kartą Luxury; w launcherze karta Luxury pokazuje wybrany wariant.
 - [ ] T4 — aplikacja: galeria, ekran motywu z podglądem na żywo, motyw globalny i per tryb, wiele motywów własnych
       (kreator przeniesiony do modułu razem z wyborem koloru).
 - [ ] T5 — kolory systemu (tapeta z palety, HEX), kopia zapasowa, wersja 1.5.0 + tag, checklista testów całości.

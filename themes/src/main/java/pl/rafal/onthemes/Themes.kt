@@ -94,16 +94,8 @@ object Themes {
         palette = listOf(0xFFEF476F, 0xFFFFD166, 0xFF84CC16, 0xFF4DF5CD, 0xFF118AB2, 0xFFA78BFA),
     )
 
-    // Dawniej "ELEGANT" (złoto na butelkowej zieleni) — zalążek Luxury; metale i bazy do wyboru od T3.
-    val LUXURY = ThemeSpec(
-        id = "LUXURY",
-        labelRes = R.string.ot_theme_luxury,
-        family = ThemeFamily.LUXURY,
-        light = Roles(0xFFF3F1E8, 0xFFFFFFFF, 0xFFE3E8E1, 0xFFC3CFC5, 0xFF17261E, 0xFF4F6358, 0xFF8C6D1F, 0xFFFFFFFF),
-        dark = Roles(0xFF0E1A15, 0xFF15251E, 0xFF1D3128, 0xFF2F4A3D, 0xFFEDE6D3, 0xFFAFC0B4, 0xFFD4AF37, 0xFF1E1A08),
-        // złoto, miedź, brąz, srebro + butelkowa zieleń, purpura, bordo, granat
-        palette = listOf(0xFFD4AF37, 0xFFB87333, 0xFFCD7F32, 0xFFC0C0C8, 0xFF1F6B4A, 0xFF6A2C70, 0xFF8C1C3A, 0xFF1F3A68),
-    )
+    // Dawniej "ELEGANT" (złoto na butelkowej zieleni). Pozostałe połączenia metal × baza: Luxury.spec(...).
+    val LUXURY: ThemeSpec = Luxury.spec(Metal.GOLD, LuxuryBase.BOTTLE)
 
     // Kolejność kart: od codziennych, przez wyraziste, do systemowego i własnego.
     // Systemowy tylko na Androidzie 12+ (wcześniej system nie liczy kolorów z tapety).
@@ -121,6 +113,8 @@ object Themes {
     // Motyw po id (także starym); null, gdy id puste albo nieznane (wtedy wywołujący bierze domyślny).
     fun find(id: String?): ThemeSpec? {
         val key = normalizeId(id) ?: return null
+        // Warianty Luxury nie są osobno na liście — budujemy je z id ("LUXURY:<METAL>:<BAZA>").
+        if (key == Luxury.CATALOG_ID || key.startsWith(Luxury.CATALOG_ID + ":")) return Luxury.fromId(key)
         return all.firstOrNull { it.id == key }
     }
 }

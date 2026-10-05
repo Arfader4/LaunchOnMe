@@ -22,4 +22,17 @@
     <string name="ot_theme_bw">Czarno-biały</string>
     <string name="ot_theme_pastel">Pastelowy</string>
     <string name="ot_theme_system">Systemowy</string>
+    <string name="ot_metal_gold">Złoto</string>
+    <string name="ot_metal_silver">Srebro</string>
+    <string name="ot_metal_copper">Miedź</string>
+    <string name="ot_metal_bronze">Brąz</string>
+    <string name="ot_base_bottle">Butelkowa zieleń</string>
+    <string name="ot_base_purple">Purpura</string>
+    <string name="ot_base_navy">Granat</string>
+    <string name="ot_base_burgundy">Bordo</string>
+    <string name="ot_base_black">Czerń</string>
+    <string name="ot_luxury_metal">Metal</string>
+    <string name="ot_luxury_base">Baza</string>
+    <string name="ot_luxury_sheen">Połysk w ruchu</string>
+    <string name="ot_luxury_sheen_sub">Wolny refleks światła na klawiszu ON i dużych znaczkach. Zużywa trochę więcej baterii.</string>
 </resources>

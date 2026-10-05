@@ -82,12 +82,15 @@ fun PaletteRow(selected: ThemeSpec?, onSelect: (ThemeSpec?) -> Unit, allowDefaul
         if (allowDefault) {
             PaletteCard(label = stringResource(R.string.look_default), swatches = emptyList(), selected = selected == null, onClick = { onSelect(null) })
         }
+        // Warianty Luxury (metal × baza) to jedna karta — pokazuje wybrany wariant; wariant zmienia się w OnThemes.
         Themes.all.forEach { palette ->
+            val same = selected != null && palette.catalogId == selected.catalogId
+            val shown = if (same && selected != null) selected else palette
             PaletteCard(
-                label = palette.label,
-                swatches = palette.swatches(dark),
-                selected = palette == selected,
-                onClick = { onSelect(palette) },
+                label = shown.label,
+                swatches = shown.swatches(dark),
+                selected = same,
+                onClick = { onSelect(shown) },
             )
         }
     }

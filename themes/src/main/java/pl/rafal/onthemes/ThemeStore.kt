@@ -34,6 +34,15 @@ class ThemeStore private constructor(context: Context) {
         )
     }
 
+    // Luxury: wolny refleks światła przesuwający się po klawiszu ON i dużych znaczkach (domyślnie wyłączony — bateria).
+    private val _luxurySheen = MutableStateFlow(prefs.getBoolean(KEY_SHEEN, false))
+    val luxurySheen: StateFlow<Boolean> = _luxurySheen.asStateFlow()
+
+    fun setLuxurySheen(on: Boolean) {
+        prefs.edit().putBoolean(KEY_SHEEN, on).apply()
+        _luxurySheen.value = on
+    }
+
     fun setCustomColors(colors: CustomColors) {
         prefs.edit()
             .putLong(KEY_C_BG, colors.background)
@@ -64,6 +73,7 @@ class ThemeStore private constructor(context: Context) {
     companion object {
         private const val KEY_MODE = "theme_mode"
         private const val KEY_THEME = "default_palette" // nazwa klucza z czasów "schematów" — zostaje dla zgodności
+        private const val KEY_SHEEN = "luxury_sheen"
         private const val KEY_C_BG = "custom_bg"
         private const val KEY_C_SURFACE = "custom_surface"
         private const val KEY_C_ACCENT = "custom_accent"

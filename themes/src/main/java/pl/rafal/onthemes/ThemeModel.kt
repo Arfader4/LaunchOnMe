@@ -75,10 +75,15 @@ class ThemeSpec(
     val badge: BadgeStyle = BadgeStyle.TINTED,
     val finish: Finish = Finish.FLAT,
     val darkOnly: Boolean = false, // np. AMOLED: zawsze ciemny, przełącznik Jasny/Ciemny go nie zmienia
+    val metal: Metal? = null,           // Luxury: metal (akcent, obwódki i symbole znaczków)
+    val luxuryBase: LuxuryBase? = null, // Luxury: baza (kolor tła)
+    val catalogId: String = id,         // karta w katalogu: wszystkie warianty Luxury to jedna karta "LUXURY"
 ) {
     private val basePalette: List<Long> = sortByHue(palette)
 
-    val label: String get() = OnThemesText.get(labelRes)
+    // Luxury dopisuje metal i bazę, np. "Luxury · Miedź / Granat".
+    val label: String
+        get() = OnThemesText.get(labelRes) + if (metal != null && luxuryBase != null) " · ${metal.label} / ${luxuryBase.label}" else ""
 
     // Krótka paleta motywu (kolory trybów, akcent). Własny motyw dokłada swój akcent na początek listy.
     // Systemowy bierze kolory z One UI / Material You (SystemColors), gdy są dostępne.

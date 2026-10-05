@@ -24,11 +24,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -166,8 +169,14 @@ private fun GalleryScreen(store: ThemeStore, mode: ThemeMode, selected: ThemeSpe
                 )
             }
         }
-        items(Themes.all, key = { it.id }) { spec ->
-            ThemeCard(spec = spec, dark = dark, selected = spec == selected, onClick = { store.setDefaultTheme(spec) })
+        // Karty po catalogId: wszystkie warianty Luxury to jedna karta (pokazuje wybrany wariant).
+        items(Themes.all, key = { it.catalogId }) { base ->
+            val isSelected = base.catalogId == selected.catalogId
+            val shown = if (isSelected) selected else base
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeCard(spec = shown, dark = dark, selected = isSelected, onClick = { if (!isSelected) store.setDefaultTheme(base) })
+                if (isSelected && shown.family == ThemeFamily.LUXURY) LuxuryPicker(store, shown)
+            }
         }
 
         item {
@@ -280,15 +289,19 @@ private fun MiniPreview(spec: ThemeSpec, dark: Boolean) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             spec.palette.take(3).forEach { c ->
                 val outline = badgeOutline(isDark, spec.badge)
+                val rim = badgeRim(spec.badge, spec.metal)
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(15.dp)
                         .clip(RoundedCornerShape(5.dp))
                         .background(badgeBackground(c, isDark, spec.badge))
-                        .border(1.dp, outline ?: Color.Transparent, RoundedCornerShape(5.dp)),
+                        .then(
+                            if (rim != null) Modifier.border(1.dp, rim, RoundedCornerShape(5.dp))
+                            else Modifier.border(1.dp, outline ?: Color.Transparent, RoundedCornerShape(5.dp)),
+                        ),
                 ) {
-                    Box(Modifier.size(5.dp).clip(CircleShape).background(badgeSymbol(isDark, spec.badge, c)))
+                    Box(Modifier.size(5.dp).clip(CircleShape).background(badgeSymbol(isDark, spec.badge, c, spec.metal)))
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -303,8 +316,10 @@ private fun ModeRow(mode: HostMode, dark: Boolean) {
     val spec = Themes.find(mode.themeId)
     val badgeDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     // Znaczek w stylu motywu, którego tryb używa (własny albo globalny).
-    val style = (spec ?: LocalThemeSpec.current).badge
+    val modeSpec = spec ?: LocalThemeSpec.current
+    val style = modeSpec.badge
     val outline = badgeOutline(badgeDark, style)
+    val rim = badgeRim(style, modeSpec.metal)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -319,12 +334,15 @@ private fun ModeRow(mode: HostMode, dark: Boolean) {
                 .size(34.dp)
                 .clip(RoundedCornerShape(11.dp))
                 .background(badgeBackground(mode.color, badgeDark, style))
-                .border(1.dp, outline ?: Color.Transparent, RoundedCornerShape(11.dp)),
+                .then(
+                    if (rim != null) Modifier.border(1.5.dp, rim, RoundedCornerShape(11.dp))
+                    else Modifier.border(1.dp, outline ?: Color.Transparent, RoundedCornerShape(11.dp)),
+                ),
         ) {
             Icon(
                 painter = painterResource(mode.iconRes),
                 contentDescription = null,
-                tint = badgeSymbol(badgeDark, style, mode.color),
+                tint = badgeSymbol(badgeDark, style, mode.color, modeSpec.metal),
                 modifier = Modifier.size(21.dp),
             )
         }
@@ -345,6 +363,74 @@ private fun ModeRow(mode: HostMode, dark: Boolean) {
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+// Luxury: wybór metalu i bazy (każde połączenie to osobny motyw) + przełącznik ruchomego refleksu.
+@Composable
+private fun LuxuryPicker(store: ThemeStore, current: ThemeSpec) {
+    val metal = current.metal ?: Metal.GOLD
+    val base = current.luxuryBase ?: LuxuryBase.BOTTLE
+    val sheen by store.luxurySheen.collectAsState()
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(14.dp),
+    ) {
+        Text(stringResource(R.string.ot_luxury_metal), style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            Metal.entries.forEach { m ->
+                FilterChip(
+                    selected = m == metal,
+                    onClick = { store.setDefaultTheme(Luxury.spec(m, base)) },
+                    label = { Text(m.label) },
+                    leadingIcon = { Box(Modifier.size(16.dp).clip(CircleShape).background(m.brush())) },
+                )
+            }
+        }
+        Text(stringResource(R.string.ot_luxury_base), style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            LuxuryBase.entries.forEach { b ->
+                FilterChip(
+                    selected = b == base,
+                    onClick = { store.setDefaultTheme(Luxury.spec(metal, b)) },
+                    label = { Text(b.label) },
+                    leadingIcon = {
+                        Box(
+                            Modifier
+                                .size(16.dp)
+                                .clip(CircleShape)
+                                .background(Color(b.surfaceVariant))
+                                .border(2.dp, Color(b.jewel), CircleShape),
+                        )
+                    },
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.ot_luxury_sheen), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(R.string.ot_luxury_sheen_sub),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            // Podgląd refleksu: mały metalowy kafelek, który błyszczy, gdy przełącznik jest włączony.
+            Box(
+                Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(metal.brush())
+                    .then(if (sheen) Modifier.metalSheen() else Modifier),
+            )
+            Spacer(Modifier.width(12.dp))
+            Switch(checked = sheen, onCheckedChange = { store.setLuxurySheen(it) })
         }
     }
 }

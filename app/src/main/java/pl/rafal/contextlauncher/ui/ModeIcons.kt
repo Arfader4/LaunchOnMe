@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -41,7 +43,11 @@ import pl.rafal.contextlauncher.data.db.ModeEntity
 import pl.rafal.onthemes.AllColors
 import pl.rafal.onthemes.BadgeStyle
 import pl.rafal.onthemes.LocalThemeSpec
+import pl.rafal.onthemes.Metal
+import pl.rafal.onthemes.ThemeStore
 import pl.rafal.onthemes.badgeOutline
+import pl.rafal.onthemes.badgeRim
+import pl.rafal.onthemes.metalSheen
 
 // Katalog ikon trybów. Grafiki są w res/drawable, więc ten sam symbol pokażą launcher i kafelek szybkich ustawień.
 enum class ModeIcon(val key: String, @DrawableRes val res: Int, @StringRes private val labelRes: Int, val extra: Boolean = false) {
@@ -117,8 +123,8 @@ fun modeBadgeColor(color: Long, dark: Boolean, style: BadgeStyle = BadgeStyle.TI
     pl.rafal.onthemes.badgeBackground(color, dark, style)
 
 // Kolor symbolu na znaczku trybu (i na podglądzie koloru w wyborze). W High Contrast symbol ma kolor trybu.
-fun modeBadgeSymbol(dark: Boolean, color: Long = 0xFF808080, style: BadgeStyle = BadgeStyle.TINTED): Color =
-    pl.rafal.onthemes.badgeSymbol(dark, style, color)
+fun modeBadgeSymbol(dark: Boolean, color: Long = 0xFF808080, style: BadgeStyle = BadgeStyle.TINTED, metal: Metal? = null): Color =
+    pl.rafal.onthemes.badgeSymbol(dark, style, color, metal)
 
 // Kolor, który na znaczku "niesie" kolor trybu (tło, a w High Contrast — symbol). Do kółek wyboru i kropek.
 fun modeSwatchColor(color: Long, dark: Boolean, style: BadgeStyle): Color = pl.rafal.onthemes.badgeSwatch(color, dark, style)
@@ -127,22 +133,34 @@ fun modeSwatchColor(color: Long, dark: Boolean, style: BadgeStyle): Color = pl.r
 @Composable
 fun ModeBadge(icon: ModeIcon, color: Long, size: Dp = 28.dp, modifier: Modifier = Modifier, shape: Shape? = null) {
     val dark = isThemeDark()
-    val style = LocalThemeSpec.current.badge
+    val spec = LocalThemeSpec.current
+    val style = spec.badge
     val bg = remember(color, dark, style) { modeBadgeColor(color, dark, style) }
     val clipShape = shape ?: LocalIconShape.current.shape(size) // kształt z ustawień, chyba że wywołujący wymusza własny
     val outline = badgeOutline(dark, style) // tylko High Contrast: czarny znaczek na czarnym tle potrzebuje obwódki
+    val rim = remember(style, spec.metal) { badgeRim(style, spec.metal) } // Luxury: metalowa obwódka z refleksami
+    // Luxury: ruchomy refleks tylko na dużych znaczkach (klawisz ON, łuk) i tylko gdy włączony w OnThemes.
+    var sheen = false
+    if (rim != null && size >= 36.dp) {
+        val enabled by ThemeStore.get(LocalContext.current).luxurySheen.collectAsState()
+        sheen = enabled
+    }
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(size)
             .clip(clipShape)
             .background(bg)
-            .border(1.dp, outline ?: Color.Transparent, clipShape),
+            .then(
+                if (rim != null) Modifier.border((size * 0.05f).coerceIn(1.dp, 3.dp), rim, clipShape)
+                else Modifier.border(1.dp, outline ?: Color.Transparent, clipShape),
+            )
+            .then(if (sheen) Modifier.metalSheen() else Modifier),
     ) {
         Icon(
             painter = painterResource(icon.res),
             contentDescription = null,
-            tint = modeBadgeSymbol(dark, color, style),
+            tint = modeBadgeSymbol(dark, color, style, spec.metal),
             modifier = Modifier.size(size * 0.62f),
         )
     }
@@ -261,6 +279,7 @@ fun ColorSwatches(
 private fun Swatch(color: Long?, selected: Boolean, onClick: () -> Unit, modeBadge: Boolean = false) {
     val dark = isThemeDark()
     val style = LocalThemeSpec.current.badge
+    val metal = LocalThemeSpec.current.metal
     val fill = when {
         color == null -> MaterialTheme.colorScheme.surfaceVariant
         modeBadge -> remember(color, dark, style) { modeSwatchColor(color, dark, style) }
@@ -287,7 +306,7 @@ private fun Swatch(color: Long?, selected: Boolean, onClick: () -> Unit, modeBad
         } else if (modeBadge && selected) {
             // Wybrany kolor trybu: znaczek ✓ w kolorze symbolu — od razu widać, jak będzie wyglądać ikona.
             // W High Contrast kółko ma kolor symbolu, więc ✓ rysujemy kolorem tła znaczka (czarnym / białym).
-            val check = if (style == BadgeStyle.INVERTED) modeBadgeColor(color, dark, style) else modeBadgeSymbol(dark, color, style)
+            val check = if (style == BadgeStyle.INVERTED) modeBadgeColor(color, dark, style) else modeBadgeSymbol(dark, color, style, metal)
             androidx.compose.material3.Text("✓", color = check, style = MaterialTheme.typography.labelLarge)
         }
     }

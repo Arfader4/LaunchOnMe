@@ -22,4 +22,17 @@
     <string name="ot_theme_bw">Black &amp; White</string>
     <string name="ot_theme_pastel">Pastel</string>
     <string name="ot_theme_system">System</string>
+    <string name="ot_metal_gold">Gold</string>
+    <string name="ot_metal_silver">Silver</string>
+    <string name="ot_metal_copper">Copper</string>
+    <string name="ot_metal_bronze">Bronze</string>
+    <string name="ot_base_bottle">Bottle green</string>
+    <string name="ot_base_purple">Purple</string>
+    <string name="ot_base_navy">Navy</string>
+    <string name="ot_base_burgundy">Burgundy</string>
+    <string name="ot_base_black">Black</string>
+    <string name="ot_luxury_metal">Metal</string>
+    <string name="ot_luxury_base">Base</string>
+    <string name="ot_luxury_sheen">Moving sheen</string>
+    <string name="ot_luxury_sheen_sub">A slow glint of light on the ON key and large badges. Uses a little more battery.</string>
 </resources>

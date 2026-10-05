@@ -79,7 +79,7 @@ fun ColorPickerDialog(
                                 .size(48.dp)
                                 .clip(LocalIconShape.current.shape(48.dp))
                                 .background(modeBadgeColor(c, dark, style)),
-                        ) { Text("✓", color = modeBadgeSymbol(dark, c, style), style = MaterialTheme.typography.titleMedium) }
+                        ) { Text("✓", color = modeBadgeSymbol(dark, c, style, pl.rafal.onthemes.LocalThemeSpec.current.metal), style = MaterialTheme.typography.titleMedium) }
                     }
                     Spacer(Modifier.width(16.dp))
                     OutlinedTextField(
