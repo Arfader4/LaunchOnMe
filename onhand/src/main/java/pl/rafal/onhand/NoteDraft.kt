@@ -10,6 +10,9 @@ import pl.rafal.onhand.data.NoteRepository
 // i przy wyjściu. Mutex (≈ SemaphoreSlim(1) w C#) pilnuje, żeby dwa zapisy naraz nie utworzyły dwóch notatek.
 class NoteDraft(private val repo: NoteRepository, initialId: Long?) {
     private val mutex = Mutex()
+    // Osobna blokada na dodawanie załączników: wyjście z edytora czeka, aż trwające kopiowanie się skończy
+    // (inaczej pusta notatka "bez załączników" zostałaby usunięta w trakcie kopiowania).
+    private val attachMutex = Mutex()
 
     var id: Long? = initialId
         private set
@@ -51,11 +54,28 @@ class NoteDraft(private val repo: NoteRepository, initialId: Long?) {
         }
     }
 
-    // Wyjście z edytora: zapis, a notatka wyczyszczona do zera znika (jak w Keep).
+    // Id notatki teraz — także dla pustej (dodanie załącznika do nowej notatki potrzebuje wiersza w bazie).
+    suspend fun ensureId(title: String, text: String): Long = withContext(NonCancellable) {
+        mutex.withLock {
+            id ?: repo.create(title, text).also {
+                id = it
+                savedTitle = title
+                savedText = text
+            }
+        }
+    }
+
+    // Dodanie załączników: id notatki (tworzy pusty wiersz, jeśli trzeba) i kopiowanie pod blokadą.
+    suspend fun addAttachments(title: String, text: String, add: suspend (Long) -> Unit) = withContext(NonCancellable) {
+        attachMutex.withLock { add(ensureId(title, text)) }
+    }
+
+    // Wyjście z edytora: zapis, a notatka wyczyszczona do zera (bez tekstu i bez załączników) znika (jak w Keep).
     suspend fun finish(title: String, text: String) {
         save(title, text)
+        attachMutex.withLock { } // poczekaj na kopiowanie w toku
         val current = id
-        if (current != null && title.isBlank() && text.isBlank()) delete()
+        if (current != null && title.isBlank() && text.isBlank() && repo.attachmentCount(current) == 0) delete()
     }
 
     suspend fun delete() = withContext(NonCancellable) {

@@ -251,8 +251,12 @@ Nowy czat: „robimy paczkę OnN z ROADMAP.md” (gałąź `feature/onhand`).
       Lista: zakładki Notatki / Archiwum, długie przytrzymanie = zaznaczanie (dolny pasek: Udostępnij, Eksport,
       Archiwizuj/Przywróć, Usuń); kilka notatek → „jako jeden tekst” albo „jako pliki .txt”. Edytor ⋮: Udostępnij,
       Eksport .txt / .md, Archiwizuj (zamyka edytor) / Przywróć, Usuń. `NoteExport.kt`, `OnHandFileProvider`.
-- [ ] On3 — do środka: cel „Udostępnij → OnHand” (tekst, link, obraz/y, pliki), Nowa / Dopisz do…, załączniki
+- [x] On3 — do środka: cel „Udostępnij → OnHand” (tekst, link, obraz/y, pliki), Nowa / Dopisz do…, załączniki
       w edytorze (galeria, plik) i w eksporcie.
+      `OnHandShareActivity` (okno nad nadawcą: tytuł z tematu, podgląd, Nowa notatka / Dopisz do… przez listę
+      w trybie wyboru, „Otwórz po zapisaniu”); pliki kopiowane od razu do `files/onhand/<id>/` (ścieżka względna
+      w bazie). Edytor: „📎 Załącz” (galeria / pliki), miniatury zdjęć, wiersze plików, otwieranie, ✕ usuwa.
+      Lista: 📎 N. Eksport notatki z załącznikami → .zip (plik + folder; w .md odnośniki), Udostępnij wysyła też pliki.
 - [ ] On4 — launcher: `OnHandHost`, przypinanie z OnHand i z `HandySheet`, rodzaj `ONHAND`, migracja starych notatek
       (baza v13), ShareActivity tekst → notatka OnHand, `Backup.kt` (`OnHandBackup` + pliki w .zip), wersja 1.4.0 + tag,
       checklista testów całości.

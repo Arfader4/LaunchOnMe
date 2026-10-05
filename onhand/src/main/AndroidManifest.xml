@@ -21,7 +21,32 @@
             </intent-filter>
         </activity>
 
-        <!-- Udostępnianie notatek jako plików (.txt / .md): tymczasowy link content:// z prawem odczytu. -->
+        <!-- Cel "Udostępnij → OnHand": tekst, linki, zdjęcia i pliki z innych aplikacji. Małe okno nad nadawcą,
+             bez własnego wpisu w "ostatnich aplikacjach". -->
+        <activity
+            android:name=".OnHandShareActivity"
+            android:exported="true"
+            android:label="@string/onhand_name"
+            android:icon="@mipmap/ic_onhand"
+            android:roundIcon="@mipmap/ic_onhand"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.OnHand.Share"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
+        <!-- Udostępnianie notatek (.txt / .md) i załączników oraz ich otwieranie: tymczasowy link content:// z prawem odczytu. -->
         <provider
             android:name=".OnHandFileProvider"
             android:authorities="${applicationId}.onhand"

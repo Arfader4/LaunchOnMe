@@ -1,6 +1,23 @@
 package pl.rafal.onhand
 
 import android.text.format.DateUtils
+import android.graphics.ImageDecoder
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.key
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.isActive
+import pl.rafal.onhand.data.AttachmentEntity
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
@@ -103,6 +120,7 @@ internal fun NoteListScreen(
             .map<List<NoteEntity>, List<NoteEntity>?> { it }
             .onStart { emit(null) }
     }.collectAsState(initial = null)
+    val attachmentCounts by remember(repo) { repo.observeAttachmentCounts() }.collectAsState(initial = emptyMap())
 
     // Zaznaczenie liczy się tylko dla notatek widocznych na liście (inne mogły zniknąć — usunięte, przeniesione).
     val visibleIds = notes.orEmpty().map { it.id }.toSet()
@@ -149,7 +167,7 @@ internal fun NoteListScreen(
                         if (selected.size == 1) {
                             val ids = selected.toList()
                             clearSelection()
-                            scope.launch { NoteExport.shareText(context, repo.getMany(ids)) }
+                            scope.launch { NoteExport.shareText(context, repo, repo.getMany(ids)) }
                         } else {
                             shareDialog = true
                         }
@@ -255,6 +273,7 @@ internal fun NoteListScreen(
                     items(list, key = { it.id }) { note ->
                         NoteRow(
                             note = note,
+                            attachments = attachmentCounts[note.id] ?: 0,
                             selected = note.id in selected,
                             // Przy zaznaczaniu dotknięcie zaznacza/odznacza; długie przytrzymanie zaczyna zaznaczanie.
                             onClick = { if (selecting) toggle(note.id) else onOpen(note.id) },
@@ -273,12 +292,12 @@ internal fun NoteListScreen(
             options = listOf(
                 stringResource(R.string.oh_share_as_text) to {
                     clearSelection()
-                    scope.launch { NoteExport.shareText(context, repo.getMany(ids)) }
+                    scope.launch { NoteExport.shareText(context, repo, repo.getMany(ids)) }
                     Unit
                 },
                 stringResource(R.string.oh_share_as_files) to {
                     clearSelection()
-                    scope.launch { NoteExport.shareFiles(context, repo.getMany(ids), NoteFormat.TXT) }
+                    scope.launch { NoteExport.shareFiles(context, repo, repo.getMany(ids), NoteFormat.TXT) }
                     Unit
                 },
             ),
@@ -408,7 +427,13 @@ private fun ChoiceDialog(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun NoteRow(note: NoteEntity, selected: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)?) {
+private fun NoteRow(
+    note: NoteEntity,
+    attachments: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
+) {
     val preview = notePreview(note)
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -448,8 +473,9 @@ private fun NoteRow(note: NoteEntity, selected: Boolean, onClick: () -> Unit, on
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+            // Czas zmiany i liczba załączników (📎 3).
             Text(
-                text = relativeTime(note.updatedAt),
+                text = relativeTime(note.updatedAt) + if (attachments > 0) "   📎 $attachments" else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
@@ -563,6 +589,47 @@ internal fun NoteEditorScreen(
     val savedId = draft.id ?: startId
     val note by remember(savedId) { repo.observeNote(savedId) }.collectAsState(initial = null)
 
+    // ---------- Załączniki ----------
+    val attachments by remember(savedId) {
+        if (savedId > 0) repo.observeAttachments(savedId) else flowOf(emptyList<AttachmentEntity>())
+    }.collectAsState(initial = emptyList())
+    var attachMenuOpen by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf<AttachmentEntity?>(null) }
+
+    // Dodanie plików: najpierw notatka musi mieć wiersz w bazie (także pusta), potem kopie plików do jej folderu.
+    // W tle (backgroundScope), żeby wyjście z edytora nie przerwało kopiowania w połowie.
+    val addFiles = { uris: List<Uri> ->
+        if (uris.isNotEmpty() && loaded) {
+            val t = title
+            val x = text
+            val app = context.applicationContext
+            NoteRepository.backgroundScope.launch {
+                var failed = 0
+                draft.addAttachments(t, x) { id ->
+                    // Tylko gdy edytor jest jeszcze otwarty — inaczej zmiana stanu otworzyłaby go z powrotem.
+                    withContext(Dispatchers.Main) { if (scope.isActive) onIdKnown(id) }
+                    for (uri in uris) {
+                        if (repo.addAttachment(id, uri) == null) failed++
+                    }
+                }
+                if (failed > 0) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(app, OnHandText.get(R.string.oh_attach_failed, failed), Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+        Unit
+    }
+    // Galeria: systemowy wybór zdjęć (Android 13+; na starszych otwiera się okno plików).
+    val pickPhotos = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
+        addFiles(uris)
+    }
+    // Pliki: dowolny typ, kilka naraz (jak OpenFileDialog z Multiselect = true).
+    val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        addFiles(uris)
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -574,19 +641,43 @@ internal fun NoteEditorScreen(
             TextButton(onClick = { close() }) { Text("‹  " + stringResource(R.string.oh_notes)) }
             Spacer(Modifier.weight(1f))
             Box {
+                TextButton(onClick = { attachMenuOpen = true }, enabled = loaded) {
+                    Text("📎  " + stringResource(R.string.oh_attach))
+                }
+                DropdownMenu(expanded = attachMenuOpen, onDismissRequest = { attachMenuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.oh_attach_photos)) },
+                        onClick = {
+                            attachMenuOpen = false
+                            runCatching {
+                                pickPhotos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                            }
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.oh_attach_files)) },
+                        onClick = {
+                            attachMenuOpen = false
+                            runCatching { pickFiles.launch(arrayOf("*/*")) }
+                        },
+                    )
+                }
+            }
+            Box {
                 TextButton(onClick = { menuOpen = true }) {
                     Text("⋮", style = MaterialTheme.typography.titleLarge)
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     // Pusta notatka: nie ma czego udostępniać ani eksportować.
-                    val hasContent = loaded && (title.isNotBlank() || text.isNotBlank())
+                    val hasContent = loaded && (title.isNotBlank() || text.isNotBlank() || attachments.isNotEmpty())
                     val isArchived = note?.archivedAt != null
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.oh_share)) },
                         enabled = hasContent,
                         onClick = {
                             menuOpen = false
-                            NoteExport.shareText(context, title, text)
+                            val files = attachments.map { NoteExport.SharedFile(repo.file(it), it.mimeType) }
+                            NoteExport.shareText(context, title, text, files)
                         },
                     )
                     DropdownMenuItem(
@@ -663,6 +754,14 @@ internal fun NoteEditorScreen(
                 readOnly = !loaded,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 240.dp),
             )
+            if (attachments.isNotEmpty()) {
+                AttachmentsSection(
+                    repo = repo,
+                    items = attachments,
+                    onOpen = { item -> NoteExport.open(context, repo.file(item), item.mimeType) },
+                    onRemove = { item -> removing = item },
+                )
+            }
         }
         val current = note
         if (current != null) {
@@ -673,6 +772,24 @@ internal fun NoteEditorScreen(
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp),
             )
         }
+    }
+
+    val toRemove = removing
+    if (toRemove != null) {
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text(stringResource(R.string.oh_attachment_remove_title)) },
+            text = { Text(stringResource(R.string.oh_attachment_remove_text, toRemove.name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    removing = null
+                    NoteRepository.backgroundScope.launch { repo.deleteAttachment(toRemove) }
+                }) { Text(stringResource(R.string.oh_remove), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { removing = null }) { Text(stringResource(R.string.oh_cancel)) }
+            },
+        )
     }
 
     if (confirmDelete) {
@@ -721,4 +838,131 @@ private fun EditorField(
             }
         },
     )
+}
+
+// Załączniki pod treścią: zdjęcia jako miniatury w poziomym pasku, reszta jako wiersze z nazwą.
+@Composable
+private fun AttachmentsSection(
+    repo: NoteRepository,
+    items: List<AttachmentEntity>,
+    onOpen: (AttachmentEntity) -> Unit,
+    onRemove: (AttachmentEntity) -> Unit,
+) {
+    val images = items.filter { it.mimeType?.startsWith("image/") == true }
+    val others = items.filter { it.mimeType?.startsWith("image/") != true }
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp)) {
+        Text(
+            text = stringResource(R.string.oh_attachments) + " (" + items.size + ")",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        if (images.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                images.forEach { item ->
+                    key(item.id) {
+                        ImageThumb(repo = repo, item = item, onOpen = { onOpen(item) }, onRemove = { onRemove(item) })
+                    }
+                }
+            }
+        }
+        others.forEach { item ->
+            key(item.id) {
+                FileRow(item = item, onOpen = { onOpen(item) }, onRemove = { onRemove(item) })
+            }
+        }
+    }
+}
+
+// Miniatura zdjęcia (zmniejszona przy dekodowaniu — ImageDecoder, orientacja z EXIF) z ✕ w rogu.
+@Composable
+private fun ImageThumb(repo: NoteRepository, item: AttachmentEntity, onOpen: () -> Unit, onRemove: () -> Unit) {
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, item.path) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                ImageDecoder.decodeBitmap(ImageDecoder.createSource(repo.file(item))) { decoder, info, _ ->
+                    val max = maxOf(info.size.width, info.size.height).coerceAtLeast(1)
+                    val scale = minOf(1f, 320f / max)
+                    decoder.setTargetSize(
+                        (info.size.width * scale).toInt().coerceAtLeast(1),
+                        (info.size.height * scale).toInt().coerceAtLeast(1),
+                    )
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                }.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    Box(
+        Modifier
+            .size(104.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onOpen),
+    ) {
+        val image = bitmap
+        if (image != null) {
+            Image(
+                bitmap = image,
+                contentDescription = item.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text("🖼", modifier = Modifier.align(Alignment.Center), style = MaterialTheme.typography.headlineSmall)
+        }
+        RemoveBadge(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp))
+    }
+}
+
+@Composable
+private fun FileRow(item: AttachmentEntity, onOpen: () -> Unit, onRemove: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onOpen),
+    ) {
+        Row(Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(fileIcon(item.mimeType), style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+            )
+            TextButton(onClick = onRemove) { Text("✕", color = Color(0xFFFF6B6B)) }
+        }
+    }
+}
+
+// Małe kółko z ✕ na miniaturze.
+@Composable
+private fun RemoveBadge(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(26.dp)
+            .clip(CircleShape)
+            .background(Color(0xCC101214))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("✕", color = Color(0xFFFF6B6B), style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+private fun fileIcon(mime: String?): String = when {
+    mime == null -> "📄"
+    mime.startsWith("video/") -> "🎬"
+    mime.startsWith("audio/") -> "🎵"
+    mime == "application/pdf" -> "📕"
+    mime.startsWith("text/") -> "📝"
+    mime.contains("zip") || mime.contains("compressed") -> "🗜"
+    else -> "📄"
 }

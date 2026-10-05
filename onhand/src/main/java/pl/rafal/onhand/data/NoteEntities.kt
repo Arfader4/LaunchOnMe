@@ -22,6 +22,7 @@ data class NoteEntity(
 }
 
 // Załącznik notatki (zdjęcie, plik). Kopia w filesDir/onhand/<noteId>/ — oryginał z "Udostępnij" bywa chwilowy.
+// path jest względna do filesDir (np. "onhand/12/zdjecie.jpg"), żeby kopia zapasowa działała też na innym telefonie.
 // Tabela powstaje od razu w wersji 1 bazy, żeby paczka On3 (załączniki) nie potrzebowała migracji.
 @Entity(
     tableName = "attachments",
@@ -43,3 +44,6 @@ data class AttachmentEntity(
     val mimeType: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
 )
+
+// Wynik zapytania z GROUP BY (Room wypełnia go po nazwach kolumn — jak Dapper w .NET).
+data class AttachmentCount(val noteId: Long, val count: Int)

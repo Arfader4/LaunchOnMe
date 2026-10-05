@@ -39,4 +39,22 @@
     <string name="oh_format_md">Markdown (.md)</string>
     <string name="oh_export_done">Zapisano</string>
     <string name="oh_export_failed">Nie udało się zapisać pliku</string>
+    <!-- On3: Udostępnij → OnHand, załączniki -->
+    <string name="oh_share_title">Zapisz w OnHand</string>
+    <string name="oh_share_title_hint">Tytuł (opcjonalnie)</string>
+    <string name="oh_share_append">Dopisz do…</string>
+    <string name="oh_share_open_after">Otwórz notatkę po zapisaniu</string>
+    <string name="oh_share_saved">Zapisano w OnHand</string>
+    <string name="oh_share_appended">Dopisano do „%1$s”</string>
+    <string name="oh_share_nothing">Nie ma czego zapisać</string>
+    <string name="oh_attachments_n">Załączniki: %1$d</string>
+    <string name="oh_attach_failed">Nie udało się skopiować plików: %1$d</string>
+    <string name="oh_attach">Załącz</string>
+    <string name="oh_attach_photos">Zdjęcia z galerii</string>
+    <string name="oh_attach_files">Pliki</string>
+    <string name="oh_attachments">Załączniki</string>
+    <string name="oh_attachment_remove_title">Usunąć załącznik?</string>
+    <string name="oh_attachment_remove_text">„%1$s” zniknie z notatki.</string>
+    <string name="oh_remove">Usuń</string>
+    <string name="oh_open_failed">Żadna aplikacja nie otworzy tego pliku</string>
 </resources>

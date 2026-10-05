@@ -84,31 +84,56 @@ internal object NoteExport {
         }
     }
 
-    // ---------- Udostępnij ----------
-
-    // Jako tekst: jedna notatka albo kilka sklejonych w jedną wiadomość. To przyjmują Keep, Samsung Notes, komunikatory.
-    fun shareText(context: Context, title: String, text: String) {
-        val send = Intent(Intent.ACTION_SEND)
-            .setType("text/plain")
-            .putExtra(Intent.EXTRA_TEXT, format(title, text, NoteFormat.TXT).trimEnd())
-        if (title.isNotBlank()) send.putExtra(Intent.EXTRA_SUBJECT, title.trim())
-        startChooser(context, send)
-    }
-
-    fun shareText(context: Context, notes: List<NoteEntity>) {
-        if (notes.size == 1) {
-            shareText(context, notes[0].title, notes[0].text)
-        } else if (notes.isNotEmpty()) {
-            val text = notes.joinToString("\n\n— — —\n\n") { format(it, NoteFormat.TXT).trimEnd() }
-            startChooser(context, Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text))
+    // Sekcja "Załączniki" na końcu pliku w paczce .zip: .txt — lista nazw, .md — odnośniki (obrazy jako ![…]),
+    // ścieżki względne do folderu notatki obok pliku. <…> wokół ścieżki pozwala na spacje (CommonMark).
+    private fun attachmentSection(names: List<String>, mimes: List<String?>, folder: String, fmt: NoteFormat): String {
+        if (names.isEmpty()) return ""
+        val header = OnHandText.get(R.string.oh_attachments)
+        return if (fmt == NoteFormat.MD) {
+            "\n## $header\n\n" + names.mapIndexed { i, n ->
+                val bang = if (mimes[i]?.startsWith("image/") == true) "!" else ""
+                val label = n.replace("[", "\\[").replace("]", "\\]") // nawiasy w nazwie psułyby odnośnik
+                "- $bang[$label](<$folder/$n>)"
+            }.joinToString("\n") + "\n"
+        } else {
+            "\n$header:\n" + names.joinToString("\n") { "- $folder/$it" } + "\n"
         }
     }
 
-    // Jako pliki (.txt): kopie w cache/onhand_share/ i linki content:// przez FileProvider (z prawem odczytu).
-    // Poprzednie kopie kasujemy dopiero przy kolejnym udostępnianiu — odbiorca może je czytać jeszcze chwilę po wysłaniu.
-    suspend fun shareFiles(context: Context, notes: List<NoteEntity>, fmt: NoteFormat) {
+    // ---------- Udostępnij ----------
+
+    // Plik do wysłania (kopia notatki albo załącznik) z typem MIME.
+    class SharedFile(val file: File, val mimeType: String?)
+
+    suspend fun attachmentFiles(repo: NoteRepository, notes: List<NoteEntity>): List<SharedFile> =
+        withContext(Dispatchers.IO) {
+            notes.flatMap { note ->
+                repo.attachmentsFor(note.id).map { SharedFile(repo.file(it), it.mimeType) }
+            }.filter { it.file.exists() }
+        }
+
+    // Jako tekst (+ załączniki, jeśli są). To przyjmują Keep, Samsung Notes, komunikatory.
+    fun shareText(context: Context, title: String, text: String, files: List<SharedFile> = emptyList()) {
+        send(context, format(title, text, NoteFormat.TXT).trimEnd(), title.trim().takeIf { it.isNotEmpty() }, files)
+    }
+
+    // Jedna notatka albo kilka sklejonych w jedną wiadomość, z załącznikami wszystkich.
+    suspend fun shareText(context: Context, repo: NoteRepository, notes: List<NoteEntity>) {
         if (notes.isEmpty()) return
-        val uris = withContext(Dispatchers.IO) {
+        val files = attachmentFiles(repo, notes)
+        if (notes.size == 1) {
+            shareText(context, notes[0].title, notes[0].text, files)
+        } else {
+            val text = notes.joinToString("\n\n— — —\n\n") { format(it, NoteFormat.TXT).trimEnd() }
+            send(context, text, null, files)
+        }
+    }
+
+    // Jako pliki (.txt) + załączniki: kopie notatek w cache/onhand_share/, wszystko przez FileProvider (z prawem odczytu).
+    // Poprzednie kopie kasujemy dopiero przy kolejnym udostępnianiu — odbiorca może je czytać jeszcze chwilę po wysłaniu.
+    suspend fun shareFiles(context: Context, repo: NoteRepository, notes: List<NoteEntity>, fmt: NoteFormat) {
+        if (notes.isEmpty()) return
+        val noteFiles = withContext(Dispatchers.IO) {
             val dir = File(context.cacheDir, SHARE_DIR)
             dir.deleteRecursively()
             val names = uniqueNames(notes, fmt)
@@ -116,20 +141,56 @@ internal object NoteExport {
                 // Każdy plik we własnym podfolderze: nazwa pliku (= tytuł) zostaje czytelna dla odbiorcy.
                 val file = File(File(dir, i.toString()).apply { mkdirs() }, names[i])
                 file.writeText(format(note, fmt))
-                FileProvider.getUriForFile(context, "${context.packageName}.onhand", file)
+                SharedFile(file, fmt.mimeType)
             }
         }
-        val send = if (uris.size == 1) {
-            Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
-        } else {
-            Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+        send(context, null, null, noteFiles + attachmentFiles(repo, notes))
+    }
+
+    // Otwarcie załącznika w innej aplikacji (zdjęcie w galerii, PDF w czytniku…).
+    fun open(context: Context, file: File, mimeType: String?) {
+        val view = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uriFor(context, file), mimeType ?: "*/*")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        runCatching { context.startActivity(view) }
+            .onFailure { Toast.makeText(context, OnHandText.get(R.string.oh_open_failed), Toast.LENGTH_SHORT).show() }
+    }
+
+    private fun uriFor(context: Context, file: File): Uri =
+        FileProvider.getUriForFile(context, "${context.packageName}.onhand", file)
+
+    // Wspólny typ kilku plików: ten sam → on, same obrazy → image/*, inaczej */* (jak najwęższy wspólny typ bazowy).
+    private fun commonMime(mimes: List<String?>): String {
+        val list = mimes.map { it ?: "application/octet-stream" }.distinct()
+        val groups = list.map { it.substringBefore('/') }.distinct()
+        return when {
+            list.size == 1 -> list[0]
+            groups.size == 1 -> groups[0] + "/*"
+            else -> "*/*"
         }
-        send.setType(fmt.mimeType).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        // ClipData z wszystkimi linkami: dzięki niej prawo odczytu przechodzi przez okno wyboru aplikacji.
-        val clip = ClipData.newRawUri(null, uris[0])
-        for (i in 1 until uris.size) clip.addItem(ClipData.Item(uris[i]))
-        send.clipData = clip
-        startChooser(context, send)
+    }
+
+    // ACTION_SEND (tekst / jeden plik) albo ACTION_SEND_MULTIPLE (kilka plików), z tekstem w EXTRA_TEXT.
+    private fun send(context: Context, text: String?, subject: String?, files: List<SharedFile>) {
+        val intent: Intent
+        if (files.isEmpty()) {
+            intent = Intent(Intent.ACTION_SEND).setType("text/plain")
+        } else {
+            val uris = files.map { uriFor(context, it.file) }
+            intent = if (uris.size == 1) {
+                Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+            } else {
+                Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+            }
+            intent.setType(commonMime(files.map { it.mimeType })).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // ClipData z wszystkimi linkami: dzięki niej prawo odczytu przechodzi przez okno wyboru aplikacji.
+            val clip = ClipData.newRawUri(null, uris[0])
+            for (i in 1 until uris.size) clip.addItem(ClipData.Item(uris[i]))
+            intent.clipData = clip
+        }
+        if (text != null) intent.putExtra(Intent.EXTRA_TEXT, text)
+        if (subject != null) intent.putExtra(Intent.EXTRA_SUBJECT, subject)
+        startChooser(context, intent)
     }
 
     private fun startChooser(context: Context, send: Intent) {
@@ -140,8 +201,16 @@ internal object NoteExport {
 
     // ---------- Eksport do pliku (systemowe okno zapisu) ----------
 
-    // Jedna notatka → plik .txt/.md, kilka → .zip z plikami. Zwraca false przy błędzie zapisu.
-    suspend fun write(context: Context, uri: Uri, notes: List<NoteEntity>, fmt: NoteFormat, zip: Boolean): Boolean =
+    // Czy eksport musi być paczką .zip: kilka notatek albo notatka z załącznikami.
+    suspend fun needsZip(repo: NoteRepository, notes: List<NoteEntity>): Boolean =
+        notes.size > 1 || notes.any { repo.attachmentCount(it.id) > 0 }
+
+    // Nazwa paczki: jedna notatka → jej tytuł, kilka → "OnHand 2026-10-05.zip".
+    fun zipName(notes: List<NoteEntity>): String = if (notes.size == 1) fileBaseName(notes[0]) + ".zip" else zipName()
+
+    // Plik .txt/.md albo .zip: każda notatka jako plik, jej załączniki w folderze o tej samej nazwie
+    // ("Zakupy.md" + "Zakupy/paragon.jpg"). Zwraca false przy błędzie zapisu.
+    suspend fun write(context: Context, repo: NoteRepository, uri: Uri, notes: List<NoteEntity>, fmt: NoteFormat, zip: Boolean): Boolean =
         withContext(Dispatchers.IO) {
             runCatching {
                 val stream = context.contentResolver.openOutputStream(uri) ?: error("Brak strumienia dla $uri")
@@ -151,11 +220,24 @@ internal object NoteExport {
                         ZipOutputStream(out.buffered()).use { z ->
                             val names = uniqueNames(notes, fmt)
                             notes.forEachIndexed { i, note ->
+                                val folder = names[i].substringBeforeLast('.')
+                                // distinctBy: dwa wiersze z tą samą nazwą dałyby w zipie "duplicate entry".
+                                val items = repo.attachmentsFor(note.id).filter { repo.file(it).exists() }.distinctBy { it.name.lowercase() }
+                                val body = format(note, fmt) +
+                                    attachmentSection(items.map { it.name }, items.map { it.mimeType }, folder, fmt)
                                 val entry = ZipEntry(names[i])
                                 entry.time = note.updatedAt
                                 z.putNextEntry(entry)
-                                z.write(format(note, fmt).toByteArray(Charsets.UTF_8))
+                                z.write(body.toByteArray(Charsets.UTF_8))
                                 z.closeEntry()
+                                for (item in items) {
+                                    val file = repo.file(item)
+                                    val fileEntry = ZipEntry("$folder/${item.name}")
+                                    fileEntry.time = file.lastModified()
+                                    z.putNextEntry(fileEntry)
+                                    file.inputStream().use { it.copyTo(z) }
+                                    z.closeEntry()
+                                }
                             }
                         }
                     } else {
@@ -179,17 +261,19 @@ internal fun rememberNoteExporter(repo: NoteRepository): NoteExporter {
     // Co eksportujemy, gdy okno zapisu jest otwarte (rememberSaveable — przeżyje obrót ekranu w tym czasie).
     var pendingIds by rememberSaveable { mutableStateOf(longArrayOf()) }
     var pendingFormat by rememberSaveable { mutableStateOf(NoteFormat.TXT) }
+    var pendingZip by rememberSaveable { mutableStateOf(false) }
 
     val onResult: (Uri?) -> Unit = { uri ->
         val ids = pendingIds.toList()
         val fmt = pendingFormat
+        val zip = pendingZip
         pendingIds = longArrayOf()
         if (uri != null && ids.isNotEmpty()) {
             val app = context.applicationContext
             // W tle (backgroundScope): zapis ma się dokończyć, nawet gdy ekran zaraz zniknie.
             NoteRepository.backgroundScope.launch {
                 val notes = repo.getMany(ids)
-                val ok = notes.isNotEmpty() && NoteExport.write(app, uri, notes, fmt, zip = ids.size > 1)
+                val ok = notes.isNotEmpty() && NoteExport.write(app, repo, uri, notes, fmt, zip)
                 withContext(Dispatchers.Main) {
                     Toast.makeText(app, OnHandText.get(if (ok) R.string.oh_export_done else R.string.oh_export_failed), Toast.LENGTH_SHORT).show()
                 }
@@ -205,11 +289,13 @@ internal fun rememberNoteExporter(repo: NoteRepository): NoteExporter {
             scope.launch {
                 val notes = repo.getMany(ids)
                 if (notes.isNotEmpty()) {
+                    val zip = NoteExport.needsZip(repo, notes)
                     pendingIds = notes.map { it.id }.toLongArray()
                     pendingFormat = fmt
+                    pendingZip = zip
                     val result = runCatching {
-                        if (notes.size > 1) {
-                            zipLauncher.launch(NoteExport.zipName())
+                        if (zip) {
+                            zipLauncher.launch(NoteExport.zipName(notes))
                         } else if (fmt == NoteFormat.MD) {
                             mdLauncher.launch(NoteExport.fileName(notes[0], fmt))
                         } else {

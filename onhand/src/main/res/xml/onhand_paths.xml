@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OnHand udostępnia innym aplikacjom tylko kopie notatek przygotowane do wysłania (cache/onhand_share/). -->
+<!-- OnHand udostępnia innym aplikacjom tylko kopie notatek do wysłania (cache/onhand_share/)
+     i załączniki notatek (files/onhand/) — nic więcej z pamięci aplikacji. -->
 <paths>
     <cache-path name="share" path="onhand_share/" />
+    <files-path name="attachments" path="onhand/" />
 </paths>

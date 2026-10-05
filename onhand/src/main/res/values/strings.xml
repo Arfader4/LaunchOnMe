@@ -39,4 +39,22 @@
     <string name="oh_format_md">Markdown (.md)</string>
     <string name="oh_export_done">Saved</string>
     <string name="oh_export_failed">Couldn’t save the file</string>
+    <!-- On3: Udostępnij → OnHand, załączniki -->
+    <string name="oh_share_title">Save to OnHand</string>
+    <string name="oh_share_title_hint">Title (optional)</string>
+    <string name="oh_share_append">Add to…</string>
+    <string name="oh_share_open_after">Open the note after saving</string>
+    <string name="oh_share_saved">Saved to OnHand</string>
+    <string name="oh_share_appended">Added to “%1$s”</string>
+    <string name="oh_share_nothing">Nothing to save</string>
+    <string name="oh_attachments_n">Attachments: %1$d</string>
+    <string name="oh_attach_failed">Couldn’t copy files: %1$d</string>
+    <string name="oh_attach">Attach</string>
+    <string name="oh_attach_photos">Photos from gallery</string>
+    <string name="oh_attach_files">Files</string>
+    <string name="oh_attachments">Attachments</string>
+    <string name="oh_attachment_remove_title">Remove attachment?</string>
+    <string name="oh_attachment_remove_text">“%1$s” will be removed from the note.</string>
+    <string name="oh_remove">Remove</string>
+    <string name="oh_open_failed">No app can open this file</string>
 </resources>
