@@ -20,5 +20,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Udostępnianie notatek jako plików (.txt / .md): tymczasowy link content:// z prawem odczytu. -->
+        <provider
+            android:name=".OnHandFileProvider"
+            android:authorities="${applicationId}.onhand"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/onhand_paths" />
+        </provider>
     </application>
 </manifest>

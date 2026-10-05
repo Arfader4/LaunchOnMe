@@ -11,6 +11,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
@@ -88,10 +89,14 @@ private fun OnHandApp(
     var editing by rememberSaveable {
         mutableLongStateOf(directId ?: if (newText != null) NEW_NOTE else NO_EDITOR)
     }
+    // Zakładka listy (Notatki / Archiwum) — tutaj, bo lista znika z ekranu na czas edytora.
+    var archiveTab by rememberSaveable { mutableStateOf(false) }
     if (editing == NO_EDITOR) {
         NoteListScreen(
             repo = repo,
             pickMode = pickMode,
+            archiveTab = archiveTab,
+            onArchiveTab = { archiveTab = it },
             onOpen = { id -> if (pickMode) onPicked(id) else { editing = id } },
             onNew = { editing = NEW_NOTE },
         )

@@ -14,4 +14,29 @@
     <string name="oh_delete_confirm_title">Usunąć notatkę?</string>
     <string name="oh_delete_confirm_text">Notatka i jej załączniki znikną. Tego nie da się cofnąć.</string>
     <string name="oh_cancel">Anuluj</string>
+    <!-- On2: archiwum, zaznaczanie, Udostępnij, eksport -->
+    <string name="oh_tab_archive">Archiwum</string>
+    <string name="oh_archive_empty">Archiwum jest puste. Zarchiwizowane notatki czekają tutaj i dalej da się je wyszukać.</string>
+    <string name="oh_archive">Archiwizuj</string>
+    <string name="oh_restore">Przywróć</string>
+    <string name="oh_archived_n">Do archiwum: %1$d</string>
+    <string name="oh_restored_n">Przywrócono: %1$d</string>
+    <string name="oh_deleted_n">Usunięto: %1$d</string>
+    <string name="oh_selected_n">Zaznaczono: %1$d</string>
+    <string name="oh_select_all">Zaznacz wszystkie</string>
+    <string name="oh_delete_many_title">Usunąć notatki (%1$d)?</string>
+    <string name="oh_share">Udostępnij</string>
+    <string name="oh_share_n">Udostępnij notatki (%1$d)</string>
+    <string name="oh_share_as_text">Jako jeden tekst (Keep, Samsung Notes, czaty)</string>
+    <string name="oh_share_as_files">Jako osobne pliki .txt</string>
+    <string name="oh_share_failed">Żadna aplikacja tego nie przyjmie</string>
+    <string name="oh_export">Eksport</string>
+    <string name="oh_export_txt">Eksport .txt</string>
+    <string name="oh_export_md">Eksport .md (Markdown)</string>
+    <string name="oh_export_format">Format eksportu</string>
+    <string name="oh_export_zip_hint">Notatki (%1$d) zapiszą się jako jeden plik .zip.</string>
+    <string name="oh_format_txt">Zwykły tekst (.txt)</string>
+    <string name="oh_format_md">Markdown (.md)</string>
+    <string name="oh_export_done">Zapisano</string>
+    <string name="oh_export_failed">Nie udało się zapisać pliku</string>
 </resources>

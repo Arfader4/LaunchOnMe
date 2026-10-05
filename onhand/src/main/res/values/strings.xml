@@ -14,4 +14,29 @@
     <string name="oh_delete_confirm_title">Delete note?</string>
     <string name="oh_delete_confirm_text">The note and its attachments will be removed. This can’t be undone.</string>
     <string name="oh_cancel">Cancel</string>
+    <!-- On2: archiwum, zaznaczanie, Udostępnij, eksport -->
+    <string name="oh_tab_archive">Archive</string>
+    <string name="oh_archive_empty">Archive is empty. Archived notes wait here and stay searchable.</string>
+    <string name="oh_archive">Archive</string>
+    <string name="oh_restore">Restore</string>
+    <string name="oh_archived_n">Archived: %1$d</string>
+    <string name="oh_restored_n">Restored: %1$d</string>
+    <string name="oh_deleted_n">Deleted: %1$d</string>
+    <string name="oh_selected_n">Selected: %1$d</string>
+    <string name="oh_select_all">Select all</string>
+    <string name="oh_delete_many_title">Delete notes (%1$d)?</string>
+    <string name="oh_share">Share</string>
+    <string name="oh_share_n">Share notes (%1$d)</string>
+    <string name="oh_share_as_text">As one text (Keep, Samsung Notes, chats)</string>
+    <string name="oh_share_as_files">As separate .txt files</string>
+    <string name="oh_share_failed">No app can receive this</string>
+    <string name="oh_export">Export</string>
+    <string name="oh_export_txt">Export .txt</string>
+    <string name="oh_export_md">Export .md (Markdown)</string>
+    <string name="oh_export_format">Export format</string>
+    <string name="oh_export_zip_hint">%1$d notes will be saved as one .zip file.</string>
+    <string name="oh_format_txt">Plain text (.txt)</string>
+    <string name="oh_format_md">Markdown (.md)</string>
+    <string name="oh_export_done">Saved</string>
+    <string name="oh_export_failed">Couldn’t save the file</string>
 </resources>

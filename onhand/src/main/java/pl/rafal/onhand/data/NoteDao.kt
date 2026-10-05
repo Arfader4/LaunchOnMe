@@ -20,6 +20,10 @@ interface NoteDao {
     @Query("SELECT * FROM notes")
     suspend fun getAll(): List<NoteEntity>
 
+    // Kilka notatek naraz (zaznaczanie wielu): WHERE id IN (...) — Room sam rozwinie listę w parametry.
+    @Query("SELECT * FROM notes WHERE id IN (:ids)")
+    suspend fun getMany(ids: List<Long>): List<NoteEntity>
+
     @Insert
     suspend fun insert(note: NoteEntity): Long
 
@@ -29,6 +33,9 @@ interface NoteDao {
     // time = null przywraca z archiwum.
     @Query("UPDATE notes SET archivedAt = :time WHERE id = :id")
     suspend fun setArchived(id: Long, time: Long?)
+
+    @Query("UPDATE notes SET archivedAt = :time WHERE id IN (:ids)")
+    suspend fun setArchivedMany(ids: List<Long>, time: Long?)
 
     @Query("DELETE FROM notes WHERE id = :id")
     suspend fun delete(id: Long)

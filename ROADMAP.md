@@ -246,8 +246,11 @@ Nowy czat: „robimy paczkę OnN z ROADMAP.md” (gałąź `feature/onhand`).
 
 - [x] On1 — szkielet: moduł `:onhand` (settings/build.gradle, manifest, ikona adaptacyjna SVG), baza `onhand.db`,
       `OnHandText`, `OnHand` (intencje), lista z wyszukiwaniem, prosty edytor (bez załączników).
-- [ ] On2 — na zewnątrz: archiwum, zaznaczanie wielu, Udostępnij (ACTION_SEND / SEND_MULTIPLE przez FileProvider),
+- [x] On2 — na zewnątrz: archiwum, zaznaczanie wielu, Udostępnij (ACTION_SEND / SEND_MULTIPLE przez FileProvider),
       eksport .txt / .md (jedna) i .zip (kilka) przez systemowe okno zapisu (CreateDocument).
+      Lista: zakładki Notatki / Archiwum, długie przytrzymanie = zaznaczanie (dolny pasek: Udostępnij, Eksport,
+      Archiwizuj/Przywróć, Usuń); kilka notatek → „jako jeden tekst” albo „jako pliki .txt”. Edytor ⋮: Udostępnij,
+      Eksport .txt / .md, Archiwizuj (zamyka edytor) / Przywróć, Usuń. `NoteExport.kt`, `OnHandFileProvider`.
 - [ ] On3 — do środka: cel „Udostępnij → OnHand” (tekst, link, obraz/y, pliki), Nowa / Dopisz do…, załączniki
       w edytorze (galeria, plik) i w eksporcie.
 - [ ] On4 — launcher: `OnHandHost`, przypinanie z OnHand i z `HandySheet`, rodzaj `ONHAND`, migracja starych notatek

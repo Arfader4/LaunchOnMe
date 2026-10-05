@@ -30,6 +30,11 @@ class NoteRepository(private val context: Context) {
 
     suspend fun get(id: Long): NoteEntity? = notes.get(id)
 
+    // Notatki o podanych id, najnowsze pierwsze (kolejność jak na liście — tak trafiają do eksportu i Udostępnij).
+    // Po 500 naraz: starszy SQLite (Android 10–11) przyjmuje najwyżej 999 parametrów w jednym zapytaniu.
+    suspend fun getMany(ids: Collection<Long>): List<NoteEntity> =
+        ids.toList().chunked(500).flatMap { notes.getMany(it) }.sortedByDescending { it.updatedAt }
+
     suspend fun create(title: String, text: String): Long = notes.insert(NoteEntity(title = title, text = text))
 
     suspend fun update(id: Long, title: String, text: String) = notes.update(id, title, text, System.currentTimeMillis())
@@ -37,6 +42,20 @@ class NoteRepository(private val context: Context) {
     suspend fun archive(id: Long) = notes.setArchived(id, System.currentTimeMillis())
 
     suspend fun restore(id: Long) = notes.setArchived(id, null)
+
+    suspend fun archiveMany(ids: Collection<Long>) {
+        val time = System.currentTimeMillis()
+        for (part in ids.toList().chunked(500)) notes.setArchivedMany(part, time)
+    }
+
+    suspend fun restoreMany(ids: Collection<Long>) {
+        for (part in ids.toList().chunked(500)) notes.setArchivedMany(part, null)
+    }
+
+    // Każda osobno, bo razem z wierszem znika folder załączników tej notatki.
+    suspend fun deleteMany(ids: Collection<Long>) {
+        for (id in ids) delete(id)
+    }
 
     // Usunięcie notatki razem z plikami załączników (wiersze usuwa kaskada w bazie).
     suspend fun delete(id: Long) = withContext(Dispatchers.IO) {
