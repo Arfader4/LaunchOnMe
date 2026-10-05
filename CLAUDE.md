@@ -30,6 +30,8 @@ push robi właściciel.
    `md5sum -c build/origN.md5 --quiet && t=$(mktemp -d) && tar xzf build/batchN.tgz -C $t && (cd $t && find . -type f) | while read f; do mkdir -p "$(dirname "$f")"; cat "$t/$f" > "$f"; done`
    → `git add -A -- . ':!.idea' && git commit -F <plik z opisem>` (na końcu opisu trailer Co-Authored-By Claude),
    usuń `build/batchN.tgz` i `build/origN.md5`, w kontenerze `rm -rf w-orig && cp -r w w-orig`.
+   Gdy `git commit` / pełny `git status` wisi (tysiące nieśledzonych plików, np. `onhand/build/` z innej gałęzi):
+   `git add` tylko konkretnych ścieżek, potem `T=$(git write-tree); C=$(git commit-tree $T -p HEAD -F msg); git update-ref refs/heads/<gałąź> $C`.
 5. Równoległe czaty: każdy na własnej gałęzi `feature/…` od `dev`, z własnym numerem wersji z promptu.
    Wspólne pliki (`LauncherScreen.kt`, `strings.xml`, `build.gradle.kts`, `settings.gradle.kts`, ROADMAP) zmieniaj
    oszczędnie i dopisuj na końcu sekcji — mniej konfliktów przy scalaniu do `dev`.
@@ -49,3 +51,9 @@ push robi właściciel.
 - `ui/LauncherScreen.kt` (ekran główny, okna), `ui/LauncherViewModel.kt` (logika), `ui/CardGridView.kt` (siatka karty,
   przeciąganie), `ui/ModeSwitcher.kt` + `ui/ModeArc.kt` (klawisz ON, lista i łuk trybów), `data/Backup.kt` (kopia .zip/.json).
 - StickOnMe: `StudioActivity.kt` (biblioteka, edytor wycinania), `BoardEditor.kt` + `BoardRenderer.kt` (tablice).
+- OnThemes (moduł `:themes`, pakiet `pl.rafal.onthemes`): cały model motywów — `ThemeModel.kt` (`ThemeSpec`, `Roles`,
+  `LocalThemeSpec`), `Themes.kt` (katalog + aliasy starych nazw), `Luxury.kt`, `CustomThemes.kt`, `ThemeStore.kt`
+  (prefs `appearance`), `Badges.kt` (wygląd znaczka trybu wg stylu motywu), `SystemColors.kt`, `PaletteWallpaper.kt`;
+  ekrany `OnThemesActivity.kt` + `Screens.kt` + `Components.kt` + `LauncherPreview.kt`. Launcher tylko czyta
+  (`ContextLauncherTheme` ustawia `LocalThemeSpec`, `ModeBadge` rysuje wg stylu), tryby widzi moduł przez
+  `OnThemesHost` ↔ `data/OnThemesBridge.kt`. Teksty: `OnThemesText`.

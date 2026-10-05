@@ -83,6 +83,7 @@ private sealed interface Screen {
     data object Gallery : Screen
     data class Detail(val id: String) : Screen
     data class Editor(val def: CustomThemeDef) : Screen
+    data class Wallpaper(val id: String, val dark: Boolean) : Screen
 }
 
 @Composable
@@ -195,6 +196,12 @@ private fun OnThemesApp(request: OnThemesRequest?, onRequestHandled: () -> Unit)
                             push(Screen.Editor(def))
                         },
                         onModesChanged = { modesVersion++ },
+                        onWallpaper = { spec, previewDark -> push(Screen.Wallpaper(spec.id, previewDark)) },
+                    )
+                    is Screen.Wallpaper -> WallpaperScreen(
+                        spec = Themes.find(screen.id) ?: theme,
+                        dark = screen.dark,
+                        onBack = { pop() },
                     )
                     is Screen.Editor -> CustomEditorScreen(
                         store = store,

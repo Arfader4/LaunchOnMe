@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -136,7 +137,10 @@ internal fun ThemeDetailScreen(
     onEdit: (String) -> Unit,
     onDuplicate: (ThemeSpec, Boolean) -> Unit,
     onModesChanged: () -> Unit,
+    onWallpaper: (ThemeSpec, Boolean) -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val copiedText = stringResource(R.string.ot_hex_copied)
     val global by store.defaultTheme.collectAsState()
     val sheen by store.luxurySheen.collectAsState()
     // Luxury: metal i bazę można przymierzać na podglądzie, zanim się je zastosuje.
@@ -183,6 +187,19 @@ internal fun ThemeDetailScreen(
         OutlinedButton(onClick = { onDuplicate(spec, previewDark) }, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.ot_duplicate))
         }
+        // Kolory systemu (One UI / Material You) — tylko pośrednio: tapeta z palety albo kolory do przepisania.
+        SectionTitle(stringResource(R.string.ot_system_colors))
+        Hint(stringResource(R.string.ot_system_colors_hint))
+        OutlinedButton(onClick = { onWallpaper(spec, previewDark) }, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.ot_wallpaper_open))
+        }
+        OutlinedButton(
+            onClick = {
+                PaletteWallpaper.copyHex(context, spec.label, spec.look(previewDark))
+                android.widget.Toast.makeText(context, copiedText, android.widget.Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(stringResource(R.string.ot_copy_hex)) }
         if (spec.family == ThemeFamily.CUSTOM) {
             TextButton(onClick = { deleteOpen = true }, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.ot_delete), color = MaterialTheme.colorScheme.error)
@@ -371,5 +388,85 @@ private fun ColorRow(title: String, presets: List<Long>, selected: Long, onSelec
     }
     if (pickerOpen) {
         HsvColorDialog(initial = selected, onPick = { onSelect(it); pickerOpen = false }, onDismiss = { pickerOpen = false })
+    }
+}
+
+// ——— Tapeta z palety ———
+@Composable
+internal fun WallpaperScreen(spec: ThemeSpec, dark: Boolean, onBack: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val look = spec.look(dark)
+    var style by remember { mutableStateOf(PaletteWallpaper.Style.GLOW) }
+    var lockToo by remember { mutableStateOf(false) }
+    var confirmOpen by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<Boolean?>(null) }
+    val scope = rememberCoroutineScope()
+    // Mały podgląd (270 × 585 px) — liczony od nowa tylko przy zmianie stylu albo motywu.
+    val preview = remember(look, style) { PaletteWallpaper.render(look, style, 270, 585).asImageBitmap() }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+    ) {
+        BackRow(stringResource(R.string.ot_wallpaper_title), onBack)
+        Hint(stringResource(R.string.ot_wallpaper_hint))
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            androidx.compose.foundation.Image(
+                bitmap = preview,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(width = 180.dp, height = 390.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp)),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            PaletteWallpaper.Style.entries.forEach { s ->
+                FilterChip(selected = s == style, onClick = { style = s; result = null }, label = { Text(s.label) })
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().clickable { lockToo = !lockToo },
+        ) {
+            androidx.compose.material3.Checkbox(checked = lockToo, onCheckedChange = { lockToo = it })
+            Text(stringResource(R.string.ot_wallpaper_lock), style = MaterialTheme.typography.bodyLarge)
+        }
+        Button(onClick = { confirmOpen = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Text(if (busy) stringResource(R.string.ot_wallpaper_busy) else stringResource(R.string.ot_wallpaper_set))
+        }
+        val done = result
+        if (done == true) {
+            Text(stringResource(R.string.ot_wallpaper_done), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+        } else if (done == false) {
+            Text(stringResource(R.string.ot_wallpaper_failed), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+        }
+        Hint(stringResource(R.string.ot_wallpaper_modes_note))
+    }
+
+    if (confirmOpen) {
+        AlertDialog(
+            onDismissRequest = { confirmOpen = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text(stringResource(R.string.ot_wallpaper_confirm_title)) },
+            text = { Text(stringResource(R.string.ot_wallpaper_confirm_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmOpen = false
+                    busy = true
+                    scope.launch {
+                        result = PaletteWallpaper.apply(context, look, style, lockToo)
+                        busy = false
+                    }
+                }) { Text(stringResource(R.string.ot_wallpaper_set)) }
+            },
+            dismissButton = { TextButton(onClick = { confirmOpen = false }) { Text(stringResource(R.string.ot_cancel)) } },
+        )
     }
 }

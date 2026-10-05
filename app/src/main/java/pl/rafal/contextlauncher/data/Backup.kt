@@ -94,6 +94,9 @@ object Backup {
                     .put("customTheme", pl.rafal.onthemes.CustomTheme.colors.let {
                         JSONObject().put("bg", it.background).put("surface", it.surface).put("accent", it.accent).put("text", it.text)
                     })
+                    // Od 1.5: wszystkie motywy własne (OnThemes) i ruchomy połysk Luxury.
+                    .put("customThemes", JSONArray(theme.exportCustomsJson()))
+                    .put("luxurySheen", theme.luxurySheen.value)
                     .put("homeModeId", prefs.homeModeId.value ?: -1)
                     .put("leftHanded", prefs.leftHanded.value)
                     .put("returnToHome", prefs.returnToHome.value)
@@ -316,6 +319,10 @@ object Backup {
                     )
                 }
             }
+            // Kopie od 1.5 mają pełną listę motywów własnych — wczytujemy ją PRZED motywem globalnym,
+            // bo globalny może być własnym ("custom:2"). Starsze kopie: wystarczy "customTheme" powyżej.
+            p.optJSONArray("customThemes")?.let { importCustomsJson(it.toString()) }
+            if (p.has("luxurySheen")) setLuxurySheen(p.optBoolean("luxurySheen", false))
             // Stare nazwy (CONTRAST, ELEGANT) tłumaczy Themes.find.
             Themes.find(p.optString("defaultPalette"))?.let { setDefaultTheme(it) }
         }

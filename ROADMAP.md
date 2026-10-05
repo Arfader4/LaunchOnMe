@@ -12,6 +12,7 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.1 | Etapy 1–11, runda 29.09, StickOnMe S0–S4, porządki X/Y/Z (animacje) | 21 |
 | 1.2 | Runda uwag 04.10: paczki 1–3 (OnHand, klawisz ON, pasek czuwania, tłumaczenie EN/PL) | 3 |
 | 1.2.1 | Hotfix: łuk trybów i lista trybów na przygaszonym całym ekranie | 1 |
+| 1.5.0 | OnThemes — aplikacja motywów (`feature/onthemes`): T1–T5 (1.4.0 = OnHand na `feature/onhand`) | 5 |
 Razem od V1: 25 paczek. Kolejne duże tematy = 1.3, 1.4…; poprawki do nich = 1.3.1, 1.3.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
@@ -257,5 +258,9 @@ motyw „System” (kolory dynamiczne), „Kopiuj HEX”.
       (`CustomThemes`, JSON `custom_themes`; pierwszy ma stare id `CUSTOM`, kolejne `custom:N`) z nazwą i stylem
       znaczków. Kreator przeniesiony do modułu (własny wybór koloru HSV + HEX); z launchera usunięty `ThemeCreator.kt`,
       Ustawienia → „Kreator…” otwiera kreator w OnThemes.
-- [ ] T5 — kolory systemu (tapeta z palety, HEX), kopia zapasowa, wersja 1.5.0 + tag, checklista testów całości.
+- [x] T5 — kolory systemu: „Tapeta z palety…” (style Światła / Gradient / Pasy, podgląd, opcjonalnie ekran blokady;
+      One UI / Material You liczy z niej paletę) i „Kopiuj kolory (HEX)” (np. do Theme Park) na ekranie motywu.
+      Kopia zapasowa: wszystkie motywy własne (`customThemes`) i połysk Luxury. Wersja 1.5.0 + tag `v1.5.0`.
+      Uwaga: dev (1.2.1) nie ma jeszcze OnHand 1.4.0 — przy scalaniu obu gałęzi do dev konflikty w
+      `settings.gradle.kts`, `app/build.gradle.kts`, `LaunchOnMeApp.kt`, `Backup.kt`, `strings.xml`, ROADMAP.
 - [ ] (opcjonalnie T6) barwione ikony aplikacji z warstwy monochromatycznej (Android 13+).

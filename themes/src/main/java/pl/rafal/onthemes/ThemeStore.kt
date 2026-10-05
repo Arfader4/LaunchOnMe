@@ -81,6 +81,14 @@ class ThemeStore private constructor(context: Context) {
         if (_defaultTheme.value.id == id) setDefaultTheme(Themes.NIGHT)
     }
 
+    // Kopia zapasowa launchera: wszystkie motywy własne jako tekst JSON (tablica) i z powrotem.
+    fun exportCustomsJson(): String = CustomThemes.toJson(CustomThemes.defs)
+
+    fun importCustomsJson(json: String) {
+        val list = CustomThemes.fromJson(json)
+        if (list.isNotEmpty()) replaceCustoms(list)
+    }
+
     // Cała lista naraz (import kopii zapasowej).
     fun replaceCustoms(list: List<CustomThemeDef>) {
         CustomThemes.defs = list

@@ -78,4 +78,22 @@
     <string name="ot_starter_burgundy">Bordo</string>
     <string name="ot_starter_paper">Papier</string>
     <string name="ot_starter_snow">Śnieg</string>
+    <string name="ot_system_colors">Kolory systemu (One UI)</string>
+    <string name="ot_system_colors_hint">Good Lock nie ma API, ale Android 12+ i One UI biorą kolory systemu z tapety. Ustaw tapetę z tej palety, a potem w Ustawieniach → Tapeta i styl → Paleta kolorów wybierz paletę z niej.</string>
+    <string name="ot_wallpaper_open">Tapeta z palety…</string>
+    <string name="ot_copy_hex">Kopiuj kolory (HEX)</string>
+    <string name="ot_hex_copied">Kolory skopiowane — wklej je np. w Theme Park.</string>
+    <string name="ot_wallpaper_title">Tapeta z palety</string>
+    <string name="ot_wallpaper_hint">System policzy kolory z tej tapety. „Światła” dają najwyraźniejszą paletę.</string>
+    <string name="ot_wall_glow">Światła</string>
+    <string name="ot_wall_gradient">Gradient</string>
+    <string name="ot_wall_bands">Pasy</string>
+    <string name="ot_wallpaper_lock">Także ekran blokady</string>
+    <string name="ot_wallpaper_set">Ustaw tapetę</string>
+    <string name="ot_wallpaper_busy">Ustawiam…</string>
+    <string name="ot_wallpaper_done">Gotowe. Teraz otwórz Ustawienia → Tapeta i styl → Paleta kolorów i wybierz paletę z tapety.</string>
+    <string name="ot_wallpaper_failed">Nie udało się ustawić tapety.</string>
+    <string name="ot_wallpaper_modes_note">Jeśli tryby mają w LaunchOnMe własne tapety, przy zmianie trybu launcher ustawi je z powrotem.</string>
+    <string name="ot_wallpaper_confirm_title">Zmienić tapetę?</string>
+    <string name="ot_wallpaper_confirm_text">Obecna tapeta systemu zostanie zastąpiona. Zawsze możesz potem wybrać inną.</string>
 </resources>

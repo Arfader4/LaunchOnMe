@@ -78,4 +78,22 @@
     <string name="ot_starter_burgundy">Burgundy</string>
     <string name="ot_starter_paper">Paper</string>
     <string name="ot_starter_snow">Snow</string>
+    <string name="ot_system_colors">System colors (One UI)</string>
+    <string name="ot_system_colors_hint">Good Lock has no API, but Android 12+ and One UI take system colors from the wallpaper. Set a wallpaper made from this palette, then pick its palette in Settings → Wallpaper and style → Color palette.</string>
+    <string name="ot_wallpaper_open">Wallpaper from palette…</string>
+    <string name="ot_copy_hex">Copy colors (HEX)</string>
+    <string name="ot_hex_copied">Colors copied — paste them e.g. in Theme Park.</string>
+    <string name="ot_wallpaper_title">Wallpaper from palette</string>
+    <string name="ot_wallpaper_hint">The system calculates its colors from this wallpaper. \"Glow\" gives the most distinct palette.</string>
+    <string name="ot_wall_glow">Glow</string>
+    <string name="ot_wall_gradient">Gradient</string>
+    <string name="ot_wall_bands">Bands</string>
+    <string name="ot_wallpaper_lock">Lock screen too</string>
+    <string name="ot_wallpaper_set">Set wallpaper</string>
+    <string name="ot_wallpaper_busy">Setting…</string>
+    <string name="ot_wallpaper_done">Done. Now open Settings → Wallpaper and style → Color palette and choose the palette from the wallpaper.</string>
+    <string name="ot_wallpaper_failed">Could not set the wallpaper.</string>
+    <string name="ot_wallpaper_modes_note">If your modes have their own wallpapers in LaunchOnMe, switching modes will set those again.</string>
+    <string name="ot_wallpaper_confirm_title">Replace the wallpaper?</string>
+    <string name="ot_wallpaper_confirm_text">The current system wallpaper will be replaced. You can always choose another one later.</string>
 </resources>
