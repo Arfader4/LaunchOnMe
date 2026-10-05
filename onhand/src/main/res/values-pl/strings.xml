@@ -57,4 +57,11 @@
     <string name="oh_attachment_remove_text">„%1$s” zniknie z notatki.</string>
     <string name="oh_remove">Usuń</string>
     <string name="oh_open_failed">Żadna aplikacja nie otworzy tego pliku</string>
+    <!-- On4: przypinanie do trybów LaunchOnMe -->
+    <string name="oh_pin_menu">Przypnij do trybu…</string>
+    <string name="oh_pin_title">Przypnij do trybu</string>
+    <string name="oh_pin_hint">Notatka pojawi się na karcie każdego zaznaczonego trybu w LaunchOnMe.</string>
+    <string name="oh_pin_no_modes">Nie ma jeszcze trybów. Najpierw utwórz tryb w LaunchOnMe.</string>
+    <string name="oh_done">Gotowe</string>
+    <string name="oh_share_pin_to">Przypnij do trybu (opcjonalnie)</string>
 </resources>

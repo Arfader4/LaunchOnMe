@@ -25,13 +25,14 @@ import pl.rafal.contextlauncher.ui.theme.Palette
 import pl.rafal.contextlauncher.ui.theme.ThemeMode
 
 // Eksport i import całej konfiguracji (np. przeniesienie z emulatora na telefon albo nowy telefon).
-// Dwa formaty: sam JSON (ustawienia) albo .zip = ten sam JSON + pliki: naklejki z kart, tapety trybów,
-// biblioteka i tablice StickOnMe. Ścieżki plików w JSON-ie zapisujemy względnie ("@FILES@/…"), bo na innym
+// Dwa formaty: sam JSON (ustawienia + notatki OnHand) albo .zip = ten sam JSON + pliki: naklejki z kart,
+// tapety trybów, biblioteka i tablice StickOnMe, załączniki notatek OnHand.
+// Ścieżki plików w JSON-ie zapisujemy względnie ("@FILES@/…"), bo na innym
 // telefonie (albo profilu) folder aplikacji może się nazywać inaczej.
 // Nigdy nie przenosimy: widżetów innych aplikacji (ich identyfikatory działają tylko na jednym telefonie),
-// plików z OnHand (to tylko odnośniki) i statystyk uruchomień.
+// plików przypiętych na kartach (rodzaj FILE — kopie cudzych plików) i statystyk uruchomień.
 object Backup {
-    private const val VERSION = 2          // 2 = naklejki, tapety i układy trybów (czytamy też 1)
+    private const val VERSION = 3          // 3 = notatki OnHand; 2 = naklejki, tapety i układy trybów (czytamy też 1–2)
     private const val FILES = "@FILES@"   // znacznik folderu aplikacji w ścieżkach
     private const val CONFIG = "config.json"
 
@@ -102,6 +103,12 @@ object Backup {
                     .put("modeLayouts", prefs.modeLayouts.value), // odstępy i rozmiar ikon per tryb (klucze = id trybów)
             )
 
+        // OnHand: notatki zawsze (to sam tekst), załączniki tylko w .zip.
+        json.put("onhand", pl.rafal.onhand.OnHandBackup.export(context))
+        if (withFiles) {
+            pl.rafal.onhand.OnHandBackup.attachmentFiles(context).forEach { portable(it.path) }
+        }
+
         if (withFiles) {
             // Tapety trybów (i domyślna: modeId = -1) razem z kadrem i ekranem blokady.
             val wallpapers = WallpaperStore(context).saved(modeList.map { it.id }).mapNotNull { w ->
@@ -143,7 +150,8 @@ object Backup {
             ?: error(AppText.get(R.string.data_backup_cannot_read))
 
     // Rozpakowanie .zip: config.json musi być pierwszy (sprawdzamy wersję, zanim cokolwiek zapiszemy),
-    // pliki trafiają tylko do stickers/ i wallpapers/ w folderze aplikacji (ochrona przed "../" w nazwach).
+    // pliki trafiają tylko do stickers/ i wallpapers/ w folderze aplikacji (ochrona przed "../" w nazwach),
+    // a załączniki OnHand do folderu przejściowego onhand_import/.
     private fun unzip(context: Context, source: Uri, root: File): String {
         val stream = context.contentResolver.openInputStream(source) ?: error(AppText.get(R.string.data_backup_cannot_read))
         return ZipInputStream(stream.buffered()).use { zip ->
@@ -153,10 +161,22 @@ object Backup {
             val version = JSONObject(text).optInt("version")
             require(version in 1..VERSION) { AppText.get(R.string.data_backup_unsupported_version) }
             val allowed = listOf(File(root, "stickers"), File(root, "wallpapers")).map { it.canonicalPath + File.separator }
+            // Załączniki OnHand: do folderu przejściowego (OnHandBackup.import rozkłada je potem do nowych notatek).
+            val staging = File(root, pl.rafal.onhand.OnHandBackup.STAGING)
+            staging.deleteRecursively()
+            val stagingDir = staging.canonicalPath + File.separator
             while (true) {
                 val entry = zip.nextEntry ?: break
                 if (entry.isDirectory || !entry.name.startsWith("files/")) continue
-                val out = File(root, entry.name.removePrefix("files/")).canonicalFile
+                val rel = entry.name.removePrefix("files/")
+                if (rel.startsWith("onhand/")) {
+                    val staged = File(staging, rel.removePrefix("onhand/")).canonicalFile
+                    if (!staged.path.startsWith(stagingDir)) continue // ochrona przed "../"
+                    staged.parentFile?.mkdirs()
+                    staged.outputStream().use { zip.copyTo(it) }
+                    continue
+                }
+                val out = File(root, rel).canonicalFile
                 // Istniejących plików nie nadpisujemy: nazwy to UUID / id tablic, więc to ten sam plik
                 // (a tablica edytowana po zrobieniu kopii nie wróci do starej wersji).
                 if (allowed.none { out.path.startsWith(it) } || out.exists()) continue
@@ -189,6 +209,21 @@ object Backup {
         fun inside(path: String, dir: String): String? {
             val limit = File(root, dir).canonicalPath + File.separator
             return path.takeIf { runCatching { File(it).canonicalPath.startsWith(limit) }.getOrDefault(false) }
+        }
+
+        // Najpierw sprawdzamy, czy część launchera jest kompletna — zanim OnHand (osobna baza, osobna transakcja)
+        // zastąpi swoje notatki. Brak któregoś pola = wyjątek tutaj, a nic jeszcze się nie zmieniło.
+        listOf("modes", "folders", "folderApps", "cards", "pinned", "rules").forEach { json.getJSONArray(it) }
+        json.getJSONObject("prefs")
+
+        // OnHand przed launcherem: potrzebujemy mapy "stare id notatki → nowe" dla odnośników.
+        // Starsze kopie nie mają sekcji "onhand" — wtedy notatek OnHand nie ruszamy.
+        // Folder przejściowy sprzątamy zawsze (finally ≈ finally w C#), także po błędzie.
+        val onHandIds: Map<Long, Long>? = try {
+            if (!zipped) pl.rafal.onhand.OnHandBackup.clearStaging(context) // resztki po dawnym, nieudanym imporcie
+            json.optJSONObject("onhand")?.let { pl.rafal.onhand.OnHandBackup.import(context, it) }
+        } finally {
+            pl.rafal.onhand.OnHandBackup.clearStaging(context)
         }
 
         val db = LauncherDatabase.get(context)
@@ -268,12 +303,18 @@ object Backup {
 
             json.getJSONArray("pinned").objects().forEach { o ->
                 val modeId = modeIds[o.getLong("modeId")] ?: return@forEach
+                val kind = o.getString("kind")
+                var uri = o.optStringOrNull("uri")
+                // Odnośnik do notatki OnHand → nowe id notatki (bez notatki w kopii odnośnik pomijamy).
+                if (kind == PinnedItemEntity.KIND_ONHAND && onHandIds != null) {
+                    uri = uri?.toLongOrNull()?.let { onHandIds[it] }?.toString() ?: return@forEach
+                }
                 db.pinnedItemDao().insert(
                     PinnedItemEntity(
                         modeId = modeId,
-                        kind = o.getString("kind"),
+                        kind = kind,
                         title = o.getString("title"),
-                        uri = o.optStringOrNull("uri"),
+                        uri = uri,
                         text = o.optStringOrNull("text"),
                         createdAt = o.optLong("createdAt"),
                         archivedAt = o.optLongOrNull("archivedAt"),
@@ -354,6 +395,9 @@ object Backup {
                 }
             }
         }
+
+        // Stara kopia mogła przynieść notatki w bazie launchera (rodzaj NOTE) — przenosimy je do OnHand.
+        runCatching { OnHandBridge.migrateLegacyNotes(context) }
 
         // Porządek (tylko pełna kopia, która przynosi własne naklejki): pliki naklejek, których nie używa już
         // żadna karta, usuwamy. Import samego JSON-a naklejek nie ma — wtedy niczego nie kasujemy.

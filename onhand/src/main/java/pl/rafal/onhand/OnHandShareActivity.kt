@@ -13,6 +13,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -36,6 +39,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -127,13 +131,28 @@ private fun ShareSheet(
     var title by rememberSaveable { mutableStateOf(incoming.subject.orEmpty()) }
     var openAfter by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    // Opcjonalne przypięcie do trybu launchera (null = nie przypinaj).
+    val host = OnHand.host
+    var pinModeId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var modes by remember { mutableStateOf(emptyList<OnHandHost.Mode>()) }
+    LaunchedEffect(host) {
+        if (host != null) modes = runCatching { host.modes() }.getOrDefault(emptyList())
+    }
 
     // Zapis: notatka (nowa albo istniejąca), potem kopie plików. NonCancellable — żeby wyjście w trakcie
     // nie zostawiło notatki bez części załączników.
     val save = { targetId: Long? ->
         saving = true
         scope.launch {
-            val result = withContext(NonCancellable) { saveIncoming(repo, incoming, title, targetId) }
+            val modeId = pinModeId
+            val result = withContext(NonCancellable) {
+                val saved = saveIncoming(repo, incoming, title, targetId)
+                if (host != null && modeId != null) {
+                    val noteTitle = repo.get(saved.first)?.displayTitle.orEmpty().ifBlank { context.getString(R.string.oh_untitled) }
+                    runCatching { host.pin(saved.first, modeId, noteTitle) }
+                }
+                saved
+            }
             val (id, failed) = result
             val message = if (targetId == null) {
                 context.getString(R.string.oh_share_saved)
@@ -218,6 +237,28 @@ private fun ShareSheet(
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 12.dp),
                     )
+                }
+                if (modes.isNotEmpty()) {
+                    // Przypnij do trybu: chipy z nazwami trybów; ponowne dotknięcie odznacza.
+                    Text(
+                        text = stringResource(R.string.oh_share_pin_to),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        modes.forEach { mode ->
+                            FilterChip(
+                                selected = pinModeId == mode.id,
+                                onClick = { pinModeId = if (pinModeId == mode.id) null else mode.id },
+                                label = { Text(mode.name, maxLines = 1) },
+                                enabled = !saving,
+                            )
+                        }
+                    }
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

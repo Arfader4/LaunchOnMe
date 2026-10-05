@@ -107,7 +107,17 @@ private fun OnHandApp(
             initialTitle = newTitle.orEmpty(),
             initialText = newText.orEmpty(),
             onIdKnown = { id -> editing = id },
-            onClose = { if (direct) onExit() else { editing = NO_EDITOR } },
+            // keptId = notatka, która została (nie pusta, nie usunięta). W trybie wyboru nowa notatka
+            // od razu wraca do launchera jako wybrana.
+            onClose = { keptId ->
+                if (pickMode && keptId != null) {
+                    onPicked(keptId)
+                } else if (direct) {
+                    onExit()
+                } else {
+                    editing = NO_EDITOR
+                }
+            },
         )
     }
 }

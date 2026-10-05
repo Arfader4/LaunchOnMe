@@ -59,7 +59,8 @@ data class CardItemEntity(
     }
 }
 
-// Element OnHand: plik, link albo notatka przypięta do trybu.
+// Element OnHand: plik, link albo notatka przypięta do trybu. ONHAND = odnośnik do notatki w aplikacji OnHand
+// (uri = id notatki w onhand.db); tytuł tutaj to tylko zapas — na ekranie pokazujemy żywy tytuł z OnHand.
 @Entity(
     tableName = "pinned_items",
     foreignKeys = [
@@ -78,7 +79,7 @@ data class PinnedItemEntity(
     val kind: String,
     val title: String,
     val uri: String? = null,       // plik: ścieżka kopii w pamięci aplikacji; link: adres
-    val text: String? = null,      // notatka: treść
+    val text: String? = null,      // notatka (stary rodzaj NOTE): treść
     val mimeType: String? = null,  // plik: typ, np. application/pdf
     val createdAt: Long = System.currentTimeMillis(),
     val archivedAt: Long? = null,  // null = aktywny, liczba = w archiwum od tej chwili
@@ -86,7 +87,8 @@ data class PinnedItemEntity(
     companion object {
         const val KIND_FILE = "FILE"
         const val KIND_LINK = "LINK"
-        const val KIND_NOTE = "NOTE"
+        const val KIND_NOTE = "NOTE"     // stara notatka w bazie launchera — przy starcie przenoszona do OnHand
+        const val KIND_ONHAND = "ONHAND" // odnośnik do notatki OnHand
     }
 }
 

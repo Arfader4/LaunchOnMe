@@ -30,9 +30,8 @@ class NoteRepository(private val context: Context) {
 
     fun observeNote(id: Long): Flow<NoteEntity?> = notes.observeById(id)
 
-    // Tytuły notatek po id — dla launchera (odnośniki na karcie trybu, paczka On4).
-    fun observeTitles(): Flow<Map<Long, String>> =
-        combine(notes.observe(false), notes.observe(true)) { a, b -> (a + b).associate { it.id to it.displayTitle } }
+    // Wszystkie notatki po id — dla launchera (żywy tytuł i podgląd odnośnika na karcie trybu).
+    fun observeAllById(): Flow<Map<Long, NoteEntity>> = notes.observeAll().map { list -> list.associateBy { it.id } }
 
     suspend fun get(id: Long): NoteEntity? = notes.get(id)
 
@@ -41,7 +40,12 @@ class NoteRepository(private val context: Context) {
     suspend fun getMany(ids: Collection<Long>): List<NoteEntity> =
         ids.toList().chunked(500).flatMap { notes.getMany(it) }.sortedByDescending { it.updatedAt }
 
-    suspend fun create(title: String, text: String): Long = notes.insert(NoteEntity(title = title, text = text))
+    suspend fun create(title: String, text: String, createdAt: Long = System.currentTimeMillis()): Long =
+        notes.insert(NoteEntity(title = title, text = text, createdAt = createdAt))
+
+    // Notatka o identycznym tytule i treści (migracja starych notatek launchera bez duplikatów).
+    suspend fun findIdentical(title: String, text: String): Long? =
+        notes.getAll().firstOrNull { it.title == title && it.text == text }?.id
 
     suspend fun update(id: Long, title: String, text: String) = notes.update(id, title, text, System.currentTimeMillis())
 
@@ -128,13 +132,25 @@ class NoteRepository(private val context: Context) {
 
     // Każda osobno, bo razem z wierszem znika folder załączników tej notatki.
     suspend fun deleteMany(ids: Collection<Long>) {
-        for (id in ids) delete(id)
+        for (id in ids) deleteOne(id)
+        notifyDeleted(ids)
     }
 
     // Usunięcie notatki razem z plikami załączników (wiersze usuwa kaskada w bazie).
-    suspend fun delete(id: Long) = withContext(Dispatchers.IO) {
+    suspend fun delete(id: Long) {
+        deleteOne(id)
+        notifyDeleted(listOf(id))
+    }
+
+    private suspend fun deleteOne(id: Long) = withContext(Dispatchers.IO) {
         notes.delete(id)
         attachmentFolder(context, id).deleteRecursively()
+    }
+
+    // Launcher usuwa odnośniki do skasowanych notatek z kart trybów (błąd po jego stronie nie psuje usuwania).
+    private suspend fun notifyDeleted(ids: Collection<Long>) {
+        val host = pl.rafal.onhand.OnHand.host ?: return
+        runCatching { host.notesDeleted(ids) }
     }
 
     companion object {

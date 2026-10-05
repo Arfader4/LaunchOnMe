@@ -1150,4 +1150,9 @@
     <string name="manifest_share_label">Pin to mode</string>
     <string name="manifest_tile_label">Mode</string>
     <string name="manifest_dots_label">Notification dots (LaunchOnMe)</string>
+    <!-- 1.4 OnHand On4: odnośniki do notatek z aplikacji OnHand -->
+    <string name="handy_add_onhand">+ Note from OnHand</string>
+    <string name="handy_open_onhand">Open OnHand ↗</string>
+    <string name="handy_onhand_missing">Deleted in OnHand</string>
+    <string name="handy_onhand_untitled">Untitled note</string>
 </resources>

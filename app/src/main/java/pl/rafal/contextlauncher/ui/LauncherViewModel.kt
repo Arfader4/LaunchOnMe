@@ -1066,11 +1066,40 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     // --- OnHand ---
 
-    // Elementy OnHand aktywnego trybu (aktywne i zarchiwizowane; UI je rozdziela).
+    // Notatki z aplikacji OnHand po id — do żywych tytułów odnośników (zmiana w OnHand od razu widać na karcie).
+    private val onHandNotes = pl.rafal.onhand.OnHand.repository(getApplication()).observeAllById()
+
+    // Elementy OnHand aktywnego trybu (aktywne i zarchiwizowane; UI je rozdziela). Odnośnik do notatki OnHand
+    // dostaje jej aktualny tytuł, a w polu text — pierwszą linię treści (podtytuł na liście).
     val pinnedItems: StateFlow<List<PinnedItemEntity>> =
         activeMode
             .flatMapLatest { mode -> if (mode == null) flowOf(emptyList()) else pinned.observe(mode.id) }
+            .combine(onHandNotes) { items, notes ->
+                items.map { item ->
+                    if (item.kind != PinnedItemEntity.KIND_ONHAND) {
+                        item
+                    } else {
+                        val note = item.uri?.toLongOrNull()?.let { notes[it] }
+                        if (note == null) {
+                            item.copy(text = AppText.get(R.string.handy_onhand_missing), mimeType = PinnedRepository.ONHAND_MISSING)
+                        } else {
+                            // Bez własnego tytułu tytułem jest pierwsza linia — podtytuł to wtedy następna.
+                            val lines = note.text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }
+                            val firstLine = (if (note.title.isBlank()) lines.drop(1) else lines).firstOrNull()
+                            item.copy(
+                                title = note.displayTitle.ifBlank { AppText.get(R.string.handy_onhand_untitled) },
+                                text = firstLine.orEmpty(),
+                            )
+                        }
+                    }
+                }
+            }
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun pinOnHand(noteId: Long) = withActiveMode(AppText.get(R.string.vm_note_save_failed)) { modeId ->
+        val title = pl.rafal.onhand.OnHand.repository(getApplication()).get(noteId)?.displayTitle.orEmpty()
+        pinned.pinOnHand(modeId, noteId, title.ifBlank { AppText.get(R.string.handy_onhand_untitled) })
+    }
 
     // Wspólny wzorzec: weź aktywny tryb, wykonaj akcję w tle, przy błędzie pokaż komunikat.
     // (Long) -> Unit jako "suspend" = parametr-funkcja, która może czekać (jak Func<long, Task>).

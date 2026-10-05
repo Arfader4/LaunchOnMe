@@ -25,4 +25,14 @@ object OnHand {
     fun resultNoteId(data: Intent?): Long? = data?.getLongExtra(EXTRA_NOTE_ID, -1L)?.takeIf { it > 0 }
 
     fun repository(context: Context): NoteRepository = NoteRepository(context.applicationContext)
+
+    // Gospodarz (launcher). @Volatile — zapis z wątku głównego, odczyt z korutyn w tle (jak volatile w C#).
+    // null = OnHand działa sam, bez przypinania do trybów.
+    @Volatile
+    var host: OnHandHost? = null
+        private set
+
+    fun registerHost(host: OnHandHost) {
+        this.host = host
+    }
 }

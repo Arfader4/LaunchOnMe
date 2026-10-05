@@ -49,3 +49,6 @@ push robi właściciel.
 - `ui/LauncherScreen.kt` (ekran główny, okna), `ui/LauncherViewModel.kt` (logika), `ui/CardGridView.kt` (siatka karty,
   przeciąganie), `ui/ModeSwitcher.kt` + `ui/ModeArc.kt` (klawisz ON, lista i łuk trybów), `data/Backup.kt` (kopia .zip/.json).
 - StickOnMe: `StudioActivity.kt` (biblioteka, edytor wycinania), `BoardEditor.kt` + `BoardRenderer.kt` (tablice).
+- OnHand (moduł `:onhand`, pakiet `pl.rafal.onhand`, baza `onhand.db`): `OnHandActivity` + `NoteScreens.kt` (lista, edytor),
+  `OnHandShareActivity` (cel „Udostępnij”), `NoteExport.kt`, `OnHandBackup.kt`; launcher łączy się przez
+  `OnHandHost` ↔ `data/OnHandBridge.kt` (odnośniki `ONHAND` w `pinned_items`, uri = id notatki).

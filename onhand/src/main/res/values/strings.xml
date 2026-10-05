@@ -57,4 +57,11 @@
     <string name="oh_attachment_remove_text">“%1$s” will be removed from the note.</string>
     <string name="oh_remove">Remove</string>
     <string name="oh_open_failed">No app can open this file</string>
+    <!-- On4: przypinanie do trybów LaunchOnMe -->
+    <string name="oh_pin_menu">Pin to mode…</string>
+    <string name="oh_pin_title">Pin to mode</string>
+    <string name="oh_pin_hint">The note shows up on the card of each selected mode in LaunchOnMe.</string>
+    <string name="oh_pin_no_modes">No modes yet. Create one in LaunchOnMe first.</string>
+    <string name="oh_done">Done</string>
+    <string name="oh_share_pin_to">Pin to mode (optional)</string>
 </resources>

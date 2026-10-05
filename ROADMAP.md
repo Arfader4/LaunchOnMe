@@ -12,6 +12,7 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.1 | Etapy 1–11, runda 29.09, StickOnMe S0–S4, porządki X/Y/Z (animacje) | 21 |
 | 1.2 | Runda uwag 04.10: paczki 1–3 (OnHand, klawisz ON, pasek czuwania, tłumaczenie EN/PL) | 3 |
 | 1.2.1 | Hotfix: łuk trybów i lista trybów na przygaszonym całym ekranie | 1 |
+| 1.4.0 | OnHand jako osobna aplikacja notatek (`feature/onhand`): On1–On4 + nowa ikona | 5 |
 Razem od V1: 25 paczek. Kolejne duże tematy = 1.3, 1.4…; poprawki do nich = 1.3.1, 1.3.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
@@ -257,6 +258,11 @@ Nowy czat: „robimy paczkę OnN z ROADMAP.md” (gałąź `feature/onhand`).
       w trybie wyboru, „Otwórz po zapisaniu”); pliki kopiowane od razu do `files/onhand/<id>/` (ścieżka względna
       w bazie). Edytor: „📎 Załącz” (galeria / pliki), miniatury zdjęć, wiersze plików, otwieranie, ✕ usuwa.
       Lista: 📎 N. Eksport notatki z załącznikami → .zip (plik + folder; w .md odnośniki), Udostępnij wysyła też pliki.
-- [ ] On4 — launcher: `OnHandHost`, przypinanie z OnHand i z `HandySheet`, rodzaj `ONHAND`, migracja starych notatek
+- [x] On4 — launcher: `OnHandHost`, przypinanie z OnHand i z `HandySheet`, rodzaj `ONHAND`, migracja starych notatek
       (baza v13), ShareActivity tekst → notatka OnHand, `Backup.kt` (`OnHandBackup` + pliki w .zip), wersja 1.4.0 + tag,
       checklista testów całości.
+      Zmiana planu: bez bazy v13 — `kind` to tekst, więc `ONHAND` nie zmienia schematu, a przeniesienie notatek
+      między dwiema bazami robi `OnHandBridge.migrateLegacyNotes` przy starcie (powtarzalne; też po imporcie starej
+      kopii). Odnośnik pokazuje żywy tytuł z OnHand; usunięcie notatki w OnHand usuwa odnośniki (`notesDeleted`).
+      OnHand: ⋮ → „Przypnij do trybu…” (pola wyboru trybów), w „Udostępnij → OnHand” chipy trybów, w trybie wyboru
+      „+ Nowa notatka” wraca jako wybrana. Kopia zapasowa v3: sekcja `onhand` (notatki zawsze, załączniki w .zip).

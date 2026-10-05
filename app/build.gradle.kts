@@ -17,9 +17,9 @@ android {
         minSdk = 29
         targetSdk = 36
         // Wersja: X.Y.Z — Y = runda zmian (duży temat), Z = poprawka (hotfix). Historia: ROADMAP.md, "Wersje".
-        // versionCode musi rosnąć przy każdej wersji: X·10000 + Y·100 + Z (1.2.1 → 10201).
-        versionCode = 10201
-        versionName = "1.2.1"
+        // versionCode musi rosnąć przy każdej wersji: X·10000 + Y·100 + Z (1.4.0 → 10400).
+        versionCode = 10400
+        versionName = "1.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

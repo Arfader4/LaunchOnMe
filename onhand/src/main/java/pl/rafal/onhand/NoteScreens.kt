@@ -152,7 +152,8 @@ internal fun NoteListScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
-            if (!pickMode && !selecting && !archived) {
+            // W trybie wyboru też: nowa notatka wraca do launchera jako wybrana.
+            if (!selecting && !archived) {
                 ExtendedFloatingActionButton(onClick = onNew) {
                     Text("+  " + stringResource(R.string.oh_new_note))
                 }
@@ -504,7 +505,7 @@ internal fun NoteEditorScreen(
     initialTitle: String,
     initialText: String,
     onIdKnown: (Long) -> Unit,
-    onClose: () -> Unit,
+    onClose: (keptId: Long?) -> Unit,
 ) {
     // Bez klucza: gdy nowa notatka dostanie id (noteId 0 → id), edytor zostaje ten sam (kursor, klawiatura).
     val startId = remember { noteId }
@@ -546,14 +547,37 @@ internal fun NoteEditorScreen(
         }
     }
 
+    // Czas ostatniej zmiany pod treścią (tylko dla zapisanej notatki).
+    val savedId = draft.id ?: startId
+    val note by remember(savedId) { repo.observeNote(savedId) }.collectAsState(initial = null)
+
+    // ---------- Załączniki ----------
+    val attachments by remember(savedId) {
+        if (savedId > 0) repo.observeAttachments(savedId) else flowOf(emptyList<AttachmentEntity>())
+    }.collectAsState(initial = emptyList())
+    var attachMenuOpen by remember { mutableStateOf(false) }
+    var pinFor by remember { mutableStateOf<Long?>(null) } // "Przypnij do trybu…" dla tej notatki
+    val host = OnHand.host
+    var removing by remember { mutableStateOf<AttachmentEntity?>(null) }
+
     // Wyjście: zapis "w tle" (backgroundScope), bo ekran znika od razu, a zapis ma się dokończyć.
     val close = {
-        if (loaded) {
-            val t = title
-            val x = text
-            NoteRepository.backgroundScope.launch { draft.finish(t, x) }
+        val t = title
+        val x = text
+        val hasContent = loaded && (t.isNotBlank() || x.isNotBlank() || attachments.isNotEmpty())
+        if (loaded && hasContent && draft.id == null) {
+            // Wpisane przed pierwszym zapisem (< 0,7 s): wiersz w bazie powstaje teraz, a id wraca do wywołującego
+            // (w trybie wyboru launcher dostaje tę notatkę). Ekran zamykamy dopiero po zapisie.
+            NoteRepository.backgroundScope.launch {
+                val id = draft.ensureId(t, x)
+                draft.finish(t, x)
+                withContext(Dispatchers.Main) { onClose(id) }
+            }
+        } else {
+            if (loaded) NoteRepository.backgroundScope.launch { draft.finish(t, x) }
+            // Notatka "zostaje", gdy ma id i coś w środku (pusta zniknie w finish()).
+            onClose(draft.id?.takeIf { hasContent })
         }
-        onClose()
     }
     BackHandler { close() }
 
@@ -582,19 +606,8 @@ internal fun NoteEditorScreen(
             draft.id?.let { repo.archive(it) }
         }
         Toast.makeText(app, OnHandText.get(R.string.oh_archived_n, 1), Toast.LENGTH_SHORT).show()
-        onClose()
+        onClose(null) // zarchiwizowana nie jest "wybrana" w trybie wyboru
     }
-
-    // Czas ostatniej zmiany pod treścią (tylko dla zapisanej notatki).
-    val savedId = draft.id ?: startId
-    val note by remember(savedId) { repo.observeNote(savedId) }.collectAsState(initial = null)
-
-    // ---------- Załączniki ----------
-    val attachments by remember(savedId) {
-        if (savedId > 0) repo.observeAttachments(savedId) else flowOf(emptyList<AttachmentEntity>())
-    }.collectAsState(initial = emptyList())
-    var attachMenuOpen by remember { mutableStateOf(false) }
-    var removing by remember { mutableStateOf<AttachmentEntity?>(null) }
 
     // Dodanie plików: najpierw notatka musi mieć wiersz w bazie (także pusta), potem kopie plików do jej folderu.
     // W tle (backgroundScope), żeby wyjście z edytora nie przerwało kopiowania w połowie.
@@ -696,6 +709,24 @@ internal fun NoteEditorScreen(
                             exportAs(NoteFormat.MD)
                         },
                     )
+                    // Przypinanie do trybów launchera (tylko gdy OnHand mieszka w LaunchOnMe).
+                    if (host != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.oh_pin_menu)) },
+                            enabled = hasContent,
+                            onClick = {
+                                menuOpen = false
+                                val t = title
+                                val x = text
+                                scope.launch {
+                                    val id = draft.ensureId(t, x)
+                                    draft.save(t, x)
+                                    onIdKnown(id)
+                                    pinFor = id
+                                }
+                            },
+                        )
+                    }
                     if (isArchived) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.oh_restore)) },
@@ -774,6 +805,11 @@ internal fun NoteEditorScreen(
         }
     }
 
+    val pinId = pinFor
+    if (pinId != null && host != null) {
+        PinToModesDialog(host = host, repo = repo, noteId = pinId, onDismiss = { pinFor = null })
+    }
+
     val toRemove = removing
     if (toRemove != null) {
         AlertDialog(
@@ -801,7 +837,7 @@ internal fun NoteEditorScreen(
                 TextButton(onClick = {
                     confirmDelete = false
                     NoteRepository.backgroundScope.launch { draft.delete() } // w tle: ekran zaraz znika
-                    onClose()
+                    onClose(null)
                 }) { Text(stringResource(R.string.oh_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {

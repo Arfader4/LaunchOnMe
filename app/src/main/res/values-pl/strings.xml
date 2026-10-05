@@ -1166,4 +1166,9 @@
     <string name="manifest_share_label">Przypnij do trybu</string>
     <string name="manifest_tile_label">Tryb</string>
     <string name="manifest_dots_label">Kropki powiadomień (LaunchOnMe)</string>
+    <!-- 1.4 OnHand On4: odnośniki do notatek z aplikacji OnHand -->
+    <string name="handy_add_onhand">+ Notatka z OnHand</string>
+    <string name="handy_open_onhand">Otwórz OnHand ↗</string>
+    <string name="handy_onhand_missing">Usunięta w OnHand</string>
+    <string name="handy_onhand_untitled">Notatka bez tytułu</string>
 </resources>

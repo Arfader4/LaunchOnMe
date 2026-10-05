@@ -46,6 +46,14 @@ interface NoteDao {
 
     @Query("DELETE FROM notes WHERE id = :id")
     suspend fun delete(id: Long)
+
+    // Import kopii zapasowej: wszystko od nowa (załączniki znikną kaskadą).
+    @Query("DELETE FROM notes")
+    suspend fun deleteAll()
+
+    // Wszystkie notatki z tytułem i treścią — dla launchera (żywe tytuły odnośników na kartach).
+    @Query("SELECT * FROM notes")
+    fun observeAll(): Flow<List<NoteEntity>>
 }
 
 @Dao
@@ -71,4 +79,7 @@ interface AttachmentDao {
 
     @Query("DELETE FROM attachments WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM attachments")
+    suspend fun getAll(): List<AttachmentEntity>
 }
