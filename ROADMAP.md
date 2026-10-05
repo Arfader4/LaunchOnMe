@@ -221,3 +221,35 @@ Kolejność ustalona 04.10: paczka 1 → paczka 2 → tłumaczenie → duże tem
       Systemowego oszczędzania baterii aplikacja sama nie włączy (wymaga uprawnienia nadanego przez adb).
 - [ ] Optymalizacja baterii i procesora w całym launcherze.
 - [ ] Blokada folderów w szufladzie odciskiem palca / PIN-em (systemowy BiometricPrompt).
+
+## 1.4 — OnHand jako osobna aplikacja (gałąź `feature/onhand`, plan z 05.10)
+Bez synchronizacji (Keep / Samsung Notes nie mają publicznego API) — zamiast niej „Udostępnij” w obie strony i eksport.
+Nowy czat: „robimy paczkę OnN z ROADMAP.md” (gałąź `feature/onhand`).
+
+**Podział (wzór: `:studio` / obiekt `StickOnMe`):**
+- Moduł `:onhand` (biblioteka, pakiet `pl.rafal.onhand`), `:app` zależy od niego, nie odwrotnie. Własna aktywność
+  z ikoną w szufladzie (activity-alias / `taskAffinity`), teksty przez `OnHandText`.
+- Baza: osobna Room `onhand.db` w module — `notes` (tytuł, treść = zwykły tekst, createdAt, updatedAt, archivedAt)
+  i `attachments` (noteId, ścieżka, MIME, nazwa); pliki w `filesDir/onhand/`.
+- Komunikacja: obiekt `OnHand` z intencjami (`openIntent(noteId)`, `pickIntent()` → wynik `noteId`, `newIntent(text)`)
+  + interfejs gospodarza `OnHandHost` (lista trybów, `pinToMode(noteId, modeId)`), który `:app` rejestruje
+  w `LaunchOnMeApp` (jak `StudioText.init`) — moduł nie zna bazy launchera.
+- Launcher: `pinned_items` dostaje rodzaj `ONHAND` (`uri` = noteId); wiersz pokazuje tytuł żywej notatki,
+  dotknięcie otwiera ją w OnHand. Pliki i linki bez zmian.
+- Decyzje 05.10: stare notatki (`KIND_NOTE`) przenosimy do OnHand (migracja, na karcie zostaje odnośnik `ONHAND`);
+  „Udostępnij → LaunchOnMe → Przypnij do trybu” dla tekstu tworzy notatkę OnHand przypiętą do trybu;
+  treść = zwykły tekst (checklisty/Markdown ewentualnie później); przegląd „jak kompilator” po każdej paczce.
+
+**Ekrany:** lista (wyszukiwanie, zakładki Notatki / Archiwum, zaznaczanie wielu), edytor (zapis sam, załączniki,
+⋮: Udostępnij, Eksport .txt/.md, Przypnij do trybu…, Archiwizuj, Usuń), okno przyjmowania z „Udostępnij”
+(Nowa notatka / Dopisz do…, opcjonalnie przypięcie do trybu); w launcherze w `HandySheet`: „Notatka z OnHand”, „Otwórz OnHand”.
+
+- [ ] On1 — szkielet: moduł `:onhand` (settings/build.gradle, manifest, ikona adaptacyjna SVG), baza `onhand.db`,
+      `OnHandText`, `OnHand` (intencje), lista z wyszukiwaniem, prosty edytor (bez załączników).
+- [ ] On2 — na zewnątrz: archiwum, zaznaczanie wielu, Udostępnij (ACTION_SEND / SEND_MULTIPLE przez FileProvider),
+      eksport .txt / .md (jedna) i .zip (kilka) przez systemowe okno zapisu (CreateDocument).
+- [ ] On3 — do środka: cel „Udostępnij → OnHand” (tekst, link, obraz/y, pliki), Nowa / Dopisz do…, załączniki
+      w edytorze (galeria, plik) i w eksporcie.
+- [ ] On4 — launcher: `OnHandHost`, przypinanie z OnHand i z `HandySheet`, rodzaj `ONHAND`, migracja starych notatek
+      (baza v13), ShareActivity tekst → notatka OnHand, `Backup.kt` (`OnHandBackup` + pliki w .zip), wersja 1.4.0 + tag,
+      checklista testów całości.
