@@ -67,6 +67,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -85,14 +86,18 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -560,6 +565,20 @@ private fun BoardsGrid(refresh: Int, onOpen: (Board) -> Unit) {
 
 // --- Edytor ---
 
+private const val PREVIEW_WORK_SIDE = 800 // podgląd "Wykończenia" liczony na mniejszej kopii
+
+// Maska ML Kit przygotowana w całości w tle (model, przeliczenie pewności, skalowanie). null = nie wyszło.
+// Na wątku UI zostaje tylko szybka podmiana: editor.applyMask(...).
+private suspend fun autoMaskFor(editor: CutoutEditor): android.graphics.Bitmap? = try {
+    withContext(Dispatchers.Default) {
+        autoMask(editor.photo)?.let { (values, w, h) -> editor.prepareMask(values, w, h) }
+    }
+} catch (e: kotlin.coroutines.cancellation.CancellationException) {
+    throw e // anulowanie (wyjście z edytora) przechodzi dalej — jak OperationCanceledException w C#
+} catch (e: Exception) {
+    null
+}
+
 private enum class Tool(@StringRes val labelRes: Int) {
     ADD(R.string.som_add), ERASE(R.string.som_editor_tool_erase), CROP(R.string.som_editor_tool_crop), OVAL(R.string.som_editor_tool_oval), MOVE(R.string.som_editor_tool_move);
     val paints get() = this == ADD || this == ERASE
@@ -587,7 +606,8 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
             previewing = true
             try {
                 kotlinx.coroutines.delay(150) // suwak jeszcze jedzie
-                val image = withContext(Dispatchers.Default) { runCatching { editor.render(rotate = false) { ensureActive() } }.getOrNull() }
+                // Podgląd na kopii do 800 px (zapis i tak liczy w pełnej rozdzielczości).
+                val image = withContext(Dispatchers.Default) { runCatching { editor.render(rotate = false, workSide = PREVIEW_WORK_SIDE) { ensureActive() } }.getOrNull() }
                 resultPreview = image?.asImageBitmap()
             } finally {
                 previewing = false
@@ -595,14 +615,17 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
         }
     }
 
+    // Zamknięcie edytora: kopie "Cofnij" od razu do zwolnienia (zdjęcie i maskę może jeszcze rysować animacja wyjścia).
+    DisposableEffect(editor) { onDispose { editor.releaseUndo() } }
+
     // Na start: automatyczne wycięcie obiektu (ML Kit). Brak obiektu → zostaje całe zdjęcie, poprawiasz pędzlem.
     LaunchedEffect(editor) {
         if (editor.fromSticker) { // poprawka gotowej naklejki — maska już jest (z jej przezroczystości)
             busy = false
             return@LaunchedEffect
         }
-        val result = runCatching { autoMask(editor.photo) }.getOrNull()
-        if (result != null) editor.applyConfidence(result.first, result.second, result.third)
+        val prepared = autoMaskFor(editor)
+        if (prepared != null) editor.applyMask(prepared)
         else message = context.getString(R.string.som_editor_auto_failed)
         busy = false
     }
@@ -626,7 +649,9 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                             if (sticker == null) {
                                 message = context.getString(R.string.som_editor_empty)
                             } else {
-                                onSaved(StickerLibrary.save(context, sticker))
+                                val file = StickerLibrary.save(context, sticker)
+                                sticker.recycle() // już w pliku PNG
+                                onSaved(file)
                             }
                         } finally {
                             busy = false
@@ -665,16 +690,17 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
             if (tab == 0) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     Tool.entries.forEach { t -> FilterChip(selected = tool == t, onClick = { tool = t }, label = { Text(stringResource(t.labelRes)) }) }
-                    TextButton(enabled = editor.canUndo, onClick = { editor.undoLast() }) { Text(stringResource(R.string.som_editor_undo)) }
-                    TextButton(onClick = {
+                    // W trakcie wycinania / zapisu maska nie może się zmieniać (czyta ją wątek w tle).
+                    TextButton(enabled = !busy && editor.canUndo, onClick = { editor.undoLast() }) { Text(stringResource(R.string.som_editor_undo)) }
+                    TextButton(enabled = !busy, onClick = {
                         busy = true
                         scope.launch {
-                            val result = runCatching { autoMask(editor.photo) }.getOrNull()
-                            if (result != null) editor.applyConfidence(result.first, result.second, result.third)
+                            val prepared = autoMaskFor(editor)
+                            if (prepared != null) editor.applyMask(prepared)
                             busy = false
                         }
                     }) { Text(stringResource(R.string.som_editor_auto)) }
-                    TextButton(onClick = { editor.fill(true) }) { Text(stringResource(R.string.som_editor_whole_photo)) }
+                    TextButton(enabled = !busy, onClick = { editor.fill(true) }) { Text(stringResource(R.string.som_editor_whole_photo)) }
                 }
                 if (tool.crops) {
                     Text(
@@ -746,8 +772,7 @@ private fun MaskCanvas(editor: CutoutEditor, tool: Tool, brushDp: Float, rotatio
     var cursor by remember { mutableStateOf<Offset?>(null) }
     var cropFrom by remember { mutableStateOf<Offset?>(null) } // ramka kadru w trakcie przeciągania (ekran)
     var cropTo by remember { mutableStateOf<Offset?>(null) }
-    val checkA = Color(0xFF2A2E34)
-    val checkB = Color(0xFF1E2126)
+    val checker = rememberCheckerBrush()
     val cursorColor = MaterialTheme.colorScheme.secondary
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -847,7 +872,8 @@ private fun MaskCanvas(editor: CutoutEditor, tool: Tool, brushDp: Float, rotatio
             val dst = IntSize((photo.width * s).roundToInt(), (photo.height * s).roundToInt())
             val dstOffset = IntOffset(o.x.roundToInt(), o.y.roundToInt())
             rotate(rotation, pivot = Offset(o.x + dst.width / 2f, o.y + dst.height / 2f)) {
-                checkerboard(Rect(o, androidx.compose.ui.geometry.Size(dst.width.toFloat(), dst.height.toFloat())), checkA, checkB)
+                // Wzór zaczepiony w rogu zdjęcia — przesuwa się razem z nim.
+                translate(o.x, o.y) { drawRect(checker, size = androidx.compose.ui.geometry.Size(dst.width.toFloat(), dst.height.toFloat())) }
                 if (rotation == 0f) drawImage(photo, dstOffset = dstOffset, dstSize = dst, alpha = 0.22f)
                 // Warstwa: zdjęcie, a potem maska w trybie DstIn (zostaje tylko to, co zamalowane).
                 drawIntoCanvas { canvas ->
@@ -877,10 +903,9 @@ private val FrameColors = listOf(0xFFFFFFFFL, 0xFF16171AL, 0xFFFFD54FL, 0xFFFF8A
 // Gotowa naklejka na szachownicy (tak zostanie zapisana).
 @Composable
 private fun ResultPreview(image: ImageBitmap?, rotation: Float) {
-    val checkA = Color(0xFF2A2E34)
-    val checkB = Color(0xFF1E2126)
+    val checker = rememberCheckerBrush()
     Canvas(Modifier.fillMaxSize()) {
-        checkerboard(Rect(Offset.Zero, size), checkA, checkB)
+        drawRect(checker) // cała powierzchnia
         if (image != null) {
             val s = minOf(size.width * 0.9f / image.width, size.height * 0.9f / image.height)
             val w = (image.width * s).roundToInt()
@@ -897,19 +922,19 @@ private fun ResultPreview(image: ImageBitmap?, rotation: Float) {
     }
 }
 
-// Szachownica = "tu jest przezroczyście" (jak w programach graficznych).
-private fun DrawScope.checkerboard(area: Rect, a: Color, b: Color) {
-    val cell = 14.dp.toPx()
-    drawRect(a, topLeft = area.topLeft, size = area.size)
-    var y = area.top
-    var row = 0
-    while (y < area.bottom) {
-        var x = area.left + if (row % 2 == 0) 0f else cell
-        while (x < area.right) {
-            drawRect(b, topLeft = Offset(x, y), size = androidx.compose.ui.geometry.Size(minOf(cell, area.right - x), minOf(cell, area.bottom - y)))
-            x += cell * 2
+// Szachownica = "tu jest przezroczyście" (jak w programach graficznych). Jeden mały kafelek 2×2 pola powtarzany
+// przez shader (jak TileBrush w WPF) — jedno rysowanie zamiast setek prostokątów w każdej klatce.
+@Composable
+private fun rememberCheckerBrush(): ShaderBrush {
+    val cell = with(LocalDensity.current) { 14.dp.roundToPx() }.coerceAtLeast(1)
+    return remember(cell) {
+        val tile = android.graphics.Bitmap.createBitmap(cell * 2, cell * 2, android.graphics.Bitmap.Config.ARGB_8888)
+        android.graphics.Canvas(tile).apply {
+            drawColor(0xFF2A2E34.toInt())
+            val dark = android.graphics.Paint().apply { color = 0xFF1E2126.toInt() }
+            drawRect(0f, 0f, cell.toFloat(), cell.toFloat(), dark)
+            drawRect(cell.toFloat(), cell.toFloat(), cell * 2f, cell * 2f, dark)
         }
-        y += cell
-        row++
+        ShaderBrush(ImageShader(tile.asImageBitmap(), TileMode.Repeated, TileMode.Repeated))
     }
 }

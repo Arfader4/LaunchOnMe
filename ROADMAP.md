@@ -12,6 +12,7 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.1 | Etapy 1–11, runda 29.09, StickOnMe S0–S4, porządki X/Y/Z (animacje) | 21 |
 | 1.2 | Runda uwag 04.10: paczki 1–3 (OnHand, klawisz ON, pasek czuwania, tłumaczenie EN/PL) | 3 |
 | 1.2.1 | Hotfix: łuk trybów i lista trybów na przygaszonym całym ekranie | 1 |
+| 1.3.0 | StickOnMe: wydajność (tablica, biblioteka, edytor) — gałąź `feature/stickonme-perf` | 3 |
 Razem od V1: 25 paczek. Kolejne duże tematy = 1.3, 1.4…; poprawki do nich = 1.3.1, 1.3.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
@@ -215,7 +216,13 @@ Kolejność ustalona 04.10: paczka 1 → paczka 2 → tłumaczenie → duże tem
       srebro, miedź, brąz + butelkowa zieleń, purpura…, połysk metalu), Black & White, Vintage, Standard, Night,
       Własny (+ propozycje: Pastel, AMOLED). Uporządkowana lista kolorów i krótka paleta na motyw. Kolory systemu:
       Good Lock nie ma API — pośrednio przez tapetę (Android 12+/One UI biorą kolory z tapety).
-- [ ] **1.3 — StickOnMe: wydajność** (gałąź `feature/stickonme-perf`) przy wielu zdjęciach (mniejsze kopie robocze, dekodowanie w tle, limit pamięci).
+- [x] **1.3 — StickOnMe: wydajność** (gałąź `feature/stickonme-perf`) przy wielu zdjęciach — 3 paczki:
+      1) tablica: nieruszane warstwy wypalone w dwa obrazy (pod / nad ruszaną), tablica czytana dopiero przy rysowaniu,
+      cache tekstu, obrazy i ramki wczytywane w tle; podgląd na kopiach ≤1024 px z limitem pamięci, eksport osobnym
+      rendererem w pełnej jakości; rozmiar logiczny obrazu warstwy (max 1400 px) — skala nie zależy od kopii.
+      2) biblioteka: miniatury w pamięci (LruCache) i na dysku (cache), max 3 dekodowania naraz, onTrimMemory.
+      3) edytor: ML Kit na kopii ≤1024 px, wynik i maska liczone w tle; podgląd „Wykończenia” na kopii 800 px;
+      zwalnianie bitmap (Cofnij, kroki pośrednie, eksport); szachownica jako wzór (shader).
 - [ ] KeepMeOn (oszczędzanie energii): tryb włączany przy słabej baterii, blokada zmiany trybu (odblokowanie odciskiem),
       najważniejsze aplikacje, bez animacji/tapety/odświeżania widżetów, ciemny motyw; propozycja w samouczku.
       Systemowego oszczędzania baterii aplikacja sama nie włączy (wymaga uprawnienia nadanego przez adb).
