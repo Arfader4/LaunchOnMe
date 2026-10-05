@@ -209,13 +209,13 @@ Kolejność ustalona 04.10: paczka 1 → paczka 2 → tłumaczenie → duże tem
 - [x] Numeracja wersji (versionName / versionCode, tagi w gicie).
 
 ### Duże tematy (osobne czaty, kolejno)
-- [ ] OnHand jako pełne notatki: przyjmowanie z „Udostępnij” (Keep, Samsung Notes…), wysyłanie do nich, eksport do pliku.
+- [ ] **1.4 — OnHand** (osobna aplikacja jak StickOnMe, gałąź `feature/onhand`) — pełne notatki: przyjmowanie z „Udostępnij” (Keep, Samsung Notes…), wysyłanie do nich, eksport do pliku.
       (Keep ma API tylko dla firmowych kont Workspace, Samsung Notes nie ma API — synchronizacji nie robimy.)
-- [ ] Motywy (aplikacja jak StickOnMe): High Contrast (czarne/białe tło ikon + kolorowy symbol), Luxury (złoto,
+- [ ] **1.5 — OnThemes** (aplikacja motywów jak StickOnMe, gałąź `feature/onthemes`): High Contrast (czarne/białe tło ikon + kolorowy symbol), Luxury (złoto,
       srebro, miedź, brąz + butelkowa zieleń, purpura…, połysk metalu), Black & White, Vintage, Standard, Night,
       Własny (+ propozycje: Pastel, AMOLED). Uporządkowana lista kolorów i krótka paleta na motyw. Kolory systemu:
       Good Lock nie ma API — pośrednio przez tapetę (Android 12+/One UI biorą kolory z tapety).
-- [ ] StickOnMe: wydajność przy wielu zdjęciach (mniejsze kopie robocze, dekodowanie w tle, limit pamięci).
+- [ ] **1.3 — StickOnMe: wydajność** (gałąź `feature/stickonme-perf`) przy wielu zdjęciach (mniejsze kopie robocze, dekodowanie w tle, limit pamięci).
 - [ ] KeepMeOn (oszczędzanie energii): tryb włączany przy słabej baterii, blokada zmiany trybu (odblokowanie odciskiem),
       najważniejsze aplikacje, bez animacji/tapety/odświeżania widżetów, ciemny motyw; propozycja w samouczku.
       Systemowego oszczędzania baterii aplikacja sama nie włączy (wymaga uprawnienia nadanego przez adb).

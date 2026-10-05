@@ -17,6 +17,23 @@ z własną ikoną w szufladzie. Projekt do nauki i portfolio. Plan prac i histor
 - Warstwa na cały ekran (przygaszenie, łuk): `ui/ScreenOverlay.kt` (`OnScreen`, `ScreenDim`) — nie Popup,
   bo okno Popup na Androidzie ≤14 nie sięga pod paski systemu.
 
+## Nowy czat — skąd wziąć kod i jak oddać zmiany
+Środowisko Claude (kontener w chmurze) jest puste; kod jest na komputerze właściciela (folder `ContextLauncher`,
+połączony przez aplikację Claude). GitHub z kontenera bez tokenu nie działa — commity robimy na komputerze,
+push robi właściciel.
+1. Na start: poproś o zgodę na usuwanie w folderze projektu (git zostawia `.git/index.lock`, pliki tymczasowe w `build/`).
+2. Na komputerze: `cd $HOME/mnt/ContextLauncher && git switch <gałąź>` (gałąź podana w prompcie; nowa: `git switch -c <gałąź> dev`),
+   potem `git archive --format=tar.gz -o build/src.tgz HEAD` → `device_stage_files` → w kontenerze
+   `mkdir w && tar xzf …/src.tgz -C w && cp -r w w-orig`. Nie commitujemy `.idea/`.
+3. Praca w `w/`, przegląd „jak kompilator” (osobny agent), poprawki.
+4. `bash w/tools/claude-pack.sh N` → `device_commit_files` obu plików do `ContextLauncher\build\` → na komputerze:
+   `md5sum -c build/origN.md5 --quiet && t=$(mktemp -d) && tar xzf build/batchN.tgz -C $t && (cd $t && find . -type f) | while read f; do mkdir -p "$(dirname "$f")"; cat "$t/$f" > "$f"; done`
+   → `git add -A -- . ':!.idea' && git commit -F <plik z opisem>` (na końcu opisu trailer Co-Authored-By Claude),
+   usuń `build/batchN.tgz` i `build/origN.md5`, w kontenerze `rm -rf w-orig && cp -r w w-orig`.
+5. Równoległe czaty: każdy na własnej gałęzi `feature/…` od `dev`, z własnym numerem wersji z promptu.
+   Wspólne pliki (`LauncherScreen.kt`, `strings.xml`, `build.gradle.kts`, `settings.gradle.kts`, ROADMAP) zmieniaj
+   oszczędnie i dopisuj na końcu sekcji — mniej konfliktów przy scalaniu do `dev`.
+
 ## Pułapki techniczne (ważne)
 - **DEX:** żadnych `return@label` ani nielokalnych `return` w lambdach inline w funkcjach @Composable
   (forEach, key, Row/Column/Box, let…) i żadnego wczesnego `return` w ciele @Composable — tylko if/else.
