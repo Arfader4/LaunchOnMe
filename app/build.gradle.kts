@@ -43,6 +43,8 @@ android {
 dependencies {
     // StickOnMe (studio naklejek): własna ikona w szufladzie, ale ta sama instalacja i wspólne pliki naklejek.
     implementation(project(":studio"))
+    // OnHand (notatki): własna ikona w szufladzie i własna baza, ta sama instalacja.
+    implementation(project(":onhand"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

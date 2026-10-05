@@ -9,5 +9,6 @@ class LaunchOnMeApp : Application() {
         super.onCreate()
         AppText.init(this)
         pl.rafal.stickonme.StudioText.init(this)
+        pl.rafal.onhand.OnHandText.init(this)
     }
 }

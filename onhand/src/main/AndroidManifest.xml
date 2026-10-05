@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- OnHand: własna ikona i nazwa w szufladzie (osobne zadanie w "ostatnich aplikacjach"),
+             ale to ta sama instalacja co LaunchOnMe. -->
+        <activity
+            android:name=".OnHandActivity"
+            android:exported="true"
+            android:label="@string/onhand_name"
+            android:icon="@mipmap/ic_onhand"
+            android:roundIcon="@mipmap/ic_onhand"
+            android:taskAffinity="pl.rafal.onhand"
+            android:theme="@style/Theme.OnHand"
+            android:windowSoftInputMode="adjustResize"
+            android:enableOnBackInvokedCallback="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

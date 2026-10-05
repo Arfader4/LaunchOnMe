@@ -1,0 +1,17 @@
+<resources>
+    <string name="onhand_name">OnHand</string>
+    <string name="oh_notes">Notatki</string>
+    <string name="oh_search">Szukaj w notatkach</string>
+    <string name="oh_new_note">Nowa notatka</string>
+    <string name="oh_empty">Nie ma jeszcze notatek. Dotknij „Nowa notatka” albo udostępnij do OnHand tekst, link lub plik.</string>
+    <string name="oh_no_results">Nic nie znaleziono</string>
+    <string name="oh_pick_title">Wybierz notatkę</string>
+    <string name="oh_untitled">Bez tytułu</string>
+    <string name="oh_title_hint">Tytuł</string>
+    <string name="oh_text_hint">Notatka</string>
+    <string name="oh_edited">Zmieniono %1$s</string>
+    <string name="oh_delete">Usuń</string>
+    <string name="oh_delete_confirm_title">Usunąć notatkę?</string>
+    <string name="oh_delete_confirm_text">Notatka i jej załączniki znikną. Tego nie da się cofnąć.</string>
+    <string name="oh_cancel">Anuluj</string>
+</resources>

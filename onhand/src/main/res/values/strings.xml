@@ -1,0 +1,17 @@
+<resources>
+    <string name="onhand_name">OnHand</string>
+    <string name="oh_notes">Notes</string>
+    <string name="oh_search">Search notes</string>
+    <string name="oh_new_note">New note</string>
+    <string name="oh_empty">No notes yet. Tap “New note”, or share text, links and files to OnHand.</string>
+    <string name="oh_no_results">Nothing found</string>
+    <string name="oh_pick_title">Choose a note</string>
+    <string name="oh_untitled">Untitled</string>
+    <string name="oh_title_hint">Title</string>
+    <string name="oh_text_hint">Note</string>
+    <string name="oh_edited">Edited %1$s</string>
+    <string name="oh_delete">Delete</string>
+    <string name="oh_delete_confirm_title">Delete note?</string>
+    <string name="oh_delete_confirm_text">The note and its attachments will be removed. This can’t be undone.</string>
+    <string name="oh_cancel">Cancel</string>
+</resources>
