@@ -17,9 +17,13 @@ import java.util.UUID
 object StickerLibrary {
     private fun folder(context: Context) = File(context.filesDir, "stickers/library").apply { mkdirs() }
 
-    // Najnowsze na początku (jak "ostatnie" w galerii).
+    // Najnowsze na początku (jak "ostatnie" w galerii). Data pliku czytana raz na plik, a nie w każdym porównaniu sortowania.
     fun list(context: Context): List<File> =
-        folder(context).listFiles { f -> f.extension == "png" }?.sortedByDescending { it.lastModified() }.orEmpty()
+        folder(context).listFiles { f -> f.extension == "png" }
+            ?.map { it to it.lastModified() }
+            ?.sortedByDescending { it.second }
+            ?.map { it.first }
+            .orEmpty()
 
     suspend fun save(context: Context, sticker: Bitmap): File = withContext(Dispatchers.IO) {
         val file = File(folder(context), "${UUID.randomUUID()}.png")
@@ -27,13 +31,82 @@ object StickerLibrary {
         file
     }
 
-    // Miniatura do siatki biblioteki.
-    fun thumbnail(file: File, maxSide: Int = 320): ImageBitmap? = runCatching {
+    // --- Miniatury (1.3.0) ---
+    // Dwa poziomy pamięci podręcznej, jak w przeglądarce: w pamięci (LruCache, limit w bajtach) i na dysku
+    // (małe PNG w cacheDir — system może je usunąć, wtedy po prostu powstaną od nowa). Klucz zawiera datę zmiany pliku,
+    // więc poprawiona naklejka / zapisana tablica dostaje nową miniaturę sama.
+    const val THUMB_SIDE = 320
+
+    private val thumbMemory = object : android.util.LruCache<String, ImageBitmap>(
+        minOf(24L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 16).toInt(),
+    ) {
+        override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4
+    }
+
+    // Najwyżej 3 dekodowania miniatur naraz (zamiast dziesiątek równoległych na Dispatchers.IO → skoki pamięci).
+    // Jak SemaphoreSlim(3) w C#. Użycie: withContext(StickerLibrary.thumbDispatcher) { thumbnail(...) }.
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val thumbDispatcher = Dispatchers.IO.limitedParallelism(3)
+
+    private fun thumbKey(file: File, modified: Long, maxSide: Int) = "${file.absolutePath}|$modified|$maxSide"
+
+    // Miniatura z pamięci bez czekania (np. żeby kafelek od razu coś pokazał przy powrocie na ekran). null = trzeba wczytać.
+    fun cachedThumbnail(file: File, maxSide: Int = THUMB_SIDE): ImageBitmap? =
+        thumbMemory.get(thumbKey(file, file.lastModified(), maxSide))
+
+    // Miniatura do siatki (biblioteka, tablice, okno wyboru naklejki). Blokuje — wołać w tle (thumbDispatcher).
+    // cache = false: jednorazowy obraz (np. animacja "odklejenia"), bez zapisu na dysk.
+    fun thumbnail(context: Context, file: File, maxSide: Int = THUMB_SIDE, cache: Boolean = true): ImageBitmap? = runCatching {
+        if (!cache) return@runCatching decodeScaled(file, maxSide, software = false)?.asImageBitmap()
+        val modified = file.lastModified()
+        if (modified == 0L) return@runCatching null // pliku nie ma
+        val key = thumbKey(file, modified, maxSide)
+        thumbMemory.get(key)?.let { return@runCatching it }
+        val dir = thumbFolder(context)
+        val disk = File(dir, "${file.absolutePath.hashCode().toUInt()}_${modified}_$maxSide.png")
+        // Kopia z dysku (mały plik — szybko; bitmapa sprzętowa, bez kopiowania do GPU). Uszkodzona (np. przerwany zapis)
+        // → usuwamy i robimy od nowa, żeby kafelek nie został pusty na zawsze.
+        val fromDisk = if (disk.exists()) {
+            runCatching { decodeScaled(disk, maxSide, software = false) }.getOrNull().also { if (it == null) disk.delete() }
+        } else {
+            null
+        }
+        val image = fromDisk ?: decodeScaled(file, maxSide, software = true)?.also { small ->
+            // Pierwszy raz: dekodowanie od razu w małym rozmiarze, zapis miniatury na dysk.
+            // Mały plik (np. miniatura tablicy 360 px) nie potrzebuje kopii na dysku.
+            if (file.length() > 64 * 1024) {
+                runCatching {
+                    dir.mkdirs()
+                    dropThumbs(context, file) // stare miniatury tego pliku (sprzed zmiany) do kosza
+                    // Zapis do pliku tymczasowego i zmiana nazwy — nikt nie przeczyta pliku w połowie zapisu.
+                    val tmp = File(dir, disk.name + ".tmp")
+                    tmp.outputStream().use { small.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    if (!tmp.renameTo(disk)) tmp.delete()
+                }
+            }
+        }
+        image?.asImageBitmap()?.also { thumbMemory.put(key, it) }
+    }.getOrNull()
+
+    private fun thumbFolder(context: Context): File = File(context.cacheDir, "stickonme_thumbs")
+
+    // Usunięcie miniatur danego pliku z dysku (także po usunięciu tablicy — BoardStore.delete).
+    fun dropThumbs(context: Context, file: File) {
+        val prefix = "${file.absolutePath.hashCode().toUInt()}_"
+        thumbFolder(context).listFiles { f -> f.name.startsWith(prefix) }?.forEach { it.delete() }
+    }
+
+    private fun decodeScaled(file: File, maxSide: Int, software: Boolean): Bitmap? =
         ImageDecoder.decodeBitmap(ImageDecoder.createSource(file)) { decoder, info, _ ->
             val scale = minOf(1f, maxSide.toFloat() / maxOf(info.size.width, info.size.height).coerceAtLeast(1))
             if (scale < 1f) decoder.setTargetSize((info.size.width * scale).toInt().coerceAtLeast(1), (info.size.height * scale).toInt().coerceAtLeast(1))
-        }.asImageBitmap()
-    }.getOrNull()
+            if (software) decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE // potrzebne do compress()
+        }
+
+    // Mało pamięci (onTrimMemory) albo wyjście ze studia: miniatury w pamięci do wyrzucenia (na dysku zostają).
+    fun trimMemory() {
+        thumbMemory.evictAll()
+    }
 
     // Gotowa naklejka (plik PNG) do ponownej edycji.
     suspend fun decodeFile(path: String, maxSide: Int = 1600): Bitmap? = withContext(Dispatchers.IO) {
@@ -47,8 +120,12 @@ object StickerLibrary {
         }.getOrNull()
     }
 
-    fun delete(file: File) {
-        runCatching { file.delete() }
+    fun delete(context: Context, file: File) {
+        runCatching {
+            // Miniatury usuwanej naklejki też (na dysku; w pamięci wypadną same, klucz z datą już nie pasuje).
+            dropThumbs(context, file)
+            file.delete()
+        }
     }
 
     // Udostępnienie naklejki innej aplikacji (WhatsApp, Messenger…) przez FileProvider — link z czasowym prawem odczytu.

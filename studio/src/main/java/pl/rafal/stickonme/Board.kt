@@ -179,6 +179,7 @@ object BoardStore {
     fun delete(context: Context, board: Board) {
         runCatching {
             File(folder(context), "${board.id}.json").delete()
+            StickerLibrary.dropThumbs(context, thumbnailFile(context, board.id)) // kopie miniatury w cache
             thumbnailFile(context, board.id).delete()
             val assetsDir = assets(context).canonicalPath + File.separator
             val usedElsewhere = list(context).filter { it.id != board.id }

@@ -740,7 +740,11 @@ private fun StickerPickDialog(onPick: (File) -> Unit, onDismiss: () -> Unit) {
                 list.isEmpty() -> Text(stringResource(R.string.som_board_library_empty))
                 else -> LazyVerticalGrid(columns = GridCells.Adaptive(80.dp), modifier = Modifier.heightIn(max = 420.dp)) {
                     items(list, key = { it.absolutePath }) { file ->
-                        val image by produceState<ImageBitmap?>(null, file) { value = withContext(Dispatchers.IO) { StickerLibrary.thumbnail(file, 200) } }
+                        // Te same miniatury co w bibliotece (wspólna pamięć podręczna), max 3 dekodowania naraz.
+                        val initial = remember(file) { StickerLibrary.cachedThumbnail(file) }
+                        val image by produceState(initial, file) {
+                            if (value == null) value = withContext(StickerLibrary.thumbDispatcher) { StickerLibrary.thumbnail(context, file) }
+                        }
                         Box(
                             Modifier
                                 .padding(4.dp)

@@ -126,6 +126,12 @@ private object DirectLoadingKey
 // Studio naklejek. Otwarte z szuflady: biblioteka + edytor. Otwarte z launchera (EXTRA_PICK):
 // wybór gotowej naklejki albo nowa — a wynik (ścieżka pliku) wraca do launchera.
 class StudioActivity : ComponentActivity() {
+    // System prosi o oddanie pamięci (aplikacja w tle albo telefonowi brakuje RAM) — miniatury można wczytać ponownie.
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) StickerLibrary.trimMemory()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         StudioText.init(this) // teksty spoza Compose (na wypadek startu bez klasy aplikacji launchera)
@@ -174,7 +180,7 @@ private fun StudioApp(pickMode: Boolean, wallpaperMode: Boolean, start: StudioSt
     var libraryTab by remember { mutableIntStateOf(if (wallpaperMode) 1 else 0) }
     var peel by remember { mutableStateOf<ImageBitmap?>(null) } // animacja "odklejenia" po zapisie
     fun peelFrom(file: File) {
-        scope.launch { peel = withContext(Dispatchers.IO) { StickerLibrary.thumbnail(file, 512) } }
+        scope.launch { peel = withContext(Dispatchers.IO) { StickerLibrary.thumbnail(context, file, 512, cache = false) } }
     }
     var loading by remember { mutableStateOf(false) }
     var refresh by remember { mutableIntStateOf(0) } // zmiana = biblioteka czytana od nowa
@@ -423,8 +429,10 @@ private fun LibraryScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 itemsIndexed(files, key = { _, f -> f.absolutePath }) { index, file ->
-                    val image by produceState<ImageBitmap?>(null, file) {
-                        value = withContext(Dispatchers.IO) { StickerLibrary.thumbnail(file) }
+                    // Najpierw z pamięci (od razu, bez mignięcia pustego kafelka), inaczej w tle — max 3 naraz.
+                    val initial = remember(file) { StickerLibrary.cachedThumbnail(file) } // raz, nie w każdej rekompozycji
+                    val image by produceState(initial, file) {
+                        if (value == null) value = withContext(StickerLibrary.thumbDispatcher) { StickerLibrary.thumbnail(context, file) }
                     }
                     Box(
                         contentAlignment = Alignment.Center,
@@ -476,7 +484,7 @@ private fun LibraryScreen(
             text = { Text(stringResource(R.string.som_lib_delete_sticker_text)) },
             confirmButton = {
                 TextButton(onClick = {
-                    StickerLibrary.delete(file)
+                    StickerLibrary.delete(context, file)
                     toDelete = null
                     version++
                 }) { Text(stringResource(R.string.som_delete), color = MaterialTheme.colorScheme.error) }
@@ -510,10 +518,11 @@ private fun BoardsGrid(refresh: Int, onOpen: (Board) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             itemsIndexed(list, key = { _, b -> b.id }) { index, board ->
-                val thumb by produceState<ImageBitmap?>(null, board.id, refresh) {
-                    value = withContext(Dispatchers.IO) {
-                        BoardStore.thumbnailFile(context, board.id).takeIf { it.exists() }?.let { StickerLibrary.thumbnail(it) }
-                    }
+                val thumbFile = remember(board.id) { BoardStore.thumbnailFile(context, board.id) }
+                val initial = remember(thumbFile, refresh) { StickerLibrary.cachedThumbnail(thumbFile) }
+                val thumb by produceState(initial, board.id, refresh) {
+                    // Po zapisie tablicy plik ma nową datę → nowy klucz → świeża miniatura.
+                    value = withContext(StickerLibrary.thumbDispatcher) { StickerLibrary.thumbnail(context, thumbFile) } ?: value
                 }
                 Column(
                     Modifier
