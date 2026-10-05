@@ -38,6 +38,10 @@ import androidx.compose.ui.unit.dp
 import pl.rafal.contextlauncher.AppText
 import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.ModeEntity
+import pl.rafal.onthemes.AllColors
+import pl.rafal.onthemes.BadgeStyle
+import pl.rafal.onthemes.LocalThemeSpec
+import pl.rafal.onthemes.badgeOutline
 
 // Katalog ikon trybów. Grafiki są w res/drawable, więc ten sam symbol pokażą launcher i kafelek szybkich ustawień.
 enum class ModeIcon(val key: String, @DrawableRes val res: Int, @StringRes private val labelRes: Int, val extra: Boolean = false) {
@@ -108,27 +112,37 @@ enum class ModeIcon(val key: String, @DrawableRes val res: Int, @StringRes priva
 // w jasnym zawsze ciemny — więc to tło się dostosowuje. Zachowujemy odcień i nasycenie (HSL), zmieniamy tylko jasność,
 // aż kontrast z symbolem będzie dobry (luminancja jak w WCAG). Dotyczy też kolorów własnych z palety HSV.
 // Samo liczenie mieszka w module OnThemes (Badges.kt), żeby podgląd w OnThemes rysował znaczki tak samo.
-fun modeBadgeColor(color: Long, dark: Boolean): Color = pl.rafal.onthemes.badgeBackground(color, dark)
+// Styl znaczka (BadgeStyle) zależy od motywu — patrz LocalThemeSpec.
+fun modeBadgeColor(color: Long, dark: Boolean, style: BadgeStyle = BadgeStyle.TINTED): Color =
+    pl.rafal.onthemes.badgeBackground(color, dark, style)
 
-// Kolor symbolu na znaczku trybu (i na podglądzie koloru w wyborze).
-fun modeBadgeSymbol(dark: Boolean): Color = pl.rafal.onthemes.badgeSymbol(dark)
+// Kolor symbolu na znaczku trybu (i na podglądzie koloru w wyborze). W High Contrast symbol ma kolor trybu.
+fun modeBadgeSymbol(dark: Boolean, color: Long = 0xFF808080, style: BadgeStyle = BadgeStyle.TINTED): Color =
+    pl.rafal.onthemes.badgeSymbol(dark, style, color)
 
-// Znaczek trybu: symbol na kolorowym tle. Tło dopasowane do motywu (modeBadgeColor), symbol jasny/ciemny jak motyw.
+// Kolor, który na znaczku "niesie" kolor trybu (tło, a w High Contrast — symbol). Do kółek wyboru i kropek.
+fun modeSwatchColor(color: Long, dark: Boolean, style: BadgeStyle): Color = pl.rafal.onthemes.badgeSwatch(color, dark, style)
+
+// Znaczek trybu: symbol na tle. Wygląd według stylu motywu (TINTED / INVERTED / MONO), symbol jasny/ciemny jak motyw.
 @Composable
 fun ModeBadge(icon: ModeIcon, color: Long, size: Dp = 28.dp, modifier: Modifier = Modifier, shape: Shape? = null) {
     val dark = isThemeDark()
-    val bg = remember(color, dark) { modeBadgeColor(color, dark) }
+    val style = LocalThemeSpec.current.badge
+    val bg = remember(color, dark, style) { modeBadgeColor(color, dark, style) }
+    val clipShape = shape ?: LocalIconShape.current.shape(size) // kształt z ustawień, chyba że wywołujący wymusza własny
+    val outline = badgeOutline(dark, style) // tylko High Contrast: czarny znaczek na czarnym tle potrzebuje obwódki
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(size)
-            .clip(shape ?: LocalIconShape.current.shape(size)) // kształt z ustawień, chyba że wywołujący wymusza własny
-            .background(bg),
+            .clip(clipShape)
+            .background(bg)
+            .border(1.dp, outline ?: Color.Transparent, clipShape),
     ) {
         Icon(
             painter = painterResource(icon.res),
             contentDescription = null,
-            tint = modeBadgeSymbol(dark),
+            tint = modeBadgeSymbol(dark, color, style),
             modifier = Modifier.size(size * 0.62f),
         )
     }
@@ -201,6 +215,7 @@ fun ColorSwatches(
     allowNone: Boolean = false,
     allowCustom: Boolean = true, // "+" na końcu: dowolny kolor z palety (HSV / HEX)
     modeBadge: Boolean = false,  // kolory trybu: kółka pokazują kolor tak, jak wyjdzie na znaczku w tym motywie
+    showOffList: Boolean = true, // wybrany kolor spoza listy pokaż na początku (false, gdy pokazuje go inny rząd)
 ) {
     var pickerOpen by remember { mutableStateOf(false) }
     val customColorDescription = stringResource(R.string.mode_color_custom)
@@ -210,7 +225,7 @@ fun ColorSwatches(
             Swatch(color = null, selected = selected == null, onClick = { onSelect(null) })
         }
         // Wybrany kolor spoza listy (własny) pokazujemy na początku, żeby było widać, co jest ustawione.
-        if (selected != null && selected !in colors) {
+        if (showOffList && selected != null && selected !in colors) {
             Swatch(color = selected, selected = true, onClick = { pickerOpen = true }, modeBadge = modeBadge)
         }
         colors.forEach { c -> Swatch(color = c, selected = c == selected, onClick = { onSelect(c) }, modeBadge = modeBadge) }
@@ -245,9 +260,10 @@ fun ColorSwatches(
 @Composable
 private fun Swatch(color: Long?, selected: Boolean, onClick: () -> Unit, modeBadge: Boolean = false) {
     val dark = isThemeDark()
+    val style = LocalThemeSpec.current.badge
     val fill = when {
         color == null -> MaterialTheme.colorScheme.surfaceVariant
-        modeBadge -> remember(color, dark) { modeBadgeColor(color, dark) }
+        modeBadge -> remember(color, dark, style) { modeSwatchColor(color, dark, style) }
         else -> Color(color)
     }
     val swatchDescription = if (color == null) stringResource(R.string.mode_color_scheme) else stringResource(R.string.mode_color)
@@ -270,7 +286,50 @@ private fun Swatch(color: Long?, selected: Boolean, onClick: () -> Unit, modeBad
             androidx.compose.material3.Text("A", style = MaterialTheme.typography.labelSmall)
         } else if (modeBadge && selected) {
             // Wybrany kolor trybu: znaczek ✓ w kolorze symbolu — od razu widać, jak będzie wyglądać ikona.
-            androidx.compose.material3.Text("✓", color = modeBadgeSymbol(dark), style = MaterialTheme.typography.labelLarge)
+            // W High Contrast kółko ma kolor symbolu, więc ✓ rysujemy kolorem tła znaczka (czarnym / białym).
+            val check = if (style == BadgeStyle.INVERTED) modeBadgeColor(color, dark, style) else modeBadgeSymbol(dark, color, style)
+            androidx.compose.material3.Text("✓", color = check, style = MaterialTheme.typography.labelLarge)
         }
+    }
+}
+
+// Wybór koloru w dwóch rzędach: krótka paleta bieżącego motywu ("Z motywu") i wszystkie kolory po odcieniu
+// ("Wszystkie kolory", na końcu "+" = dowolny kolor). Kolor spoza obu list pokazuje się na początku drugiego rzędu.
+@Composable
+fun ThemeColorSwatches(
+    selected: Long?,
+    onSelect: (Long?) -> Unit,
+    allowNone: Boolean = false,
+    modeBadge: Boolean = false,
+) {
+    val palette = LocalThemeSpec.current.palette
+    val rest = AllColors.filter { it !in palette }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            stringResource(R.string.look_colors_theme),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ColorSwatches(
+            colors = palette,
+            selected = selected,
+            onSelect = onSelect,
+            allowNone = allowNone,
+            allowCustom = false,
+            modeBadge = modeBadge,
+            showOffList = false,
+        )
+        Text(
+            stringResource(R.string.look_colors_all),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ColorSwatches(
+            colors = rest,
+            selected = selected,
+            onSelect = onSelect,
+            modeBadge = modeBadge,
+            showOffList = selected != null && selected !in palette,
+        )
     }
 }

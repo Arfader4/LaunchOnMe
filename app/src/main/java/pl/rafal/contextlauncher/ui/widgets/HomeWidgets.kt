@@ -303,7 +303,7 @@ fun ModeDialWidget(
                                 .background(MaterialTheme.colorScheme.surface)
                                 .padding(2.dp)
                                 .clip(CircleShape)
-                                .background(pl.rafal.contextlauncher.ui.modeBadgeColor(it.color, pl.rafal.contextlauncher.ui.isThemeDark()))
+                                .background(pl.rafal.contextlauncher.ui.modeSwatchColor(it.color, pl.rafal.contextlauncher.ui.isThemeDark(), pl.rafal.onthemes.LocalThemeSpec.current.badge))
                                 .semantics { contentDescription = changeModeLabel },
                         )
                     }

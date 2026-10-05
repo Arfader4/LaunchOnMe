@@ -233,7 +233,7 @@ private fun LookStep(plan: ModePlan, existingNames: Set<String>, onChange: (Mode
         Text(plan.name.ifBlank { "…" }, style = MaterialTheme.typography.titleMedium)
     }
     IconPicker(selected = ModeIcon.of(plan.icon), color = plan.color, onSelect = { onChange(plan.copy(icon = it.key)) })
-    ColorSwatches(colors = ModeColors, selected = plan.color, modeBadge = true, onSelect = { c -> if (c != null) onChange(plan.copy(color = c)) })
+    ThemeColorSwatches(selected = plan.color, modeBadge = true, onSelect = { c -> if (c != null) onChange(plan.copy(color = c)) })
 }
 
 // Krok 4: co powstanie. Aplikacje można odznaczyć dotknięciem (przyciemniona = nie trafi na kartę).

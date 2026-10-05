@@ -1168,4 +1168,6 @@
     <string name="manifest_dots_label">Kropki powiadomień (LaunchOnMe)</string>
     <!-- OnThemes (1.5) -->
     <string name="set_open_onthemes">🎭 Otwórz OnThemes…</string>
+    <string name="look_colors_theme">Z motywu</string>
+    <string name="look_colors_all">Wszystkie kolory</string>
 </resources>

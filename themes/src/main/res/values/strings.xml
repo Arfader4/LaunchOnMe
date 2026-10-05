@@ -17,4 +17,9 @@
     <string name="ot_theme_high_contrast">High Contrast</string>
     <string name="ot_theme_custom">Custom</string>
     <string name="ot_theme_luxury">Luxury</string>
+    <string name="ot_theme_standard">Standard</string>
+    <string name="ot_theme_amoled">AMOLED</string>
+    <string name="ot_theme_bw">Black &amp; White</string>
+    <string name="ot_theme_pastel">Pastel</string>
+    <string name="ot_theme_system">System</string>
 </resources>

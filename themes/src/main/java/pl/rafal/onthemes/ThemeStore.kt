@@ -16,6 +16,10 @@ class ThemeStore private constructor(context: Context) {
     )
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
+    init {
+        SystemColors.refresh(context) // przed odczytem motywu: "Systemowy" ma od razu właściwe kolory
+    }
+
     private val _defaultTheme = MutableStateFlow(Themes.find(prefs.getString(KEY_THEME, null)) ?: Themes.NIGHT)
     val defaultTheme: StateFlow<ThemeSpec> = _defaultTheme.asStateFlow()
 

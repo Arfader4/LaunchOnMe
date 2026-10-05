@@ -158,7 +158,7 @@ fun NewModeDialog(onConfirm: (name: String, color: Long, icon: String) -> Unit, 
                     singleLine = true,
                 )
                 IconPicker(selected = icon, color = color, onSelect = { icon = it })
-                ColorSwatches(colors = ModeColors, selected = color, modeBadge = true, onSelect = { c -> if (c != null) color = c })
+                ThemeColorSwatches(selected = color, modeBadge = true, onSelect = { c -> if (c != null) color = c })
             }
         },
         confirmButton = {

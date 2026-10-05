@@ -47,7 +47,12 @@ fun ContextLauncherTheme(
     // LocalContentColor = domyślny kolor tekstu i ikon. MaterialTheme go nie ustawia (robi to dopiero Surface),
     // a my rysujemy na zwykłym Box — stąd czarne napisy na ciemnym tle. Ustawiamy go więc sami, dla całej aplikacji.
     MaterialTheme(colorScheme = colors, typography = Typography) {
-        CompositionLocalProvider(LocalContentColor provides colors.onBackground, content = content)
+        // LocalThemeSpec: znaczki trybów biorą z motywu swój styl (np. High Contrast = czarne tło + kolorowy symbol).
+        CompositionLocalProvider(
+            LocalContentColor provides colors.onBackground,
+            pl.rafal.onthemes.LocalThemeSpec provides palette,
+            content = content,
+        )
     }
 }
 

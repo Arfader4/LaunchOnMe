@@ -53,7 +53,6 @@ import pl.rafal.contextlauncher.suggest.Suggestion
 import pl.rafal.contextlauncher.suggest.SuggestionEngine
 import pl.rafal.contextlauncher.suggest.parseTimeOrNull
 import pl.rafal.contextlauncher.suggest.toRule
-import pl.rafal.onthemes.AccentColors
 import pl.rafal.onthemes.ThemeSpec
 import pl.rafal.onthemes.Themes
 import java.time.DayOfWeek
@@ -188,7 +187,7 @@ fun ModeSettingsSheet(
             IconPicker(selected = icon, color = mode.color) { onAppearanceChange(it.key, mode.color, palette, mode.accent) }
 
             Text(stringResource(R.string.msug_icon_color), style = MaterialTheme.typography.titleSmall)
-            ColorSwatches(colors = ModeColors, selected = mode.color, modeBadge = true, onSelect = { c ->
+            ThemeColorSwatches(selected = mode.color, modeBadge = true, onSelect = { c ->
                 if (c != null) onAppearanceChange(mode.icon, c, palette, mode.accent)
             })
 
@@ -196,8 +195,7 @@ fun ModeSettingsSheet(
             PaletteRow(selected = palette, onSelect = { onAppearanceChange(mode.icon, mode.color, it, mode.accent) }, allowDefault = true)
 
             Text(stringResource(R.string.msug_accent_color), style = MaterialTheme.typography.titleSmall)
-            ColorSwatches(
-                colors = AccentColors,
+            ThemeColorSwatches(
                 selected = mode.accent,
                 onSelect = { onAppearanceChange(mode.icon, mode.color, palette, it) },
                 allowNone = true, // "A" = kolor ze schematu

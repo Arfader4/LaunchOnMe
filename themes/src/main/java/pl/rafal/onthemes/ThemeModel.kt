@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -73,21 +74,37 @@ class ThemeSpec(
     palette: List<Long>,
     val badge: BadgeStyle = BadgeStyle.TINTED,
     val finish: Finish = Finish.FLAT,
+    val darkOnly: Boolean = false, // np. AMOLED: zawsze ciemny, przełącznik Jasny/Ciemny go nie zmienia
 ) {
     private val basePalette: List<Long> = sortByHue(palette)
 
     val label: String get() = OnThemesText.get(labelRes)
 
     // Krótka paleta motywu (kolory trybów, akcent). Własny motyw dokłada swój akcent na początek listy.
+    // Systemowy bierze kolory z One UI / Material You (SystemColors), gdy są dostępne.
     val palette: List<Long>
-        get() = if (family == ThemeFamily.CUSTOM) sortByHue((listOf(CustomTheme.colors.accent) + basePalette).distinct()) else basePalette
+        get() = when (family) {
+            ThemeFamily.CUSTOM -> sortByHue((listOf(CustomTheme.colors.accent) + basePalette).distinct())
+            ThemeFamily.SYSTEM -> SystemColors.palette.takeIf { it.isNotEmpty() } ?: basePalette
+            else -> basePalette
+        }
 
-    // Role dla wariantu; własny motyw jest jeden (bez osobnej wersji jasnej/ciemnej).
-    fun roles(dark: Boolean): Roles = if (family == ThemeFamily.CUSTOM) CustomTheme.colors.roles() else if (dark) this.dark else light
+    // Role dla wariantu. Własny motyw jest jeden (bez osobnej wersji jasnej/ciemnej), systemowy pyta Androida,
+    // "tylko ciemny" (AMOLED) zawsze daje wersję ciemną.
+    fun roles(dark: Boolean): Roles = when {
+        family == ThemeFamily.CUSTOM -> CustomTheme.colors.roles()
+        family == ThemeFamily.SYSTEM -> SystemColors.roles(dark) ?: if (dark) this.dark else light
+        darkOnly -> this.dark
+        dark -> this.dark
+        else -> light
+    }
 
-    // Czy motyw wyjdzie ciemny: własny "wie" to sam (po jasności tła), reszta słucha przełącznika Jasny/Ciemny.
-    fun isDark(dark: Boolean): Boolean =
-        if (family == ThemeFamily.CUSTOM) Color(roles(dark).background).luminance() < 0.5f else dark
+    // Czy motyw wyjdzie ciemny: własny "wie" to sam (po jasności tła), AMOLED zawsze, reszta słucha przełącznika.
+    fun isDark(dark: Boolean): Boolean = when {
+        family == ThemeFamily.CUSTOM -> Color(roles(dark).background).luminance() < 0.5f
+        darkOnly -> true
+        else -> dark
+    }
 
     // Trzy kolory do podglądu motywu (tło, powierzchnia, akcent).
     fun swatches(dark: Boolean): List<Color> = roles(dark).let {
@@ -130,6 +147,21 @@ val AccentColors = listOf(
     0xFF8FB2FF, 0xFF4FB3BF, 0xFF7FD6AE, 0xFF3F8F5F, 0xFFECEAE4,
     0xFF4DF5CD, 0xFFEF476F, 0xFFFFD166, 0xFF118AB2, 0xFFF472B6, 0xFF84CC16,
 )
+
+// Wszystkie kolory do wyboru (kolory trybów + kolory główne), bez powtórzeń, posortowane po odcieniu.
+// W launcherze pokazujemy je pod krótką paletą motywu ("Z motywu" / "Wszystkie kolory").
+val AllColors: List<Long> = sortByHue(
+    (
+        listOf(
+            0xFFF0A844, 0xFF8FB2FF, 0xFF7FD6AE, 0xFFFF9A7F, 0xFFB9A5FF, 0xFFD4AF37, 0xFF4FB3BF, 0xFFE0736B, 0xFF8B5A2B,
+            0xFF4DF5CD, 0xFFFFD166, 0xFFEF476F, 0xFF06D6A0, 0xFF118AB2, 0xFFA78BFA, 0xFFF472B6, 0xFF94A3B8, 0xFF84CC16,
+        ) + AccentColors
+        ).distinct(),
+)
+
+// Motyw, w którym rysuje się bieżący ekran — znaczki trybów biorą z niego styl (BadgeStyle).
+// CompositionLocal ≈ wartość dziedziczona w dół drzewa (jak DynamicResource w WPF). Ustawia ją ContextLauncherTheme.
+val LocalThemeSpec = compositionLocalOf { Themes.NIGHT }
 
 // Kolory własnego motywu: 4 wybierane w kreatorze, reszta ról wyliczana (mieszanie kolorów jak w Material).
 data class CustomColors(

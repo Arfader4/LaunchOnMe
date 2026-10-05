@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
     // Wracamy na ekran główny (np. po odinstalowaniu aplikacji), więc odświeżamy listę.
     override fun onResume() {
         super.onResume()
+        pl.rafal.onthemes.OnThemes.refreshSystemColors(this) // motyw "Systemowy": tapeta / paleta mogła się zmienić
         viewModel.refresh()
     }
 

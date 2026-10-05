@@ -71,13 +71,15 @@ fun ColorPickerDialog(
                     if (badgePreview) {
                         Spacer(Modifier.width(8.dp))
                         val dark = isThemeDark()
+                        val style = pl.rafal.onthemes.LocalThemeSpec.current.badge
+                        val c = argb.toLong() and 0xFFFFFFFFL
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(LocalIconShape.current.shape(48.dp))
-                                .background(modeBadgeColor(argb.toLong() and 0xFFFFFFFFL, dark)),
-                        ) { Text("✓", color = modeBadgeSymbol(dark), style = MaterialTheme.typography.titleMedium) }
+                                .background(modeBadgeColor(c, dark, style)),
+                        ) { Text("✓", color = modeBadgeSymbol(dark, c, style), style = MaterialTheme.typography.titleMedium) }
                     }
                     Spacer(Modifier.width(16.dp))
                     OutlinedTextField(

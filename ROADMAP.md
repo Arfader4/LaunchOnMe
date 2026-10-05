@@ -240,8 +240,11 @@ motyw „System” (kolory dynamiczne), „Kopiuj HEX”.
       (karty z miniaturą i paletą), lista trybów z ich motywami. W launcherze: Ustawienia → „Otwórz OnThemes”; ikona
       OnThemes w szufladzie idzie za jasnością launchera (Jasny / Ciemny), przy „Auto” za systemem.
       Wygląd launchera bez zmian (Elegancki → Luxury, Kontrast → High Contrast tylko z nazwy).
-- [ ] T2 — katalog: Standard, High Contrast (INVERTED), Black & White (MONO), Pastel, AMOLED, System; style znaczków;
-      palety po odcieniu w wyborze kolorów (paleta motywu + wszystkie kolory).
+- [x] T2 — katalog: Standard, AMOLED (zawsze ciemny, czysta czerń), High Contrast (znaczki INVERTED: czarne / białe tło,
+      kolorowy symbol z kontrastem ≥ 4,5:1, cienka obwódka), Czarno-biały (MONO: szare znaczki), Pastelowy, Systemowy
+      (kolory Material You / One UI z tapety, Android 12+, odświeżane po powrocie na ekran). Styl znaczka idzie z motywu
+      przez `LocalThemeSpec` (ustawia go `ContextLauncherTheme`). Wybór koloru trybu i akcentu: rząd „Z motywu”
+      (krótka paleta) + „Wszystkie kolory” (po odcieniu) + „+”.
 - [ ] T3 — Luxury: metale (złoto, srebro, miedź, brąz) × bazy (butelkowa zieleń, purpura, granat, bordo, czerń), połysk.
 - [ ] T4 — aplikacja: galeria, ekran motywu z podglądem na żywo, motyw globalny i per tryb, wiele motywów własnych
       (kreator przeniesiony do modułu razem z wyborem koloru).

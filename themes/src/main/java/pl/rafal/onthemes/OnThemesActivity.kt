@@ -68,6 +68,11 @@ class OnThemesActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent { OnThemesApp() }
     }
+
+    override fun onResume() {
+        super.onResume()
+        OnThemes.refreshSystemColors(this) // motyw "Systemowy": tapeta / paleta mogła się zmienić
+    }
 }
 
 @Composable
@@ -110,7 +115,7 @@ private fun OnThemesApp() {
     }
 
     MaterialTheme(colorScheme = colors) {
-        CompositionLocalProvider(LocalContentColor provides colors.onBackground) {
+        CompositionLocalProvider(LocalContentColor provides colors.onBackground, LocalThemeSpec provides theme) {
             Box(Modifier.fillMaxSize().background(colors.background)) {
                 GalleryScreen(store, mode, theme, dark)
             }
@@ -274,14 +279,16 @@ private fun MiniPreview(spec: ThemeSpec, dark: Boolean) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             spec.palette.take(3).forEach { c ->
+                val outline = badgeOutline(isDark, spec.badge)
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(15.dp)
                         .clip(RoundedCornerShape(5.dp))
-                        .background(badgeBackground(c, isDark, spec.badge)),
+                        .background(badgeBackground(c, isDark, spec.badge))
+                        .border(1.dp, outline ?: Color.Transparent, RoundedCornerShape(5.dp)),
                 ) {
-                    Box(Modifier.size(5.dp).clip(CircleShape).background(badgeSymbol(isDark, spec.badge)))
+                    Box(Modifier.size(5.dp).clip(CircleShape).background(badgeSymbol(isDark, spec.badge, c)))
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -295,6 +302,9 @@ private fun MiniPreview(spec: ThemeSpec, dark: Boolean) {
 private fun ModeRow(mode: HostMode, dark: Boolean) {
     val spec = Themes.find(mode.themeId)
     val badgeDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    // Znaczek w stylu motywu, którego tryb używa (własny albo globalny).
+    val style = (spec ?: LocalThemeSpec.current).badge
+    val outline = badgeOutline(badgeDark, style)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -308,12 +318,13 @@ private fun ModeRow(mode: HostMode, dark: Boolean) {
             modifier = Modifier
                 .size(34.dp)
                 .clip(RoundedCornerShape(11.dp))
-                .background(badgeBackground(mode.color, badgeDark)),
+                .background(badgeBackground(mode.color, badgeDark, style))
+                .border(1.dp, outline ?: Color.Transparent, RoundedCornerShape(11.dp)),
         ) {
             Icon(
                 painter = painterResource(mode.iconRes),
                 contentDescription = null,
-                tint = badgeSymbol(badgeDark),
+                tint = badgeSymbol(badgeDark, style, mode.color),
                 modifier = Modifier.size(21.dp),
             )
         }

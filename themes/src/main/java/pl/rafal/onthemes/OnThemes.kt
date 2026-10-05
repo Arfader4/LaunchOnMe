@@ -20,6 +20,9 @@ object OnThemes {
         ThemeStore.get(context)
     }
 
+    // Kolory systemu (motyw "Systemowy") — odśwież po powrocie na ekran; tapeta / paleta mogła się zmienić.
+    fun refreshSystemColors(context: Context) = SystemColors.refresh(context)
+
     fun openIntent(context: Context): Intent =
         Intent(context, OnThemesActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
