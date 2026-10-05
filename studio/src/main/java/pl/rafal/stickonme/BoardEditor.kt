@@ -52,6 +52,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -63,6 +64,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -88,6 +92,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -129,15 +134,49 @@ fun BoardEditorScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val renderer = remember { BoardRenderer() }
-    var board by remember { mutableStateOf(initial) }
+    val renderer = remember { BoardRenderer() } // podgląd: mniejsze kopie obrazów, bez dekodowania na wątku UI
+    // Zamknięcie tablicy = puszczamy pamięć podręczną obrazów (nie czekamy, aż GC znajdzie cały renderer).
+    DisposableEffect(renderer) { onDispose { renderer.clear() } }
+    // Stan tablicy jako obiekt State (nie "by"): ekran NIE czyta go w kompozycji, tylko w akcjach i przy rysowaniu,
+    // więc przesuwanie warstwy palcem przerysowuje płótno, a nie przebudowuje całego ekranu co klatkę.
+    val boardState = remember { mutableStateOf(initial) }
+    var board by boardState
     var selectedId by remember { mutableStateOf<String?>(null) }
     var dialog by remember { mutableStateOf(BoardDialog.NONE) }
     var textDraft by remember { mutableStateOf<Layer?>(null) } // nowy albo edytowany tekst
     val history = remember { ArrayDeque<Board>() }             // cofanie (do 30 kroków)
     var historySize by remember { mutableStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
-    val selected = board.layers.firstOrNull { it.id == selectedId }
+    // Dla paska narzędzi wystarczy rodzaj zaznaczonej warstwy i nazwa tablicy — derivedStateOf zmienia się tylko,
+    // gdy zmieni się wynik (jak INotifyPropertyChanged tylko dla tej jednej właściwości), a nie przy każdym ruchu.
+    val selectedKind by remember { derivedStateOf { boardState.value.layers.firstOrNull { it.id == selectedId }?.kind } }
+    val boardName by remember { derivedStateOf { boardState.value.name } }
+    fun selectedLayer(): Layer? = board.layers.firstOrNull { it.id == selectedId } // czytane w chwili akcji
+
+    // Obrazy warstw i tła wczytywane w tle (podgląd nigdy nie dekoduje na wątku UI). Po wczytaniu "loaded" rośnie,
+    // a płótno rysuje się od nowa. Ścieżki jako zbiór — przesuwanie warstwy go nie zmienia, więc nic się nie restartuje.
+    // Klucz to zbiór obrazów z ramkami — zmiana ramki też liczy ją w tle.
+    var loaded by remember { mutableIntStateOf(0) }
+    var preloading by remember { mutableStateOf(true) }
+    val needs by remember {
+        derivedStateOf {
+            boardState.value.let { b ->
+                b.layers.mapNotNull { l -> l.path?.let { BoardRenderer.Need(it, l.frame, l.frameColor) } }.toSet() +
+                    setOfNotNull(b.bgImage?.let { BoardRenderer.Need(it) })
+            }
+        }
+    }
+    // Ponowne wczytanie, gdy podgląd nie znalazł obrazu w pamięci (najwyżej 2 razy na ten sam zestaw — przy bardzo wielu
+    // zdjęciach cache może nie zmieścić wszystkich i nie chcemy wczytywać w kółko).
+    var reload by remember { mutableIntStateOf(0) }
+    var reloadsLeft by remember { mutableIntStateOf(2) }
+    LaunchedEffect(needs) { reloadsLeft = 2 }
+    LaunchedEffect(needs, reload) {
+        renderer.previewMiss = false
+        withContext(Dispatchers.IO) { renderer.preload(needs) { ensureActive() } }
+        loaded++ // zawsze — po wczytaniu podgląd wypala się od nowa
+        preloading = false
+    }
 
     fun push() {
         history.addLast(board)
@@ -194,8 +233,8 @@ fun BoardEditorScreen(
                 change(board.copy(bgType = Board.BG_IMAGE, bgImage = path))
             } else {
                 val (cx, cy) = center()
-                // Zdjęcie na start zajmuje ok. 60% szerokości tablicy.
-                val scale = board.width * 0.6f / photo.width
+                // Zdjęcie na start zajmuje ok. 60% szerokości tablicy (skala względem rozmiaru logicznego, max 1400 px).
+                val scale = board.width * 0.6f / (photo.width * BoardRenderer.logicalScale(photo.width, photo.height))
                 addLayer(Layer(kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = scale, frame = Layer.FRAME_INSTAX))
             }
         }
@@ -205,7 +244,7 @@ fun BoardEditorScreen(
         // Pasek górny: zamknij (zapisuje), cofnij, eksport.
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
             TextButton(enabled = !closing, onClick = { close() }) { Text(stringResource(R.string.som_board_done_back)) }
-            Text(board.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text(boardName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             TextButton(enabled = historySize > 0, onClick = {
                 history.removeLastOrNull()?.let { board = it }
                 historySize = history.size
@@ -229,15 +268,26 @@ fun BoardEditorScreen(
             }
         }
 
-        BoardCanvas(
-            board = board,
-            renderer = renderer,
-            selectedId = selectedId,
-            onSelect = { selectedId = it },
-            onGestureStart = { push() },
-            onUpdate = { f -> board = f(board) },
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-        )
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            BoardCanvas(
+                board = { boardState.value },
+                loaded = { loaded },
+                onMiss = {
+                    if (!preloading && reloadsLeft > 0) {
+                        reloadsLeft--
+                        reload++
+                    }
+                },
+                renderer = renderer,
+                selectedId = selectedId,
+                onSelect = { selectedId = it },
+                onGestureStart = { push() },
+                onUpdate = { f -> board = f(board) },
+                modifier = Modifier.fillMaxSize(),
+            )
+            // Pierwsze wczytanie obrazów tablicy (wiele zdjęć) — kółko zamiast zacięcia ekranu.
+            if (preloading) CircularProgressIndicator(Modifier.align(Alignment.Center))
+        }
 
         message?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
@@ -251,7 +301,8 @@ fun BoardEditorScreen(
                 .horizontalScroll(rememberScrollState())
                 .padding(12.dp),
         ) {
-            if (selected == null) {
+            val kind = selectedKind
+            if (kind == null) {
                 ToolButton(stringResource(R.string.som_board_add_sticker)) { dialog = BoardDialog.STICKER }
                 ToolButton(stringResource(R.string.som_board_add_photo)) { photoForBackground = false; pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                 ToolButton(stringResource(R.string.som_board_add_text)) {
@@ -262,20 +313,25 @@ fun BoardEditorScreen(
                 ToolButton(stringResource(R.string.som_board_add_emoji)) { dialog = BoardDialog.EMOJI }
                 ToolButton(stringResource(R.string.som_board_background)) { dialog = BoardDialog.BACKGROUND }
             } else {
-                if (selected.kind == Layer.KIND_TEXT) ToolButton(stringResource(R.string.som_board_text_style)) { textDraft = selected; dialog = BoardDialog.TEXT }
+                // Akcje biorą warstwę w chwili dotknięcia (selectedLayer()), więc zawsze aktualne położenie.
+                if (kind == Layer.KIND_TEXT) ToolButton(stringResource(R.string.som_board_text_style)) { textDraft = selectedLayer(); dialog = BoardDialog.TEXT }
                 else ToolButton(stringResource(R.string.som_board_frame)) { dialog = BoardDialog.FRAME }
                 ToolButton(stringResource(R.string.som_board_to_front)) {
-                    change(board.copy(layers = board.layers.filter { it.id != selected.id } + selected))
+                    selectedLayer()?.let { sel -> change(board.copy(layers = board.layers.filter { it.id != sel.id } + sel)) }
                 }
                 ToolButton(stringResource(R.string.som_board_to_back)) {
-                    change(board.copy(layers = listOf(selected) + board.layers.filter { it.id != selected.id }))
+                    selectedLayer()?.let { sel -> change(board.copy(layers = listOf(sel) + board.layers.filter { it.id != sel.id })) }
                 }
                 ToolButton(stringResource(R.string.som_board_duplicate)) {
-                    addLayer(selected.copy(id = java.util.UUID.randomUUID().toString(), x = selected.x + board.width * 0.04f, y = selected.y + board.width * 0.04f))
+                    selectedLayer()?.let { sel ->
+                        addLayer(sel.copy(id = java.util.UUID.randomUUID().toString(), x = sel.x + board.width * 0.04f, y = sel.y + board.width * 0.04f))
+                    }
                 }
-                ToolButton(stringResource(R.string.som_board_straighten)) { change(board.updateLayer(selected.id) { it.copy(rotation = 0f) }) }
+                ToolButton(stringResource(R.string.som_board_straighten)) {
+                    selectedId?.let { id -> change(board.updateLayer(id) { it.copy(rotation = 0f) }) }
+                }
                 ToolButton(stringResource(R.string.som_board_delete_layer)) {
-                    change(board.copy(layers = board.layers.filter { it.id != selected.id }))
+                    selectedId?.let { id -> change(board.copy(layers = board.layers.filter { it.id != id })) }
                     selectedId = null
                 }
                 ToolButton(stringResource(R.string.som_done)) { selectedId = null }
@@ -291,9 +347,9 @@ fun BoardEditorScreen(
                 scope.launch {
                     // Kopia w assets tablicy: usunięcie naklejki z biblioteki nie psuje tablic (jak w launcherze).
                     val path = BoardStore.copyAsset(context, file) ?: file.absolutePath
-                    val bmp = withContext(Dispatchers.IO) { renderer.bitmap(path) } // dekodowanie poza wątkiem UI
+                    val img = withContext(Dispatchers.IO) { renderer.bitmap(path) } // dekodowanie poza wątkiem UI (od razu w pamięci podglądu)
                     val (cx, cy) = center()
-                    val scale = if (bmp != null) board.width * 0.45f / maxOf(bmp.width, bmp.height) else 1f
+                    val scale = if (img != null) board.width * 0.45f / maxOf(img.width, img.height) else 1f // rozmiar logiczny
                     addLayer(Layer(kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = scale))
                 }
             },
@@ -330,7 +386,8 @@ fun BoardEditorScreen(
                     val file = StickerLibrary.save(context, bmp)
                     val path = BoardStore.copyAsset(context, file) ?: file.absolutePath
                     val (cx, cy) = center()
-                    addLayer(Layer(kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = board.width * 0.4f / maxOf(bmp.width, bmp.height)))
+                    val logical = maxOf(bmp.width, bmp.height) * BoardRenderer.logicalScale(bmp.width, bmp.height)
+                    addLayer(Layer(kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = board.width * 0.4f / logical))
                 }
             },
             onDismiss = { dialog = BoardDialog.NONE },
@@ -345,7 +402,7 @@ fun BoardEditorScreen(
             },
             onDismiss = { dialog = BoardDialog.NONE },
         )
-        BoardDialog.FRAME -> selected?.let { layer ->
+        BoardDialog.FRAME -> selectedLayer()?.let { layer -> // okno otwarte = czytanie tablicy w kompozycji jest w porządku
             FrameDialog(
                 layer = layer,
                 onChange = { updated -> change(board.updateLayer(layer.id) { updated }) },
@@ -355,22 +412,34 @@ fun BoardEditorScreen(
         BoardDialog.EXPORT -> ExportDialog(
             onSticker = {
                 dialog = BoardDialog.NONE
+                val snapshot = board
                 scope.launch {
-                    val sticker = withContext(Dispatchers.Default) { runCatching { renderer.renderSticker(board) }.getOrNull() }
+                    // Eksport w pełnej jakości: osobny renderer (oryginalne obrazy), po zapisie do wyrzucenia.
+                    val sticker = withContext(Dispatchers.Default) { runCatching { BoardRenderer.forExport().renderSticker(snapshot) }.getOrNull() }
                     if (sticker == null) {
                         message = context.getString(R.string.som_board_empty)
                     } else {
                         saveBoard()
-                        onStickerSaved(StickerLibrary.save(context, sticker))
+                        val file = StickerLibrary.save(context, sticker)
+                        sticker.recycle() // już w pliku — nie czekamy na GC z kilkudziesięcioma MB
+                        onStickerSaved(file)
                         message = context.getString(R.string.som_board_sticker_saved)
                     }
                 }
             },
             onGallery = {
                 dialog = BoardDialog.NONE
+                val snapshot = board
                 scope.launch {
                     val ok = withContext(Dispatchers.IO) {
-                        runCatching { saveToGallery(context, renderer.render(board), board.name) }.isSuccess
+                        runCatching {
+                            val image = BoardRenderer.forExport().render(snapshot) // pełna jakość, pełny rozmiar tablicy
+                            try {
+                                saveToGallery(context, image, snapshot.name)
+                            } finally {
+                                image.recycle()
+                            }
+                        }.isSuccess
                     }
                     message = if (ok) context.getString(R.string.som_board_gallery_saved)
                         else context.getString(R.string.som_board_gallery_failed)
@@ -407,9 +476,17 @@ private fun ToolButton(label: String, onClick: () -> Unit) {
 
 // Płótno: tablica dopasowana do ekranu z marginesem (widać, co wystaje poza krawędź).
 // Jeden palec: zaznacz i przesuń warstwę. Dwa palce: skala i obrót zaznaczonej warstwy.
+//
+// Wydajność (1.3.0): warstwy, które się nie ruszają, są "wypalone" w dwa obrazy wielkości płótna — wszystko POD
+// zaznaczoną warstwą (z tłem) i wszystko NAD nią. W każdej klatce gestu rysujemy więc trzy rzeczy: spód, ruszaną
+// warstwę i wierzch, zamiast całej tablicy dwa razy. Obrazy wypalają się od nowa tylko, gdy zmieni się ich zawartość
+// (inne zaznaczenie, zmiana warstwy, tła, wczytany obraz) — porównanie list warstw (data class) jak Equals w C#.
+// Tablica jest czytana dopiero przy rysowaniu (board()), więc ruch palca nie przebudowuje kompozycji, tylko rysunek.
 @Composable
 private fun BoardCanvas(
-    board: Board,
+    board: () -> Board,
+    loaded: () -> Int,                    // licznik wczytanych w tle obrazów (zmiana = przerysuj)
+    onMiss: () -> Unit,                   // podgląd nie znalazł obrazu w pamięci → wczytaj w tle
     renderer: BoardRenderer,
     selectedId: String?,
     onSelect: (String?) -> Unit,
@@ -419,13 +496,20 @@ private fun BoardCanvas(
 ) {
     val currentBoard by rememberUpdatedState(board)
     val currentSelected by rememberUpdatedState(selectedId)
+    val currentOnMiss by rememberUpdatedState(onMiss)
     val outside = Color(0xFF0B0C0E)
     val selection = MaterialTheme.colorScheme.secondary
+    // Wymiary tablicy — jedyne, czego potrzebuje kompozycja (skala i położenie na ekranie). Nie zmieniają się przy ruchu.
+    val dims by remember { derivedStateOf { currentBoard().let { it.width to it.height } } }
+    val bake = remember { SceneBake() }
+    // Puszczenie wypalonych obrazów razem z płótnem (wyjście z tablicy).
+    DisposableEffect(bake) { onDispose { bake.release() } }
     BoxWithConstraints(modifier.background(outside)) {
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
-        val scale = minOf(w * 0.84f / board.width, h * 0.84f / board.height)
-        val origin = Offset((w - board.width * scale) / 2f, (h - board.height * scale) / 2f)
+        val (boardW, boardH) = dims
+        val scale = minOf(w * 0.84f / boardW, h * 0.84f / boardH)
+        val origin = Offset((w - boardW * scale) / 2f, (h - boardH * scale) / 2f)
         fun toBoard(p: Offset) = (p - origin) / scale
 
         Canvas(
@@ -435,7 +519,7 @@ private fun BoardCanvas(
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         val start = toBoard(down.position)
-                        val hit = renderer.hit(currentBoard, start.x, start.y)
+                        val hit = renderer.hit(currentBoard(), start.x, start.y)
                         // Dotknięcie pustego miejsca odznacza; dotknięcie warstwy ją zaznacza.
                         // Dwa palce działają na zaznaczonej warstwie, nawet gdy drugi palec jest obok niej.
                         var target = hit?.id ?: currentSelected
@@ -489,27 +573,58 @@ private fun BoardCanvas(
                     }
                 },
         ) {
-            drawIntoCanvas { c ->
-                val canvas = c.nativeCanvas
+            val b = board()           // odczyt stanu w fazie rysowania → zmiana = tylko przerysowanie
+            val version = loaded()    // wczytany obraz → wypalić od nowa
+            val layers = b.layers
+            val activeIndex = layers.indexOfFirst { it.id == selectedId }
+            val below = if (activeIndex < 0) layers else layers.subList(0, activeIndex)
+            val above = if (activeIndex < 0) emptyList() else layers.subList(activeIndex + 1, layers.size)
+            val area = RectF(0f, 0f, b.width.toFloat(), b.height.toFloat())
+            val pxW = size.width.toInt()
+            val pxH = size.height.toInt()
+            val checkerCell = 18.dp.toPx() / scale
+            // Tło tablicy bez warstw — klucz spodu (zmiana tła = nowy spód).
+            val background = b.copy(layers = emptyList())
+
+            // Rysowanie grupy warstw w układzie tablicy: najpierw całe przygaszone (to, co wystaje), potem w tablicy w pełnym kolorze.
+            fun drawGroup(canvas: android.graphics.Canvas, group: List<Layer>, withBackground: Boolean) {
                 canvas.save()
                 canvas.translate(origin.x, origin.y)
                 canvas.scale(scale, scale)
-                val area = RectF(0f, 0f, board.width.toFloat(), board.height.toFloat())
-                // Przezroczyste tło = szachownica.
-                if (board.bgType == Board.BG_TRANSPARENT) drawChecker(canvas, area, 18.dp.toPx() / scale)
+                if (withBackground) {
+                    if (b.bgType == Board.BG_TRANSPARENT) drawChecker(canvas, area, checkerCell) // przezroczyste = szachownica
+                    canvas.save()
+                    canvas.clipRect(area)
+                    renderer.drawBackground(canvas, b, blocking = false)
+                    canvas.restore()
+                }
+                group.forEach { renderer.drawLayer(canvas, it, alpha = 90, blocking = false) }
                 canvas.save()
                 canvas.clipRect(area)
-                renderer.drawBackground(canvas, board)
+                group.forEach { renderer.drawLayer(canvas, it, blocking = false) }
                 canvas.restore()
-                // Najpierw całe warstwy przygaszone (to, co wystaje poza tablicę), potem w tablicy w pełnym kolorze.
-                board.layers.forEach { renderer.drawLayer(canvas, it, alpha = 90) }
+                canvas.restore()
+            }
+
+            drawIntoCanvas { c ->
+                val canvas = c.nativeCanvas
+                bake.below.draw(canvas, BakeKey(below, background, pxW, pxH, scale, origin, version), pxW, pxH) {
+                    drawGroup(it, below, withBackground = true)
+                }
+                if (activeIndex >= 0) {
+                    // Ruszana warstwa — jedyna rysowana na żywo.
+                    drawGroup(canvas, listOf(layers[activeIndex]), withBackground = false)
+                    bake.above.draw(canvas, BakeKey(above, null, pxW, pxH, scale, origin, version), pxW, pxH) {
+                        drawGroup(it, above, withBackground = false)
+                    }
+                }
                 canvas.save()
-                canvas.clipRect(area)
-                board.layers.forEach { renderer.drawLayer(canvas, it) }
-                canvas.restore()
+                canvas.translate(origin.x, origin.y)
+                canvas.scale(scale, scale)
                 // Ramka zaznaczenia (obrócona razem z warstwą).
-                board.layers.firstOrNull { it.id == selectedId }?.let { layer ->
-                    val (lw, lh) = renderer.contentSize(layer)
+                if (activeIndex >= 0) {
+                    val layer = layers[activeIndex]
+                    val (lw, lh) = renderer.contentSize(layer, blocking = false)
                     canvas.save()
                     canvas.translate(layer.x, layer.y)
                     canvas.rotate(layer.rotation)
@@ -531,7 +646,63 @@ private fun BoardCanvas(
                 })
                 canvas.restore()
             }
+            // Zmiana stanu nie w trakcie rysowania, tylko w następnej kolejce głównego wątku.
+            if (renderer.previewMiss) {
+                renderer.previewMiss = false
+                mainHandler.post { currentOnMiss() }
+            }
         }
+    }
+}
+
+private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+// Co jest na wypalonym obrazie — gdy klucz się nie zmienił, obraz jest aktualny (data class = porównanie wartości).
+private data class BakeKey(
+    val layers: List<Layer>,
+    val background: Board?, // tablica bez warstw (tło) albo null dla warstw "nad"
+    val width: Int,
+    val height: Int,
+    val scale: Float,
+    val origin: Offset,
+    val loaded: Int,
+)
+
+// Jeden wypalony obraz płótna (zwykła klasa, nie stan Compose — zmienia się tylko w fazie rysowania).
+private class BakedLayer {
+    private var key: BakeKey? = null
+    private var bitmap: Bitmap? = null
+
+    fun draw(target: android.graphics.Canvas, newKey: BakeKey, width: Int, height: Int, paint: (android.graphics.Canvas) -> Unit) {
+        if (width <= 0 || height <= 0) return
+        if (newKey.layers.isEmpty() && newKey.background == null) return // nic do narysowania
+        var bmp = bitmap
+        if (newKey != key || bmp == null) {
+            // Ten sam rozmiar = czyścimy i rysujemy w starej bitmapie (bez nowej alokacji kilku MB).
+            if (bmp == null || bmp.width != width || bmp.height != height) {
+                bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                bitmap = bmp
+            } else {
+                bmp.eraseColor(android.graphics.Color.TRANSPARENT)
+            }
+            paint(android.graphics.Canvas(bmp))
+            key = newKey
+        }
+        target.drawBitmap(bmp, 0f, 0f, null)
+    }
+
+    fun release() {
+        bitmap = null // bez recycle(): płótno mogło już zlecić rysowanie tej bitmapy w tej klatce
+        key = null
+    }
+}
+
+private class SceneBake {
+    val below = BakedLayer()
+    val above = BakedLayer()
+    fun release() {
+        below.release()
+        above.release()
     }
 }
 

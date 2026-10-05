@@ -210,9 +210,11 @@ private fun StudioApp(pickMode: Boolean, wallpaperMode: Boolean, start: StudioSt
         scope.launch {
             loading = true
             val path = BoardStore.copyAsset(context, file) ?: file.absolutePath
+            // Sam nagłówek pliku (inJustDecodeBounds — bez dekodowania pikseli), potem rozmiar logiczny warstwy (max 1400 px).
             val size = withContext(Dispatchers.IO) {
                 runCatching { android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }.also { android.graphics.BitmapFactory.decodeFile(path, it) } }
-                    .getOrNull()?.let { maxOf(it.outWidth, it.outHeight) }?.takeIf { it > 0 } ?: 1024
+                    .getOrNull()?.takeIf { it.outWidth > 0 && it.outHeight > 0 }
+                    ?.let { maxOf(it.outWidth, it.outHeight) * BoardRenderer.logicalScale(it.outWidth, it.outHeight) } ?: 1024f
             }
             board = Board(
                 name = context.getString(R.string.som_board_collage_name), width = 1080, height = 1080, bgType = Board.BG_COLOR,
@@ -273,7 +275,8 @@ private fun StudioApp(pickMode: Boolean, wallpaperMode: Boolean, start: StudioSt
                         loading = true
                         val file = withContext(Dispatchers.IO) {
                             runCatching {
-                                val image = BoardRenderer().render(finished, 2560)
+                                // Pełna jakość: osobny renderer eksportu (oryginalne obrazy), wyrzucany po użyciu.
+                                val image = BoardRenderer.forExport().render(finished, 2560)
                                 // Tapeta nie może być przezroczysta (system pokazałby czarne dziury) — kładziemy obraz
                                 // na kolorze tablicy, a zapisujemy jako JPEG (mniejszy plik, i tak bez przezroczystości).
                                 val opaque = android.graphics.Bitmap.createBitmap(image.width, image.height, android.graphics.Bitmap.Config.ARGB_8888)
@@ -281,8 +284,13 @@ private fun StudioApp(pickMode: Boolean, wallpaperMode: Boolean, start: StudioSt
                                     drawColor(finished.bgColor.toInt() or 0xFF000000.toInt())
                                     drawBitmap(image, 0f, 0f, null)
                                 }
-                                File(context.cacheDir, "board_wallpaper.jpg").also { f ->
-                                    f.outputStream().use { opaque.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it) }
+                                image.recycle() // dwie bitmapy tapety naraz to kilkadziesiąt MB — zwalniamy od razu
+                                try {
+                                    File(context.cacheDir, "board_wallpaper.jpg").also { f ->
+                                        f.outputStream().use { opaque.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it) }
+                                    }
+                                } finally {
+                                    opaque.recycle()
                                 }
                             }.getOrNull()
                         }
