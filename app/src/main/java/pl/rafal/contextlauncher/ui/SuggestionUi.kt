@@ -53,8 +53,9 @@ import pl.rafal.contextlauncher.suggest.Suggestion
 import pl.rafal.contextlauncher.suggest.SuggestionEngine
 import pl.rafal.contextlauncher.suggest.parseTimeOrNull
 import pl.rafal.contextlauncher.suggest.toRule
-import pl.rafal.contextlauncher.ui.theme.AccentColors
-import pl.rafal.contextlauncher.ui.theme.Palette
+import pl.rafal.onthemes.AccentColors
+import pl.rafal.onthemes.ThemeSpec
+import pl.rafal.onthemes.Themes
 import java.time.DayOfWeek
 import java.time.LocalTime
 
@@ -155,7 +156,7 @@ fun ModeSettingsSheet(
     onDeleteRule: (SuggestionRuleEntity) -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
-    onAppearanceChange: (icon: String?, color: Long, palette: Palette?, accent: Long?) -> Unit,
+    onAppearanceChange: (icon: String?, color: Long, palette: ThemeSpec?, accent: Long?) -> Unit,
     alwaysAsk: Boolean,                    // wyjątek od automatycznego przełączania
     onAlwaysAskChange: (Boolean) -> Unit,
     appRulesSummary: String,               // np. "3 zablokowane, 1 ukryta"
@@ -174,7 +175,7 @@ fun ModeSettingsSheet(
                 .padding(bottom = 24.dp),
         ) {
             val icon = ModeIcon.of(mode.icon)
-            val palette = Palette.fromName(mode.palette)
+            val palette = Themes.find(mode.palette)
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ModeBadge(mode, size = 36.dp)

@@ -1166,4 +1166,6 @@
     <string name="manifest_share_label">Przypnij do trybu</string>
     <string name="manifest_tile_label">Tryb</string>
     <string name="manifest_dots_label">Kropki powiadomień (LaunchOnMe)</string>
+    <!-- OnThemes (1.5) -->
+    <string name="set_open_onthemes">🎭 Otwórz OnThemes…</string>
 </resources>

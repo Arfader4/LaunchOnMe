@@ -33,7 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import pl.rafal.contextlauncher.R
-import pl.rafal.contextlauncher.ui.theme.CustomColors
+import pl.rafal.onthemes.CustomColors
 
 // Gotowe punkty wyjścia — potem każdy kolor można zmienić (także na dowolny z palety).
 private val ThemeStarters = listOf(

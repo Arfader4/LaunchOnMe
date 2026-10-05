@@ -1,0 +1,20 @@
+<resources>
+    <string name="ot_app_name">OnThemes</string>
+    <string name="ot_subtitle">Wygląd LaunchOnMe — jeden motyw dla wszystkiego albo inny dla każdego trybu.</string>
+    <string name="ot_brightness">Jasność</string>
+    <string name="ot_mode_light">Jasny</string>
+    <string name="ot_mode_dark">Ciemny</string>
+    <string name="ot_mode_auto">Auto</string>
+    <string name="ot_global_theme">Motyw globalny</string>
+    <string name="ot_global_hint">Dla trybów, które nie mają własnego motywu.</string>
+    <string name="ot_modes">Tryby</string>
+    <string name="ot_modes_hint">Własny motyw trybu ustawisz w oknie trybu w launcherze (wybór tutaj — w kolejnej wersji).</string>
+    <string name="ot_mode_global">Motyw globalny</string>
+    <string name="ot_modes_empty">Brak trybów — najpierw otwórz LaunchOnMe.</string>
+    <string name="ot_selected">Wybrany</string>
+    <string name="ot_theme_night">Nocny</string>
+    <string name="ot_theme_vintage">Vintage</string>
+    <string name="ot_theme_high_contrast">High Contrast</string>
+    <string name="ot_theme_custom">Własny</string>
+    <string name="ot_theme_luxury">Luxury</string>
+</resources>

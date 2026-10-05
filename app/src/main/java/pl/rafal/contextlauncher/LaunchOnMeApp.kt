@@ -9,5 +9,7 @@ class LaunchOnMeApp : Application() {
         super.onCreate()
         AppText.init(this)
         pl.rafal.stickonme.StudioText.init(this)
+        // OnThemes (motywy): teksty modułu + gospodarz, przez którego moduł widzi tryby launchera.
+        pl.rafal.onthemes.OnThemes.init(this, pl.rafal.contextlauncher.data.OnThemesBridge(this))
     }
 }

@@ -29,8 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.core.graphics.ColorUtils
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -109,25 +107,11 @@ enum class ModeIcon(val key: String, @DrawableRes val res: Int, @StringRes priva
 // Kolor tła znaczka trybu dopasowany do motywu. Symbol ma jeden kolor na cały motyw: w ciemnym zawsze jasny,
 // w jasnym zawsze ciemny — więc to tło się dostosowuje. Zachowujemy odcień i nasycenie (HSL), zmieniamy tylko jasność,
 // aż kontrast z symbolem będzie dobry (luminancja jak w WCAG). Dotyczy też kolorów własnych z palety HSV.
-fun modeBadgeColor(color: Long, dark: Boolean): Color {
-    val hsl = FloatArray(3)
-    ColorUtils.colorToHSL(color.toInt(), hsl) // Long ARGB → Int, jak (int)kolor w C#
-    fun lum() = Color(ColorUtils.HSLToColor(hsl)).luminance()
-    // Symbol to grafika, nie drobny tekst — wystarcza kontrast 3:1 (WCAG dla elementów graficznych).
-    // Wcześniej było 5:1 i prawie każdy kolor zjeżdżał do podobnej ciemnej (albo pastelowej) barwy,
-    // więc własny kolor wyglądał jak sąsiedni z listy. Teraz kolor zmienia się tylko tyle, ile trzeba.
-    if (dark) {
-        // Jasny symbol (luminancja ok. 0.91): tło ≤ 0.27.
-        while (lum() > 0.27f && hsl[2] > 0.05f) hsl[2] -= 0.02f
-    } else {
-        // Ciemny symbol (luminancja ok. 0.01): tło ≥ 0.13.
-        while (lum() < 0.13f && hsl[2] < 0.97f) hsl[2] += 0.02f
-    }
-    return Color(ColorUtils.HSLToColor(hsl))
-}
+// Samo liczenie mieszka w module OnThemes (Badges.kt), żeby podgląd w OnThemes rysował znaczki tak samo.
+fun modeBadgeColor(color: Long, dark: Boolean): Color = pl.rafal.onthemes.badgeBackground(color, dark)
 
 // Kolor symbolu na znaczku trybu (i na podglądzie koloru w wyborze).
-fun modeBadgeSymbol(dark: Boolean): Color = if (dark) Color(0xFFF4F5F7) else Color(0xFF17181C)
+fun modeBadgeSymbol(dark: Boolean): Color = pl.rafal.onthemes.badgeSymbol(dark)
 
 // Znaczek trybu: symbol na kolorowym tle. Tło dopasowane do motywu (modeBadgeColor), symbol jasny/ciemny jak motyw.
 @Composable

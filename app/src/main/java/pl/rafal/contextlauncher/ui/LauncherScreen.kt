@@ -113,7 +113,7 @@ import pl.rafal.contextlauncher.data.db.AppRestrictionEntity
 import pl.rafal.contextlauncher.data.widgets.LauncherWidgets
 import pl.rafal.contextlauncher.data.widgets.WidgetProvider
 import pl.rafal.contextlauncher.ui.theme.ContextLauncherTheme
-import pl.rafal.contextlauncher.ui.theme.Palette
+import pl.rafal.onthemes.Themes
 import pl.rafal.contextlauncher.ui.widgets.DualClockWidget
 import pl.rafal.contextlauncher.ui.widgets.FolderWidget
 import pl.rafal.contextlauncher.ui.widgets.HandyWidget
@@ -164,7 +164,7 @@ fun LauncherApp(
 
     // Motyw bierzemy z aktywnego trybu (jego schemat i kolor główny), a gdy tryb nie ma własnego — z ustawień.
     // "Jednolity wygląd" w Ustawieniach wyłącza motywy trybów: wszędzie domyślny schemat.
-    val modePalette = if (uniformLook) null else Palette.fromName(activeMode?.palette)
+    val modePalette = if (uniformLook) null else Themes.find(activeMode?.palette)
     ContextLauncherTheme(
         palette = modePalette ?: defaultPalette,
         accent = if (uniformLook) null else activeMode?.accent,

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- OnThemes: własna ikona i nazwa w szufladzie (osobne zadanie w "ostatnich aplikacjach"),
+             ale to ta sama instalacja co LaunchOnMe. Ikona ma wersję jasną i ciemną (drawable / drawable-night). -->
+        <activity
+            android:name=".OnThemesActivity"
+            android:exported="true"
+            android:label="@string/ot_app_name"
+            android:icon="@mipmap/ic_onthemes"
+            android:roundIcon="@mipmap/ic_onthemes"
+            android:taskAffinity="pl.rafal.onthemes"
+            android:theme="@style/Theme.OnThemes"
+            android:enableOnBackInvokedCallback="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

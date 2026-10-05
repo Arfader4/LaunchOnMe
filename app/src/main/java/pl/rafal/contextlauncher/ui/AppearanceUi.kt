@@ -28,8 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import pl.rafal.contextlauncher.R
-import pl.rafal.contextlauncher.ui.theme.Palette
-import pl.rafal.contextlauncher.ui.theme.ThemeMode
+import pl.rafal.onthemes.ThemeMode
+import pl.rafal.onthemes.ThemeSpec
+import pl.rafal.onthemes.Themes
 
 // Czy aktualny motyw jest ciemny (po kolorze tła) — do podglądu schematów w tej samej wersji.
 @Composable
@@ -40,9 +41,9 @@ fun isThemeDark(): Boolean = MaterialTheme.colorScheme.background.luminance() < 
 @Composable
 fun AppearanceSheet(
     themeMode: ThemeMode,
-    defaultPalette: Palette,
+    defaultPalette: ThemeSpec,
     onThemeMode: (ThemeMode) -> Unit,
-    onDefaultPalette: (Palette) -> Unit,
+    onDefaultPalette: (ThemeSpec) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
@@ -72,7 +73,7 @@ fun AppearanceSheet(
 
 // Rząd kart schematów: nazwa + trzy kolory. allowDefault dodaje kartę "Domyślny" (null).
 @Composable
-fun PaletteRow(selected: Palette?, onSelect: (Palette?) -> Unit, allowDefault: Boolean) {
+fun PaletteRow(selected: ThemeSpec?, onSelect: (ThemeSpec?) -> Unit, allowDefault: Boolean) {
     val dark = isThemeDark()
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -81,7 +82,7 @@ fun PaletteRow(selected: Palette?, onSelect: (Palette?) -> Unit, allowDefault: B
         if (allowDefault) {
             PaletteCard(label = stringResource(R.string.look_default), swatches = emptyList(), selected = selected == null, onClick = { onSelect(null) })
         }
-        Palette.entries.forEach { palette ->
+        Themes.all.forEach { palette ->
             PaletteCard(
                 label = palette.label,
                 swatches = palette.swatches(dark),

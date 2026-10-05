@@ -88,10 +88,12 @@ import pl.rafal.contextlauncher.suggest.Rule
 import pl.rafal.contextlauncher.suggest.bluetoothRuleParams
 import pl.rafal.contextlauncher.suggest.placeRuleParams
 import pl.rafal.contextlauncher.suggest.wifiRuleParams
-import pl.rafal.contextlauncher.data.ThemePrefs
 import pl.rafal.contextlauncher.ModeTileService
-import pl.rafal.contextlauncher.ui.theme.Palette
-import pl.rafal.contextlauncher.ui.theme.ThemeMode
+import pl.rafal.onthemes.ThemeMode
+import pl.rafal.onthemes.ThemeSpec
+import pl.rafal.onthemes.ThemeStore
+import pl.rafal.onthemes.Themes
+import kotlinx.coroutines.flow.drop
 import pl.rafal.contextlauncher.layout.GridRect
 import pl.rafal.contextlauncher.data.db.SuggestionRuleEntity
 import pl.rafal.contextlauncher.suggest.ModeRule
@@ -138,7 +140,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val calendar = CalendarReader(application)
     private val widgets = LauncherWidgets.get(application)
     private val pinned = PinnedRepository(application)
-    private val themePrefs = ThemePrefs.get(application)
+    private val themePrefs = ThemeStore.get(application) // motywy: moduł OnThemes
     private val signalsReader = SignalsReader(application)
     private val appPrefs = AppPrefs.get(application)
 
@@ -846,21 +848,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // --- Wygląd ---
 
     val themeMode: StateFlow<ThemeMode> = themePrefs.themeMode
-    val defaultPalette: StateFlow<Palette> = themePrefs.defaultPalette
+    val defaultPalette: StateFlow<ThemeSpec> = themePrefs.defaultTheme
 
     fun setThemeMode(mode: ThemeMode) = themePrefs.setThemeMode(mode)
 
-    fun setDefaultPalette(palette: Palette) = themePrefs.setDefaultPalette(palette)
+    fun setDefaultPalette(palette: ThemeSpec) = themePrefs.setDefaultTheme(palette)
 
     // Kreator motywów: zapis własnych kolorów i od razu użycie ich jako domyślnego schematu.
-    fun saveCustomTheme(colors: pl.rafal.contextlauncher.ui.theme.CustomColors) {
+    fun saveCustomTheme(colors: pl.rafal.onthemes.CustomColors) {
         themePrefs.setCustomColors(colors)
-        themePrefs.setDefaultPalette(Palette.CUSTOM)
+        themePrefs.setDefaultTheme(Themes.CUSTOM)
     }
 
-    fun updateModeAppearance(mode: ModeEntity, icon: String?, color: Long, palette: Palette?, accent: Long?) {
+    fun updateModeAppearance(mode: ModeEntity, icon: String?, color: Long, palette: ThemeSpec?, accent: Long?) {
         viewModelScope.launch {
-            modeDao.updateAppearance(mode.id, icon, color, palette?.name, accent)
+            modeDao.updateAppearance(mode.id, icon, color, palette?.id, accent)
             ModeTileService.requestUpdate(getApplication()) // kafelek pokazuje ikonę aktywnego trybu
         }
     }
@@ -904,6 +906,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     // Wszystkie aplikacje (bez filtra wyszukiwania), np. do wyboru aplikacji do folderu.
     val installedApps: StateFlow<List<AppInfo>> = allApps.asStateFlow()
+
+    // Ikona OnThemes ma wersję jasną i ciemną. Gdy w launcherze zmieni się jasność (Jasny / Ciemny / Auto),
+    // wczytujemy listę aplikacji jeszcze raz, żeby ikona pasowała do motywu (drop(1) = pomiń wartość startową).
+    init {
+        viewModelScope.launch {
+            themePrefs.themeMode.drop(1).collect {
+                runCatching { repository.loadApps() }.onSuccess { allApps.value = it }
+            }
+        }
+    }
 
     fun createFolder(parentId: Long?, name: String) {
         viewModelScope.launch { folderDao.insertFolder(FolderEntity(parentId = parentId, name = name.trim())) }

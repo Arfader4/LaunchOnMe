@@ -1,0 +1,20 @@
+<resources>
+    <string name="ot_app_name">OnThemes</string>
+    <string name="ot_subtitle">Looks for LaunchOnMe — one theme for everything or a different one for each mode.</string>
+    <string name="ot_brightness">Brightness</string>
+    <string name="ot_mode_light">Light</string>
+    <string name="ot_mode_dark">Dark</string>
+    <string name="ot_mode_auto">Auto</string>
+    <string name="ot_global_theme">Global theme</string>
+    <string name="ot_global_hint">Used by modes that don\'t have their own theme.</string>
+    <string name="ot_modes">Modes</string>
+    <string name="ot_modes_hint">A mode\'s own theme is set in the mode window in the launcher (choosing it here comes in a later version).</string>
+    <string name="ot_mode_global">Global theme</string>
+    <string name="ot_modes_empty">No modes yet — open LaunchOnMe first.</string>
+    <string name="ot_selected">Selected</string>
+    <string name="ot_theme_night">Night</string>
+    <string name="ot_theme_vintage">Vintage</string>
+    <string name="ot_theme_high_contrast">High Contrast</string>
+    <string name="ot_theme_custom">Custom</string>
+    <string name="ot_theme_luxury">Luxury</string>
+</resources>

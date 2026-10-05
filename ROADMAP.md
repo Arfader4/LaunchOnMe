@@ -221,3 +221,29 @@ Kolejność ustalona 04.10: paczka 1 → paczka 2 → tłumaczenie → duże tem
       Systemowego oszczędzania baterii aplikacja sama nie włączy (wymaga uprawnienia nadanego przez adb).
 - [ ] Optymalizacja baterii i procesora w całym launcherze.
 - [ ] Blokada folderów w szufladzie odciskiem palca / PIN-em (systemowy BiometricPrompt).
+
+## 1.5 — OnThemes jako osobna aplikacja motywów (gałąź `feature/onthemes`, plan z 05.10)
+Nowy czat: „robimy paczkę TN z ROADMAP.md” (gałąź `feature/onthemes`).
+
+**Podział (wzór: `:studio` / `:onhand`):** moduł `:themes` (biblioteka, pakiet `pl.rafal.onthemes`), `:app` zależy od niego.
+Cały model motywów mieszka w module: `ThemeSpec` (id, rodzina, role jasne/ciemne, krótka paleta po odcieniu, styl znaczka,
+wykończenie), katalog `Themes` (+ aliasy starych nazw: `CONTRAST` → `HIGH_CONTRAST`, `ELEGANT` → `LUXURY`), `ThemeStore`
+(ten sam plik `appearance` i klucze co dawne `ThemePrefs` — bez migracji), `Badges.kt` (kolory znaczka trybu).
+Launcher tylko czyta (`ThemeStore`, `Themes.find`), `modes.palette` trzyma id motywu. W drugą stronę `OnThemesHost`
+(lista trybów, `setModeTheme`) — implementacja `data/OnThemesBridge.kt`, rejestrowana w `LaunchOnMeApp`.
+Kolory systemu: Good Lock / Theme Park nie mają API — tapeta z palety (One UI / Material You liczą z niej kolory),
+motyw „System” (kolory dynamiczne), „Kopiuj HEX”.
+
+- [x] T1 — szkielet i przeniesienie: moduł `:themes`, `OnThemesActivity` z ikoną (jasna / ciemna przez `drawable-night`,
+      trzy płaskie cienie w kolorach logo + THEMES, warstwa monochromatyczna), `OnThemesText`, model z `Palettes.kt` /
+      `ThemePrefs.kt` przeniesiony do modułu, `OnThemesHost` + `OnThemesBridge`. OnThemes: jasność, motyw globalny
+      (karty z miniaturą i paletą), lista trybów z ich motywami. W launcherze: Ustawienia → „Otwórz OnThemes”; ikona
+      OnThemes w szufladzie idzie za jasnością launchera (Jasny / Ciemny), przy „Auto” za systemem.
+      Wygląd launchera bez zmian (Elegancki → Luxury, Kontrast → High Contrast tylko z nazwy).
+- [ ] T2 — katalog: Standard, High Contrast (INVERTED), Black & White (MONO), Pastel, AMOLED, System; style znaczków;
+      palety po odcieniu w wyborze kolorów (paleta motywu + wszystkie kolory).
+- [ ] T3 — Luxury: metale (złoto, srebro, miedź, brąz) × bazy (butelkowa zieleń, purpura, granat, bordo, czerń), połysk.
+- [ ] T4 — aplikacja: galeria, ekran motywu z podglądem na żywo, motyw globalny i per tryb, wiele motywów własnych
+      (kreator przeniesiony do modułu razem z wyborem koloru).
+- [ ] T5 — kolory systemu (tapeta z palety, HEX), kopia zapasowa, wersja 1.5.0 + tag, checklista testów całości.
+- [ ] (opcjonalnie T6) barwione ikony aplikacji z warstwy monochromatycznej (Android 13+).

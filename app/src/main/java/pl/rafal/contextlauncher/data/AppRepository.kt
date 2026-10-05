@@ -60,11 +60,20 @@ class AppRepository(
                     component = activity.componentName,
                     user = user,
                     userSerial = serial,
-                    icon = activity.getIcon(0).toBitmap(width = 144, height = 144).asImageBitmap(),
+                    icon = (ownThemedIcon(activity) ?: activity.getIcon(0)).toBitmap(width = 144, height = 144).asImageBitmap(),
                     category = activity.applicationInfo.category,
                 )
             }
         }.sortedWith(compareBy(collator) { it.label })
+    }
+
+    // Ikona OnThemes zgodna z jasnością launchera (Jasny / Ciemny), a nie systemu. Przy "Auto" — null,
+    // czyli zwykła ikona z systemu (system sam wybiera wersję jasną albo ciemną).
+    private fun ownThemedIcon(activity: android.content.pm.LauncherActivityInfo): android.graphics.drawable.Drawable? {
+        val c = activity.componentName
+        if (c.packageName != context.packageName || c.className != pl.rafal.onthemes.OnThemes.ACTIVITY_CLASS) return null
+        val dark = pl.rafal.onthemes.ThemeStore.get(context).forcedDark() ?: return null
+        return pl.rafal.onthemes.OnThemes.appIcon(context, dark)
     }
 
     fun launch(app: AppInfo) {

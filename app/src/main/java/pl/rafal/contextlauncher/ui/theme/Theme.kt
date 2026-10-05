@@ -15,19 +15,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import pl.rafal.onthemes.ThemeMode
+import pl.rafal.onthemes.ThemeSpec
+import pl.rafal.onthemes.Themes
 
 @Composable
 fun ContextLauncherTheme(
-    palette: Palette = Palette.NIGHT,
+    palette: ThemeSpec = Themes.NIGHT, // motywy mieszkają w module OnThemes
     accent: Long? = null,
     themeMode: ThemeMode = ThemeMode.AUTO,
     content: @Composable () -> Unit,
 ) {
-    val dark = when (themeMode) {
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
-        ThemeMode.AUTO -> isSystemInDarkTheme()
-    }
+    val dark = themeMode.isDark(isSystemInDarkTheme())
     val target = palette.colorScheme(dark, accent)
     val colors = animateColorScheme(target) // płynne przejście przy zmianie trybu albo motywu
 

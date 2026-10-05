@@ -51,7 +51,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import pl.rafal.contextlauncher.data.DismissDuration
-import pl.rafal.contextlauncher.ui.theme.ThemeMode
+import pl.rafal.onthemes.ThemeMode
 import androidx.compose.ui.res.stringResource
 import pl.rafal.contextlauncher.R
 
@@ -243,9 +243,13 @@ fun SettingsScreen(
                     PaletteRow(selected = defaultPalette, onSelect = { it?.let(viewModel::setDefaultPalette) }, allowDefault = false)
                     var creatorOpen by remember { mutableStateOf(false) }
                     TextButton(onClick = { creatorOpen = true }) { Text(stringResource(R.string.set_theme_creator)) }
+                    // Motywy mają teraz własną aplikację (moduł :themes, ikona w szufladzie).
+                    TextButton(onClick = { context.startActivity(pl.rafal.onthemes.OnThemes.openIntent(context)) }) {
+                        Text(stringResource(R.string.set_open_onthemes))
+                    }
                     if (creatorOpen) {
                         ThemeCreatorDialog(
-                            initial = pl.rafal.contextlauncher.ui.theme.CustomTheme.colors,
+                            initial = pl.rafal.onthemes.CustomTheme.colors,
                             onSave = {
                                 viewModel.saveCustomTheme(it)
                                 creatorOpen = false

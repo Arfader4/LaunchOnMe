@@ -21,8 +21,9 @@ import pl.rafal.contextlauncher.data.db.LauncherDatabase
 import pl.rafal.contextlauncher.data.db.ModeEntity
 import pl.rafal.contextlauncher.data.db.PinnedItemEntity
 import pl.rafal.contextlauncher.data.db.SuggestionRuleEntity
-import pl.rafal.contextlauncher.ui.theme.Palette
-import pl.rafal.contextlauncher.ui.theme.ThemeMode
+import pl.rafal.onthemes.ThemeMode
+import pl.rafal.onthemes.ThemeStore
+import pl.rafal.onthemes.Themes
 
 // Eksport i import całej konfiguracji (np. przeniesienie z emulatora na telefon albo nowy telefon).
 // Dwa formaty: sam JSON (ustawienia) albo .zip = ten sam JSON + pliki: naklejki z kart, tapety trybów,
@@ -37,7 +38,7 @@ object Backup {
 
     suspend fun export(context: Context, target: Uri, withFiles: Boolean = false) = withContext(Dispatchers.IO) {
         val db = LauncherDatabase.get(context)
-        val theme = ThemePrefs.get(context)
+        val theme = ThemeStore.get(context)
         val prefs = AppPrefs.get(context)
         val root = context.filesDir.canonicalFile
         val files = linkedSetOf<File>() // co trafi do .zip (zbiór — ten sam plik raz)
@@ -89,8 +90,8 @@ object Backup {
                 "prefs",
                 JSONObject()
                     .put("themeMode", theme.themeMode.value.name)
-                    .put("defaultPalette", theme.defaultPalette.value.name)
-                    .put("customTheme", pl.rafal.contextlauncher.ui.theme.CustomTheme.colors.let {
+                    .put("defaultPalette", theme.defaultTheme.value.id)
+                    .put("customTheme", pl.rafal.onthemes.CustomTheme.colors.let {
                         JSONObject().put("bg", it.background).put("surface", it.surface).put("accent", it.accent).put("text", it.text)
                     })
                     .put("homeModeId", prefs.homeModeId.value ?: -1)
@@ -305,17 +306,18 @@ object Backup {
 
         // Ustawienia poza bazą (SharedPreferences).
         val p = json.getJSONObject("prefs")
-        ThemePrefs.get(context).apply {
+        ThemeStore.get(context).apply {
             runCatching { setThemeMode(ThemeMode.valueOf(p.getString("themeMode"))) }
             // Własny schemat przed ustawieniem domyślnego, żeby od razu miał właściwe kolory.
             p.optJSONObject("customTheme")?.let { c ->
                 runCatching {
                     setCustomColors(
-                        pl.rafal.contextlauncher.ui.theme.CustomColors(c.getLong("bg"), c.getLong("surface"), c.getLong("accent"), c.getLong("text")),
+                        pl.rafal.onthemes.CustomColors(c.getLong("bg"), c.getLong("surface"), c.getLong("accent"), c.getLong("text")),
                     )
                 }
             }
-            Palette.fromName(p.optString("defaultPalette"))?.let { setDefaultPalette(it) }
+            // Stare nazwy (CONTRAST, ELEGANT) tłumaczy Themes.find.
+            Themes.find(p.optString("defaultPalette"))?.let { setDefaultTheme(it) }
         }
         AppPrefs.get(context).apply {
             setHomeModeId(newHomeId)

@@ -1,0 +1,9 @@
+<resources>
+    <!-- Ciemne tło od razu przy starcie (zanim Compose narysuje ekran w kolorach motywu). -->
+    <style name="Theme.OnThemes" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/onthemes_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+    <color name="onthemes_background">#FF0F1012</color>
+</resources>

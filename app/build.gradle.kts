@@ -43,6 +43,8 @@ android {
 dependencies {
     // StickOnMe (studio naklejek): własna ikona w szufladzie, ale ta sama instalacja i wspólne pliki naklejek.
     implementation(project(":studio"))
+    // OnThemes (motywy): model motywów + aplikacja z własną ikoną; launcher tylko czyta z niej kolory.
+    implementation(project(":themes"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
