@@ -12,6 +12,10 @@ z własną ikoną w szufladzie. Projekt do nauki i portfolio. Plan prac i histor
 - Kodu nie da się skompilować w środowisku Claude — każdą paczkę przegląda osobny agent „jak kompilator”,
   poprawki przed commitem. Właściciel buduje (Ctrl+F9; Gradle Sync po zmianach w build.gradle / modułach).
 - Na koniec paczki: krótki raport po polsku + checklista testów, gdy o nią poprosi.
+- Wersje: X.Y.Z (Y = runda / duży temat, Z = hotfix). Przy każdej wersji podbij `versionName` i `versionCode`
+  (X·10000 + Y·100 + Z) w `app/build.gradle.kts`, dopisz wiersz w ROADMAP.md („Wersje”) i tag `vX.Y.Z` w gicie.
+- Warstwa na cały ekran (przygaszenie, łuk): `ui/ScreenOverlay.kt` (`OnScreen`, `ScreenDim`) — nie Popup,
+  bo okno Popup na Androidzie ≤14 nie sięga pod paski systemu.
 
 ## Pułapki techniczne (ważne)
 - **DEX:** żadnych `return@label` ani nielokalnych `return` w lambdach inline w funkcjach @Composable

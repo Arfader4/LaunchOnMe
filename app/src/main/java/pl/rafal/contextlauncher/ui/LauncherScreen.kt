@@ -186,7 +186,9 @@ fun LauncherApp(
             val fn: (String) -> AppInfo? = { key -> byKey[key] }
             fn
         }
+        val screenOverlay = remember { ScreenOverlay() } // warstwa na cały ekran (łuk trybów, przygaszenie pod listą)
         CompositionLocalProvider(
+            LocalScreenOverlay provides screenOverlay,
             LocalAppLookup provides lookup, // ikony aplikacji jako symbol folderu
             LocalNotifiedApps provides if (dotsEnabled) notified else emptySet(),
             LocalShowAppLabels provides showLabels,
@@ -1208,6 +1210,9 @@ private fun LauncherContent(
                 onClose = { wizardOpen = false },
             )
         }
+
+        // Ostatnia = najwyżej: przygaszenie i łuk trybów nad całym ekranem (też pod paskami systemu).
+        LocalScreenOverlay.current?.let { ScreenOverlayLayer(it) }
     }
 
     // --- Arkusze i okna dialogowe ---

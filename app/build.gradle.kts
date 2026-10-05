@@ -16,8 +16,10 @@ android {
         applicationId = "pl.rafal.contextlauncher"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // Wersja: X.Y.Z — Y = runda zmian (duży temat), Z = poprawka (hotfix). Historia: ROADMAP.md, "Wersje".
+        // versionCode musi rosnąć przy każdej wersji: X·10000 + Y·100 + Z (1.2.1 → 10201).
+        versionCode = 10201
+        versionName = "1.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

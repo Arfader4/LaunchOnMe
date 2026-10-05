@@ -31,7 +31,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
@@ -113,8 +113,9 @@ fun ModeSwitcherButton(
     Box(
         // Klawisz po prawej połowie ekranu → łuk rozwija się w lewo-w górę; po lewej (leworęczni) → w prawo-w górę.
         Modifier.onGloballyPositioned { coords ->
-            val centerX = coords.positionInWindow().x + coords.size.width / 2f
-            arc.opensLeft = centerX > coords.findRootCoordinates().size.width / 2f
+            val center = coords.positionInRoot() + androidx.compose.ui.geometry.Offset(coords.size.width / 2f, coords.size.height / 2f)
+            arc.anchor = center
+            arc.opensLeft = center.x > coords.findRootCoordinates().size.width / 2f
         },
     ) {
         if (compact) {
@@ -239,6 +240,9 @@ fun ModeDropdown(
     // DropdownMenu sam otwiera się do góry, gdy pod przyciskiem brakuje miejsca.
     // Bez wspólnego "pudełka": tryby to osobne owalne klawisze unoszące się nad kartą (każdy ma własne tło i cień),
     // pojawiające się falą od klawisza ON. Pod nimi mniejsze przyciski: nowy tryb, OnHand, Ustawienia…
+    // Pod listą przygaszony cały ekran (jak przy łuku) — klawisze z przerwami odcinają się od karty i tapety.
+    // Lista jest w osobnym oknie, więc przygaszenie (w głównym oknie) zostaje pod nią.
+    ScreenDim(expanded)
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,

@@ -3,6 +3,17 @@
 Każdy etap to jedna paczka zmian, którą da się zbudować i przetestować osobno. Kolejny etap można zacząć
 w nowej sesji: wystarczy napisać „robimy etap N z ROADMAP.md”. Po skończeniu etapu zaznaczamy go [x].
 
+## Wersje (od 05.10)
+Numer X.Y.Z: Y = runda zmian / duży temat, Z = poprawka (hotfix). Numer widać w Ustawieniach,
+w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
+| Wersja | Co | Paczek |
+|---|---|---|
+| 1.0 | V1 — pierwsza wersja (`master`) | 1 |
+| 1.1 | Etapy 1–11, runda 29.09, StickOnMe S0–S4, porządki X/Y/Z (animacje) | 21 |
+| 1.2 | Runda uwag 04.10: paczki 1–3 (OnHand, klawisz ON, pasek czuwania, tłumaczenie EN/PL) | 3 |
+| 1.2.1 | Hotfix: łuk trybów i lista trybów na przygaszonym całym ekranie | 1 |
+Razem od V1: 25 paczek. Kolejne duże tematy = 1.3, 1.4…; poprawki do nich = 1.3.1, 1.3.2…
+
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).
 - [x] Uchwyt zmiany rozmiaru: pogrubiony narożnik z podwójną linią zamiast kółka; mniejszy ✕ na małych widżetach.
@@ -189,6 +200,13 @@ Kolejność ustalona 04.10: paczka 1 → paczka 2 → tłumaczenie → duże tem
 - [x] Wszystkie teksty do zasobów: `res/values` = angielski (domyślny), `res/values-pl` = polski — launcher ok. 1100,
       StickOnMe ok. 150 tekstów, też etykiety w manifeście. Daty i nazwy miast z pogody w języku telefonu.
       Kolejne języki = po jednym pliku `values-xx/strings.xml` na moduł.
+
+### Hotfix 1.2.1 (05.10)
+- [x] Lista trybów (dotknięcie klawisza ON): pod listą przygaszony cały ekran, owalne klawisze odcinają się od karty.
+- [x] Łuk trybów (przytrzymanie): przygaszenie na cały ekran razem z paskami systemu — warstwa rysowana w głównym
+      oknie (`ui/ScreenOverlay.kt`) zamiast dwóch okien Popup. Bez tła „ćwierćkola”, linii toru i kropki kierunku —
+      wystarczą znaczki (wybrany powiększony z obwódką) i strzałki przy >5 trybach. Mniej kodu i rysowania.
+- [x] Numeracja wersji (versionName / versionCode, tagi w gicie).
 
 ### Duże tematy (osobne czaty, kolejno)
 - [ ] OnHand jako pełne notatki: przyjmowanie z „Udostępnij” (Keep, Samsung Notes…), wysyłanie do nich, eksport do pliku.

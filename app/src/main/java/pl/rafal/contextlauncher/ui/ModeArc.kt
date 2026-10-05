@@ -31,23 +31,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
 import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.ModeEntity
 import kotlin.math.abs
@@ -68,7 +63,7 @@ private val ArcRadius = 150.dp               // promień łuku (od środka klawi
 private val ArcBadge = 46.dp
 val ModeArcDeadZone = 48.dp                  // palec bliżej środka klawisza = anuluj
 
-// Stan łuku współdzielony przez gest (na klawiszu) i rysowanie (w oknie Popup).
+// Stan łuku współdzielony przez gest (na klawiszu) i rysowanie (na warstwie całego ekranu).
 @Stable
 class ModeArcState {
     var open by mutableStateOf(false)
@@ -78,6 +73,7 @@ class ModeArcState {
     var scroll by mutableFloatStateOf(0f)     // o ile trybów przewinięty łuk (0 = od pierwszego)
     var selected by mutableIntStateOf(-1)
     var opensLeft by mutableStateOf(true)     // klawisz po prawej → łuk w lewo-w górę (leworęczni: w prawo-w górę)
+    var anchor by mutableStateOf(Offset.Zero) // środek klawisza we współrzędnych korzenia ekranu (stąd rośnie łuk)
 }
 
 // Położenie trybu i na łuku (0..1) przy danym przewinięciu; poza zakresem = poza łukiem.
@@ -161,11 +157,12 @@ fun Modifier.modeArcGesture(
     }
 }
 
-// Rysowanie łuku w oknie Popup wyśrodkowanym na klawiszu (okno nie przycina się do ekranu karty).
+// Rysowanie łuku: na warstwie całego ekranu w głównym oknie (ScreenOverlay.kt), wokół środka klawisza.
 @Composable
 fun ModeArcOverlay(state: ModeArcState, modes: List<ModeEntity>, activeId: Long?) {
     val haptics = LocalHapticFeedback.current
     val currentModes by rememberUpdatedState(modes)
+    val activeIdState = rememberUpdatedState(activeId)
     // Przewijanie łuku, gdy palec stoi przy jego końcu (timer, bo stojący palec nie wysyła zdarzeń).
     LaunchedEffect(state.open) {
         if (!state.open) return@LaunchedEffect
@@ -190,8 +187,8 @@ fun ModeArcOverlay(state: ModeArcState, modes: List<ModeEntity>, activeId: Long?
             lastSel = state.selected
         }
     }
-    // Bez wczesnego "return" w @Composable — rysujemy tylko, gdy łuk jest otwarty.
-    if (state.open) ArcContent(state, modes, activeId)
+    // Rysujemy na warstwie całego ekranu (ScreenOverlay) — przygaszenie sięga też pod paski systemu.
+    OnScreen(state.open) { ArcContent(state, currentModes, activeIdState.value) }
 }
 
 @Composable
@@ -199,30 +196,39 @@ private fun ArcContent(state: ModeArcState, modes: List<ModeEntity>, activeId: L
     val density = LocalDensity.current
     val radiusPx = with(density) { ArcRadius.toPx() }
     val box = ArcRadius * 2 + ArcBadge * 2 // kwadrat wokół środka klawisza
-    val track = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-    val glow = MaterialTheme.colorScheme.primary
-    val fan = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f) // kolory odczytane poza Canvas (tam nie ma MaterialTheme)
-    // Otwarcie jak wachlarz: tło rozkłada się od początku łuku, a znaczki "wysuwają się" po kolei spod klawisza.
-    // g = postęp całości (0..1); każdy znaczek startuje trochę później (zależnie od miejsca na łuku).
+    val boxPx = with(density) { box.toPx() }
+    val glow = MaterialTheme.colorScheme.primary // kolor odczytany poza Canvas (tam nie ma MaterialTheme)
+    // Otwarcie jak wachlarz: znaczki "wysuwają się" po kolei spod klawisza.
+    // unfold = postęp całości (0..1); każdy znaczek startuje trochę później (zależnie od miejsca na łuku).
     val unfold = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(Unit) {
         unfold.animateTo(1f, androidx.compose.animation.core.tween(360, easing = androidx.compose.animation.core.LinearEasing))
     }
     fun eased(x: Float) = androidx.compose.animation.core.FastOutSlowInEasing.transform(x.coerceIn(0f, 1f))
+    // Gdzie na ekranie leży ta warstwa (zwykle 0,0) — klawisz podaje środek we współrzędnych korzenia.
+    var origin by remember { mutableStateOf(Offset.Zero) }
 
-    // Cały ekran przygasa, a na środku duży znaczek i nazwa trybu pod palcem — nic nie chowa się pod kciukiem.
-    // Jedna lekka warstwa (bez bitmap i rozmycia), więc nie obciąża pamięci; znika razem z łukiem.
-    Popup(
-        popupPositionProvider = FullWindow,
-        properties = PopupProperties(focusable = false, clippingEnabled = false),
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { origin = it.positionInRoot() }
+            // Drugi palec nie trafia w kartę pod spodem (dawniej blokowało to okno Popup).
+            // Palec na klawiszu jest dalej śledzony przez klawisz — dotknięcie zaczęło się, zanim warstwa powstała.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) awaitPointerEvent().changes.forEach { it.consume() }
+                }
+            },
     ) {
+        // Cały ekran przygasa (więc tła "wachlarza" już nie trzeba), a na środku duży znaczek i nazwa trybu
+        // pod palcem — nic nie chowa się pod kciukiem. Jedna lekka warstwa, bez bitmap i rozmycia.
         val selectedMode = modes.getOrNull(state.selected)?.takeIf { state.active }
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .fillMaxSize()
+                .matchParentSize()
                 .graphicsLayer { alpha = eased(unfold.value / 0.6f) }
-                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f)),
+                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f)),
         ) {
             androidx.compose.animation.AnimatedContent(
                 targetState = selectedMode,
@@ -267,41 +273,27 @@ private fun ArcContent(state: ModeArcState, modes: List<ModeEntity>, activeId: L
                 }
             }
         }
-    }
 
-    Popup(
-        popupPositionProvider = CenteredOnAnchor,
-        properties = PopupProperties(focusable = false, clippingEnabled = false),
-    ) {
-        Box(Modifier.size(box), contentAlignment = Alignment.Center) {
-            // Tło łuku: półprzezroczysty "wachlarz" i linia toru.
-            Canvas(Modifier.size(box)) {
-                val c = Offset(size.width / 2f, size.height / 2f)
-                val start = if (state.opensLeft) 180f else 270f
-                val outer = radiusPx + ArcBadge.toPx() * 0.75f
-                val sweep = if (state.opensLeft) 90f else -90f
-                drawArc(
-                    color = fan,
-                    // opensLeft: od 180° zgodnie z zegarem; inaczej od 360° wstecz — tak samo jak tor znaczków.
-                    startAngle = if (state.opensLeft) 180f else 360f,
-                    sweepAngle = sweep * eased(unfold.value / 0.7f),
-                    useCenter = true,
-                    topLeft = Offset(c.x - outer, c.y - outer),
-                    size = androidx.compose.ui.geometry.Size(outer * 2, outer * 2),
-                )
-                drawArc(
-                    color = track,
-                    startAngle = start,
-                    sweepAngle = 90f,
-                    useCenter = false,
-                    topLeft = Offset(c.x - radiusPx, c.y - radiusPx),
-                    size = androidx.compose.ui.geometry.Size(radiusPx * 2, radiusPx * 2),
-                    style = Stroke(width = 2.dp.toPx()),
-                )
-                // Strzałki na końcach łuku: w tę stronę są jeszcze tryby (palec przy końcu przewija łuk).
-                val extra = (modes.size - VISIBLE).coerceAtLeast(0).toFloat()
-                if (extra > 0f) {
-                    val arrowR = radiusPx + ArcBadge.toPx() * 0.62f // na zewnątrz toru, nie pod znaczkami
+        // Znaczki trybów w kwadracie wyśrodkowanym na klawiszu (część wystaje poza ekran — to nic, i tak niewidoczna).
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .offset {
+                    IntOffset(
+                        (state.anchor.x - origin.x - boxPx / 2f).roundToInt(),
+                        (state.anchor.y - origin.y - boxPx / 2f).roundToInt(),
+                    )
+                }
+                .size(box),
+        ) {
+            // Strzałki na końcach łuku: w tę stronę są jeszcze tryby (palec przy końcu przewija łuk).
+            // Tło "wachlarza", linia toru i kropka kierunku palca zniknęły — przy przygaszonym ekranie
+            // wystarczą same znaczki (wybrany jest powiększony i obwiedziony).
+            val extra = (modes.size - VISIBLE).coerceAtLeast(0).toFloat()
+            if (extra > 0f) {
+                Canvas(Modifier.size(box)) {
+                    val c = Offset(size.width / 2f, size.height / 2f)
+                    val arrowR = radiusPx + ArcBadge.toPx() * 0.62f // na zewnątrz łuku, nie pod znaczkami
                     fun arrow(slot: Float, forward: Boolean) {
                         val deg = if (state.opensLeft) 180f + 90f * slot else 360f - 90f * slot
                         val a = Math.toRadians(deg.toDouble())
@@ -318,16 +310,10 @@ private fun ArcContent(state: ModeArcState, modes: List<ModeEntity>, activeId: L
                             lineTo(base.x - n.x * 5.dp.toPx(), base.y - n.y * 5.dp.toPx())
                             close()
                         }
-                        drawPath(path, glow.copy(alpha = 0.85f))
+                        drawPath(path, glow.copy(alpha = 0.9f * eased(unfold.value)))
                     }
                     if (state.scroll < extra - 0.05f) arrow(1.04f, forward = true)
                     if (state.scroll > 0.05f) arrow(-0.04f, forward = false)
-                }
-                // Wskaźnik kierunku palca.
-                if (state.active) {
-                    val deg = if (state.opensLeft) 180f + 90f * state.t else 360f - 90f * state.t
-                    val rad = Math.toRadians(deg.toDouble())
-                    drawCircle(glow.copy(alpha = 0.35f), radius = 6.dp.toPx(), center = c + Offset(cos(rad).toFloat(), sin(rad).toFloat()) * (radiusPx * 0.55f))
                 }
             }
             // Zwykła pętla for i if zamiast "return@forEachIndexed" (powrót z lambdy inline w @Composable psuje DEX).
@@ -379,19 +365,4 @@ private fun ArcContent(state: ModeArcState, modes: List<ModeEntity>, activeId: L
             }
         }
     }
-}
-
-// Popup na całe okno (lewy górny róg okna) — tło i podpowiedź na środku ekranu.
-private val FullWindow = object : PopupPositionProvider {
-    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset =
-        IntOffset.Zero
-}
-
-// Popup wyśrodkowany na klawiszu (środek łuku = środek klawisza).
-private val CenteredOnAnchor = object : PopupPositionProvider {
-    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset =
-        IntOffset(
-            anchorBounds.center.x - popupContentSize.width / 2,
-            anchorBounds.center.y - popupContentSize.height / 2,
-        )
 }
