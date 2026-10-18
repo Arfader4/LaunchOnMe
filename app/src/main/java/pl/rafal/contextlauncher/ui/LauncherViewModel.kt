@@ -406,6 +406,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             // WhileSubscribed: licz tylko wtedy, gdy ktoś (ekran) słucha; 5 s zapasu na obrót ekranu.
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    // 1.6.1 „lepki” tryb: co wiemy o kontekście aktywnego trybu od jego włączenia (tylko w pamięci —
+    // po restarcie aplikacji zaczynamy ostrożnie: dopóki reguła nie zapasuje, trybu sami nie kończymy).
+    // Klucz = id trybu + chwila włączenia, więc każde ponowne włączenie zaczyna od zera.
+    private data class ActiveContext(val modeId: Long, val activatedAt: Long, val hadMatch: Boolean, val unmatchedSince: LocalDateTime?)
+    @Volatile private var activeContext: ActiveContext? = null
+
     private suspend fun computeSuggestion(input: SuggestionInputs): Suggestion? {
         val nowMs = System.currentTimeMillis()
         val zone = ZoneId.systemDefault()
@@ -437,7 +443,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             emptyList()
         }
 
+        // Czy któraś reguła aktywnego trybu pasuje TERAZ — i aktualizacja pamięci kontekstu (patrz ActiveContext).
+        val ctx = active?.let { mode ->
+            val matchesNow = modeRules.any { it.modeId == mode.id && SuggestionEngine.reasonIfMatches(it.rule, now, events, signals) != null }
+            val old = activeContext?.takeIf { it.modeId == mode.id && it.activatedAt == mode.lastActiveAt }
+                ?: ActiveContext(mode.id, mode.lastActiveAt, hadMatch = false, unmatchedSince = null)
+            val updated = if (matchesNow) old.copy(hadMatch = true, unmatchedSince = null)
+            else old.copy(unmatchedSince = old.unmatchedSince ?: now)
+            activeContext = updated
+            updated
+        }
+
         return SuggestionEngine.evaluate(
+            activeHadMatch = ctx?.hadMatch ?: false,
+            activeUnmatchedSince = ctx?.unmatchedSince,
             rules = modeRules,
             activeModeId = active?.id,
             previousModeId = previous?.id,
@@ -2063,6 +2082,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val graceLeft = MANUAL_GRACE_MS - (now - lastManual)
         // Dwa przypadki: sugestia wisiała już przy ręcznej zmianie ALBO chce wrócić do trybu, z którego właśnie wyszedłeś.
         val backToLeft = targetId == appPrefs.lastManualLeft.value
+        // 1.6.1: sugestia, która wisiała już przy ręcznej zmianie, nie przełącza sama NIGDY (dawniej po 30 min) —
+        // zostaje tylko propozycja w pasku. Automat ruszy dopiero, gdy kontekst się zmieni: sugestia zniknie
+        // i pojawi się na nowo (np. nowe połączenie Bluetooth, początek kolejnego okna czasu).
+        if (since <= lastManual && suggestion is Suggestion.SwitchTo) {
+            _autoStatus.value = AppText.get(R.string.vm_auto_status_skipped)
+            return
+        }
         if ((since <= lastManual || backToLeft) && graceLeft > 0) {
             _autoStatus.value = AppText.get(R.string.vm_auto_status_grace, graceLeft / 60_000 + 1)
             scheduleAutoRecheck(graceLeft)

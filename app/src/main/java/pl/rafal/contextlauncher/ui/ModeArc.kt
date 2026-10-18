@@ -221,8 +221,9 @@ private fun ArcContent(state: ModeArcState, modes: List<ModeEntity>, activeId: L
             },
     ) {
         // Cały ekran przygasa (więc tła "wachlarza" już nie trzeba), a na środku duży znaczek i nazwa trybu
-        // pod palcem — nic nie chowa się pod kciukiem. Jedna lekka warstwa, bez bitmap i rozmycia.
+        // pod palcem — nic nie chowa się pod kciukiem. Jedna lekka warstwa; rozmycie robi karta pod spodem (screenBackdrop).
         val selectedMode = modes.getOrNull(state.selected)?.takeIf { state.active }
+        BackdropBlur { eased(unfold.value / 0.6f) } // 1.6.1: karta pod łukiem rozmyta (Android 12+)
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier

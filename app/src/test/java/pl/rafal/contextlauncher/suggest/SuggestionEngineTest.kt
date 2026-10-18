@@ -166,4 +166,36 @@ class SuggestionEngineTest {
         // Aktywne auto: Praca też pasuje, ale jej reguła jest słabsza → nie wracamy do Pracy.
         assertNull(evaluate(listOf(workHours, car), mondayMorning, active = travel, previous = work, signals = signals))
     }
+
+    // --- 1.6.1: „lepki” tryb ---
+
+    @Test
+    fun `tryb wybrany bez kontekstu nie kończy się sam`() {
+        val evening = mondayMorning.withHour(18)
+        val result = SuggestionEngine.evaluate(
+            listOf(workHours), work, home, evening.minusHours(2), evening, emptyList(), emptySet(),
+            activeHadMatch = false,
+        )
+        assertNull(result)
+    }
+
+    @Test
+    fun `chwilowy brak dopasowania nie kończy trybu`() {
+        val evening = mondayMorning.withHour(18)
+        val result = SuggestionEngine.evaluate(
+            listOf(workHours), work, home, evening.minusHours(2), evening, emptyList(), emptySet(),
+            activeHadMatch = true, activeUnmatchedSince = evening.minusMinutes(3),
+        )
+        assertNull(result)
+    }
+
+    @Test
+    fun `trwała zmiana kontekstu kończy tryb`() {
+        val evening = mondayMorning.withHour(18)
+        val result = SuggestionEngine.evaluate(
+            listOf(workHours), work, home, evening.minusHours(2), evening, emptyList(), emptySet(),
+            activeHadMatch = true, activeUnmatchedSince = evening.minusMinutes(20),
+        )
+        assertEquals(Suggestion.EndMode(work, home), result)
+    }
 }

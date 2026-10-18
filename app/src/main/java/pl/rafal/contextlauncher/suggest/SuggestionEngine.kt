@@ -72,6 +72,10 @@ sealed interface Suggestion {
 object SuggestionEngine {
     val CALENDAR_LOOKAHEAD: Duration = Duration.ofHours(3)  // jak wcześnie podpowiadać przed wydarzeniem
     val END_GRACE: Duration = Duration.ofMinutes(30)        // świeżo włączonego trybu nie proponujemy kończyć
+    // 1.6.1: reguła aktywnego trybu musi przestać pasować na dłużej, zanim zaproponujemy koniec —
+    // chwilowy brak sygnału (Wi-Fi bez SSID przy zgaszonym ekranie, słaba lokalizacja, rozłączony na moment
+    // Bluetooth) nie może wyrzucać z trybu do strony startowej.
+    val END_DEBOUNCE: Duration = Duration.ofMinutes(10)
 
     private val TimeFormat = DateTimeFormatter.ofPattern("H:mm")
     private val Weekdays = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
@@ -97,6 +101,11 @@ object SuggestionEngine {
         events: List<CalendarEvent>,
         dismissed: Set<String>,
         signals: Signals = Signals(),
+        // 1.6.1 „lepki” tryb: czy od włączenia aktywnego trybu któraś jego reguła choć raz pasowała.
+        // false = tryb wybrany bez kontekstu (np. ręcznie poza swoimi godzinami) — wtedy nie kończymy go sami.
+        activeHadMatch: Boolean = true,
+        // Od kiedy reguły aktywnego trybu nieprzerwanie nie pasują (null = nie wiadomo, liczy się tylko activeSince).
+        activeUnmatchedSince: LocalDateTime? = null,
     ): Suggestion? {
         // Najważniejsza pasująca reguła AKTYWNEGO trybu. Inny tryb podpowiadamy tylko wtedy, gdy jego reguła
         // jest ważniejsza — inaczej dwa pasujące tryby (np. Praca w godzinach + auto przez Bluetooth)
@@ -125,6 +134,9 @@ object SuggestionEngine {
         if (activeRules.isEmpty()) return null // tryb bez reguł = użytkownik sam decyduje
         if (activeSince != null && Duration.between(activeSince, now) < END_GRACE) return null
         if (activeRules.any { reasonIfMatches(it.rule, now, events, signals) != null }) return null
+        // Koniec trybu tylko po prawdziwej zmianie kontekstu: reguła pasowała, a potem przestała — i to na dłużej.
+        if (!activeHadMatch) return null
+        if (activeUnmatchedSince != null && Duration.between(activeUnmatchedSince, now) < END_DEBOUNCE) return null
         return Suggestion.EndMode(activeModeId, previousModeId).takeIf { it.key !in dismissed }
     }
 

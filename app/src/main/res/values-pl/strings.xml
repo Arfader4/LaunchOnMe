@@ -1176,4 +1176,6 @@
     <string name="handy_open_onhand">Otwórz OnHand ↗</string>
     <string name="handy_onhand_missing">Usunięta w OnHand</string>
     <string name="handy_onhand_untitled">Notatka bez tytułu</string>
+    <!-- 1.6.1 -->
+    <string name="vm_auto_status_skipped">automat pominięty: wybrałeś inny tryb; czeka na kolejną zmianę sytuacji</string>
 </resources>

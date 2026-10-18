@@ -16,7 +16,8 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.4.0 | OnHand jako osobna aplikacja notatek (`feature/onhand`): On1–On4 + nowa ikona | 5 |
 | 1.5.0 | OnThemes — aplikacja motywów (`feature/onthemes`): T1–T5 | 5 |
 | 1.6.0 | Scalenie 1.3 + 1.4 + 1.5 do `dev` (StickOnMe wydajność, OnHand, OnThemes w jednym buildzie) | 1 |
-Razem od V1: 39 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
+| 1.6.1 | Runda 18.10, paczka 1: OnHand przy wyjściu, rozmycie pod menu, tapeta po cudzej zmianie, „lepkie” tryby | 1 |
+Razem od V1: 40 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).
@@ -323,10 +324,19 @@ motyw „System” (kolory dynamiczne), „Kopiuj HEX”.
 Stan wyjściowy: 1.6.0 = gałęzie `feature/stickonme-perf`, `feature/onhand`, `feature/onthemes` scalone do `dev`.
 
 ### Paczka 1 — szybkie poprawki (1.6.1)
-- [ ] OnHand: okno zamyka się przy wyjściu z aplikacji (Home, Wstecz, przycisk).
-- [ ] OnMenu: mocniejsze przygaszenie tła + rozmycie (Android 12+, starsze — samo przygaszenie).
-- [ ] Tapeta w ustawieniach trybu nie daje się włączyć (regresja — podejrzenie: zmiany tapet w OnThemes T5).
-- [ ] Automatyczne przełączanie trybów często wraca do trybu startowego — wybór „lepki” do czasu realnej zmiany kontekstu.
+- [x] OnHand: arkusz zamyka się, gdy otwierasz z niego notatkę / plik / link / aplikację OnHand (po powrocie od razu karta).
+      Home zamyka też okienka, które dotąd zostawały: link, notatka, „+ Aplikacje”, „+ Skrót”, nowy tryb, ustawienia widżetów.
+- [x] Menu trybów (klawisz ON) i łuk: przygaszenie 0,6 + rozmycie karty pod spodem (Android 12+, RenderEffect).
+      Warstwa `ScreenOverlayLayer` przeniesiona nad treść (`LauncherApp`), treść ma `Modifier.screenBackdrop`,
+      a przygaszenia zgłaszają rozmycie przez `BackdropBlur { postęp }`. Tapety systemu (za oknem) to nie rozmywa.
+- [x] Tapeta trybu nie wracała: `WallpaperStore.applyFor` pomijał ustawianie, gdy podpis się zgadzał — nawet jeśli
+      w międzyczasie tapetę zmienił ktoś inny (OnThemes „Tapeta z palety”, ustawienia telefonu). Teraz porównuje też
+      numer tapety w systemie (`getWallpaperId`). Skutek uboczny: tapeta z palety zostaje tylko do najbliższej zmiany
+      trybu, jeśli tryb (albo domyślna) ma własną tapetę.
+- [x] „Lepkie” tryby: koniec trybu (powrót do Start) tylko gdy jego reguła pasowała, a potem przestała na ≥10 min
+      (`END_DEBOUNCE`, `ActiveContext` w ViewModelu); tryb wybrany ręcznie bez pasującej reguły zostaje.
+      Sugestia, która wisiała przy ręcznej zmianie, nie przełącza sama nigdy (dawniej po 30 min) — tylko propozycja.
+      Testy w `SuggestionEngineTest`.
 
 ### Paczka 2 — OnModes (nazwy)
 - [ ] Tryby → **OnModes**, pojedynczy tryb „… On Mode” (np. Work On Mode, domyślny Start On Mode).

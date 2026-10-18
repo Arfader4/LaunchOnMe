@@ -199,7 +199,14 @@ fun LauncherApp(
             LocalShowFolderLabels provides folderLabels,
             LocalWidgetCorner provides widgetCorner.dp,
         ) {
-            LauncherContent(viewModel, widgets, onAddWidget)
+            // Warstwa (przygaszenie, łuk) leży nad treścią, a nie w niej — dzięki temu treść pod nią
+            // można rozmyć, a sama warstwa zostaje ostra.
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().screenBackdrop(screenOverlay)) {
+                    LauncherContent(viewModel, widgets, onAddWidget)
+                }
+                ScreenOverlayLayer(screenOverlay)
+            }
         }
     }
 }
@@ -472,6 +479,7 @@ private fun LauncherContent(
         val intent = viewModel.openIntent(item) ?: return
         try {
             context.startActivity(intent)
+            handyOpen = false // wychodzimy do innej aplikacji — po powrocie od razu karta, bez arkusza OnHand
         } catch (e: ActivityNotFoundException) {
             Toast.makeText(context, context.getString(R.string.ls_toast_no_app_to_open), Toast.LENGTH_SHORT).show()
         }
@@ -523,6 +531,18 @@ private fun LauncherContent(
         appRulesOpen = false
         widgetPickerOpen = false
         handyOpen = false
+        // 1.6.1: Home zamyka też okienka otwarte z OnHand i z edycji (dotąd zostawały po powrocie).
+        linkDialogOpen = false
+        newNoteOpen = false
+        editedNote = null
+        addAppsOpen = false
+        addShortcutOpen = false
+        newModeOpen = false
+        clockToChange = null
+        noteWidgetToEdit = null
+        widgetLookFor = null
+        stackToManage = null
+        appToFile = null
         folderSheetId = null
         cardFolderOpen = null
         settingsModeId = null
@@ -1220,8 +1240,6 @@ private fun LauncherContent(
             )
         }
 
-        // Ostatnia = najwyżej: przygaszenie i łuk trybów nad całym ekranem (też pod paskami systemu).
-        LocalScreenOverlay.current?.let { ScreenOverlayLayer(it) }
     }
 
     // --- Arkusze i okna dialogowe ---
@@ -1482,7 +1500,10 @@ private fun LauncherContent(
             onAddLink = { linkDialogOpen = true },
             // Notatka z OnHand: lista OnHand w trybie wyboru (z "+ Nowa notatka"); wynik → odnośnik na karcie.
             onAddNote = { runCatching { pickOnHand.launch(pl.rafal.onhand.OnHand.pickIntent(context)) } },
-            onOpenOnHand = { startActivitySafely(pl.rafal.onhand.OnHand.appIntent(context)) },
+            onOpenOnHand = {
+                startActivitySafely(pl.rafal.onhand.OnHand.appIntent(context))
+                handyOpen = false
+            },
             onOpen = ::openPinned, // referencja do lokalnej funkcji
             onArchive = viewModel::archivePinned,
             onRestore = viewModel::restorePinned,

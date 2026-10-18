@@ -1160,4 +1160,6 @@
     <string name="handy_open_onhand">Open OnHand ↗</string>
     <string name="handy_onhand_missing">Deleted in OnHand</string>
     <string name="handy_onhand_untitled">Untitled note</string>
+    <!-- 1.6.1 -->
+    <string name="vm_auto_status_skipped">auto skipped: you picked another mode; waits for the next change of context</string>
 </resources>

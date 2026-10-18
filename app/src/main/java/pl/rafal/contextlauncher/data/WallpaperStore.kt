@@ -108,16 +108,22 @@ class WallpaperStore(context: Context) {
         val lock = lockScreenFor(owner)
         val crop = cropFor(owner)
         val signature = "$path|$lock|${crop?.toShortString()}" // zmiana kadru też wymaga ponownego ustawienia
-        if (prefs.getString(KEY_APPLIED, null) == signature) return@withContext
+        val manager = WallpaperManager.getInstance(app)
+        // 1.6.1: sam podpis nie wystarcza — tapetę mógł w międzyczasie zmienić ktoś inny (OnThemes „Tapeta z palety”,
+        // ustawienia telefonu). System nadaje każdej ustawionej tapecie nowy numer, więc porównujemy też numer:
+        // inny niż zapisany = na ekranie jest cudza tapeta i trzeba ustawić naszą od nowa.
+        val shownId = runCatching { manager.getWallpaperId(WallpaperManager.FLAG_SYSTEM) }.getOrDefault(-1)
+        if (prefs.getString(KEY_APPLIED, null) == signature && shownId == prefs.getInt(KEY_APPLIED_ID, -2)) return@withContext
 
         runCatching {
-            val manager = WallpaperManager.getInstance(app)
             val maxSide = maxOf(manager.desiredMinimumWidth, manager.desiredMinimumHeight, 1440)
             val bitmap = (if (crop != null) decodeCrop(path, crop, maxSide) else decodeScaled(path, maxSide)) ?: return@runCatching
             // FLAG_SYSTEM = ekran główny, FLAG_LOCK = ekran blokady. "or" to bitowe | z C#.
             val which = WallpaperManager.FLAG_SYSTEM or (if (lock) WallpaperManager.FLAG_LOCK else 0)
             manager.setBitmap(bitmap, null, true, which)
-            prefs.edit().putString(KEY_APPLIED, signature).apply()
+            // Numer odczytujemy po ustawieniu (setBitmap z kilkoma flagami nie zawsze zwraca numer ekranu głównego).
+            val newId = runCatching { manager.getWallpaperId(WallpaperManager.FLAG_SYSTEM) }.getOrDefault(-1)
+            prefs.edit().putString(KEY_APPLIED, signature).putInt(KEY_APPLIED_ID, newId).apply()
         }
     }
 
@@ -143,6 +149,7 @@ class WallpaperStore(context: Context) {
 
     companion object {
         private const val KEY_APPLIED = "applied"
+        private const val KEY_APPLIED_ID = "applied_id" // numer tapety w systemie po naszym ustawieniu
 
         fun parseCrop(text: String): RectF? {
             val v = text.split(',').mapNotNull { it.toFloatOrNull() }
