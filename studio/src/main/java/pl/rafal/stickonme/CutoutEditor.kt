@@ -50,6 +50,37 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
     var shape by mutableStateOf(StickerShapes.NONE)
     var frame by mutableStateOf(Layer.FRAME_NONE)
     var frameColor by mutableStateOf(0xFFFFFFFFL)
+    // Dopasowanie obrazu WEWNĄTRZ kształtu (kształt stoi, obraz pod nim się rusza) — jak RenderTransform w WPF.
+    // Przesunięcie jako ułamek boku ramki kształtu (niezależne od rozdzielczości: podgląd 800 px = zapis pełny),
+    // powiększenie 1 = dotychczasowe wypełnienie, obrót w stopniach (zgodnie z zegarem). Wartości domyślne = stare zachowanie.
+    var shapeOffsetX by mutableFloatStateOf(0f)
+    var shapeOffsetY by mutableFloatStateOf(0f)
+    var shapeZoom by mutableFloatStateOf(1f)
+    var shapeRotation by mutableFloatStateOf(0f)
+    val shapeFitChanged get() = shapeOffsetX != 0f || shapeOffsetY != 0f || shapeZoom != 1f || shapeRotation != 0f
+
+    fun resetShapeFit() {
+        shapeOffsetX = 0f
+        shapeOffsetY = 0f
+        shapeZoom = 1f
+        shapeRotation = 0f
+    }
+
+    // Ramka kształtu dla wyciętego obrazu w×h: kwadratowe kształty — kwadrat o boku krótszego boku, reszta — w×h.
+    // null = brak kształtu. Tej samej funkcji używa podgląd na żywo (Compose) i zapis, więc wyglądają identycznie.
+    fun shapeBox(w: Int, h: Int): android.util.Size? {
+        val kind = StickerShapes.of(shape)
+        if (kind.id == StickerShapes.NONE) return null
+        return if (kind.square) minOf(w, h).let { android.util.Size(it, it) } else android.util.Size(w, h)
+    }
+
+    // Macierz: środek obrazu → (0,0) → powiększenie → obrót → środek ramki + przesunięcie.
+    fun shapeMatrix(w: Int, h: Int, boxW: Int, boxH: Int) = Matrix().apply {
+        postTranslate(-w / 2f, -h / 2f)
+        postScale(shapeZoom, shapeZoom)
+        postRotate(shapeRotation)
+        postTranslate(boxW / 2f + shapeOffsetX * boxW, boxH / 2f + shapeOffsetY * boxH)
+    }
 
     private val undo = ArrayDeque<Bitmap>()
     private var undoCount by mutableIntStateOf(0) // stan Compose: przycisk "Cofnij" wie, kiedy się włączyć
@@ -188,12 +219,24 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         return out
     }
 
-    // Gotowa naklejka: zdjęcie × maska, przycięte do widocznej części, obrócone i przeskalowane.
-    // Kolejność: wycięcie → przycięcie → kształt → ramka → skala i obrót. check() = punkt przerwania (podgląd w tle).
-    // workSide: podgląd liczony na kopii o dłuższym boku najwyżej workSide px (szybciej, mniej pamięci); null = pełna
-    // jakość (zapis). Wygładzenie i zwężenie krawędzi skalują się razem z kopią, więc podgląd wygląda tak samo.
-    // Pośrednie bitmapy są zwalniane od razu (recycle) — przy kilku MB każda GC nie nadąża za suwakiem.
+    // Gotowa naklejka = cutout() (wycięcie + przycięcie) → finish() (kształt, ramka, skala, obrót).
+    // check() = punkt przerwania (podgląd w tle). workSide: podgląd liczony na kopii o dłuższym boku najwyżej
+    // workSide px; null = pełna jakość (zapis).
     fun render(rotate: Boolean = true, workSide: Int? = null, check: () -> Unit = {}): Bitmap? {
+        val cut = cutout(workSide, check) ?: return null
+        var result: Bitmap? = null
+        try {
+            result = finish(cut, rotate, check)
+            return result
+        } finally {
+            if (result !== cut) cut.recycle()
+        }
+    }
+
+    // Zdjęcie × maska (z wykończoną krawędzią), przycięte do widocznej części. null = nic nie zostało.
+    // Wygładzenie i zwężenie krawędzi skalują się razem z kopią roboczą, więc podgląd wygląda tak samo jak zapis.
+    // Pośrednie bitmapy są zwalniane od razu (recycle) — przy kilku MB każda GC nie nadąża za suwakiem.
+    fun cutout(workSide: Int? = null, check: () -> Unit = {}): Bitmap? {
         val longest = maxOf(photo.width, photo.height)
         val factor = if (workSide != null && longest > workSide) workSide.toFloat() / longest else 1f
         val src = if (factor < 1f) scaled(photo, factor) else photo
@@ -212,30 +255,35 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
                 cut.recycle()
                 return null
             }
-            var trimmed = Bitmap.createBitmap(cut, bounds.left, bounds.top, bounds.width(), bounds.height())
+            val trimmed = Bitmap.createBitmap(cut, bounds.left, bounds.top, bounds.width(), bounds.height())
             if (trimmed !== cut) cut.recycle()
-            check()
-            val kind = StickerShapes.of(shape)
-            if (kind.id != StickerShapes.NONE) trimmed = replaced(trimmed, applyShape(trimmed, kind))
-            if (frame != Layer.FRAME_NONE) trimmed = replaced(trimmed, BoardRenderer().frameSticker(trimmed, frame, frameColor))
-            check()
-            val scale = outputSide.toFloat() / maxOf(trimmed.width, trimmed.height)
-            val matrix = Matrix().apply {
-                postScale(scale, scale)
-                if (rotate) postRotate(rotation)
-            }
-            // createBitmap z macierzą sam powiększa płótno o obrócone rogi (tło przezroczyste).
-            return replaced(trimmed, Bitmap.createBitmap(trimmed, 0, 0, trimmed.width, trimmed.height, matrix, true))
+            return trimmed
         } finally {
             if (src !== photo) src.recycle()
             if (msk !== mask) msk.recycle()
         }
     }
 
-    // Następny krok obróbki gotowy → poprzedni wynik do zwolnienia (chyba że to ten sam obiekt).
-    private fun replaced(old: Bitmap, new: Bitmap): Bitmap {
-        if (new !== old) old.recycle()
-        return new
+    // Kształt (z dopasowaniem obrazu) → ramka → skala do outputSide → obrót. Wejścia "cut" NIE zwalnia
+    // (podgląd trzyma je dalej i liczy z niego kolejne wersje); może je zwrócić bez zmian.
+    fun finish(cut: Bitmap, rotate: Boolean = true, check: () -> Unit = {}): Bitmap {
+        var b = cut
+        fun next(new: Bitmap) { // poprzedni krok do zwolnienia — chyba że to wejście albo ten sam obiekt
+            if (new !== b && b !== cut) b.recycle()
+            b = new
+        }
+        val kind = StickerShapes.of(shape)
+        if (kind.id != StickerShapes.NONE) next(applyShape(b, kind))
+        if (frame != Layer.FRAME_NONE) next(BoardRenderer().frameSticker(b, frame, frameColor))
+        check()
+        val scale = outputSide.toFloat() / maxOf(b.width, b.height)
+        val matrix = Matrix().apply {
+            postScale(scale, scale)
+            if (rotate) postRotate(rotation)
+        }
+        // createBitmap z macierzą sam powiększa płótno o obrócone rogi (tło przezroczyste).
+        next(Bitmap.createBitmap(b, 0, 0, b.width, b.height, matrix, true))
+        return b
     }
 
     private fun scaled(source: Bitmap, factor: Float): Bitmap = Bitmap.createScaledBitmap(
@@ -245,21 +293,21 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         true,
     )
 
-    // Kształt: kwadratowe (koło, serce…) najpierw kadrujemy do kwadratu ze środka, potem zostawiamy tylko wnętrze ścieżki.
+    // Kształt: obraz rysowany macierzą dopasowania (przesunięcie / powiększenie / obrót) na płótno o rozmiarze ramki,
+    // potem maska ze ścieżki kształtu w trybie DST_IN. Maska jest osobną bitmapą na CAŁE płótno — DST_IN działa wtedy
+    // wszędzie (rysowanie samego obrazu z SRC_IN zostawiłoby czarny kształt tam, gdzie obraz po obrocie nie sięga).
+    // Wejścia nie zwalnia.
     private fun applyShape(source: Bitmap, kind: StickerShapes.Shape): Bitmap {
-        val side = minOf(source.width, source.height)
-        val base = if (kind.square) {
-            Bitmap.createBitmap(source, (source.width - side) / 2, (source.height - side) / 2, side, side)
-        } else {
-            source
-        }
-        val path = StickerShapes.path(kind.id, base.width.toFloat(), base.height.toFloat()) ?: return base
-        val out = Bitmap.createBitmap(base.width, base.height, Bitmap.Config.ARGB_8888)
+        val box = shapeBox(source.width, source.height) ?: return source
+        val path = StickerShapes.path(kind.id, box.width.toFloat(), box.height.toFloat()) ?: return source
+        val out = Bitmap.createBitmap(box.width, box.height, Bitmap.Config.ARGB_8888)
+        val shapeMask = Bitmap.createBitmap(box.width, box.height, Bitmap.Config.ALPHA_8)
+        Canvas(shapeMask).drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK })
         Canvas(out).apply {
-            drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK })
-            drawBitmap(base, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN) })
+            drawBitmap(source, shapeMatrix(source.width, source.height, box.width, box.height), Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+            drawBitmap(shapeMask, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
         }
-        if (base !== source) base.recycle() // pomocniczy kwadrat (źródło zwalnia wywołujący)
+        shapeMask.recycle()
         return out
     }
 

@@ -152,4 +152,10 @@
     <string name="som_board_height">height</string>
     <string name="som_board_custom_name">Board %1$d×%2$d</string>
     <string name="som_board_create_custom">Create custom</string>
+    <!-- Dopasowanie obrazu w kształcie (1.8.0) -->
+    <string name="som_editor_fit">Fit image in shape</string>
+    <string name="som_editor_fit_reset">Reset</string>
+    <string name="som_editor_fit_hint">One finger moves the image, two fingers zoom and rotate it. The shape stays put.</string>
+    <string name="som_editor_fit_zoom">Zoom in shape: %1$d%%</string>
+    <string name="som_editor_fit_rotation">Rotation in shape: %1$d°</string>
 </resources>

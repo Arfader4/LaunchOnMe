@@ -36,6 +36,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -95,6 +96,10 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -596,21 +601,45 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
     var message by remember { mutableStateOf<String?>(null) }
     // Zakładka "Wykończenie" pokazuje GOTOWĄ naklejkę (krawędź, kształt, ramka, obrót) — liczoną w tle
     // chwilę po ostatniej zmianie; kolejna zmiana anuluje poprzednie liczenie (ensureActive w pętlach).
+    // Dwa etapy: (1) wycięcie + krawędź → cutPreview (wolniejsze, tylko po zmianie maski / krawędzi),
+    // (2) kształt + ramka z cutPreview → resultPreview (szybkie). Tryb "Dopasuj w kształcie" rysuje cutPreview
+    // na żywo w Compose, więc w trakcie gestów etap 2 się nie liczy — dopiero po wyjściu z trybu.
+    // cutPreview nie zwalniamy ręcznie (recycle): może go jeszcze rysować płótno — zbierze go GC (ok. 2,5 MB).
+    var cutPreview by remember(editor) { mutableStateOf<android.graphics.Bitmap?>(null) }
     var resultPreview by remember(editor) { mutableStateOf<ImageBitmap?>(null) }
-    var previewing by remember { mutableStateOf(false) }
-    LaunchedEffect(
-        editor, tab, editor.edgeSmooth, editor.edgeShrink, editor.version,
-        editor.shape, editor.frame, editor.frameColor, // obrót nie — podgląd obraca się przy rysowaniu
-    ) {
+    var cutting by remember { mutableStateOf(false) }   // etap 1 w toku
+    var finishing by remember { mutableStateOf(false) } // etap 2 w toku
+    val previewing = cutting || finishing
+    var fitting by remember(editor) { mutableStateOf(false) } // tryb "Dopasuj obraz w kształcie"
+    val fitMode = fitting && tab == 1 && editor.shape != StickerShapes.NONE
+    LaunchedEffect(editor, tab, editor.edgeSmooth, editor.edgeShrink, editor.version) {
         if (tab == 1) {
-            previewing = true
+            cutting = true
             try {
                 kotlinx.coroutines.delay(150) // suwak jeszcze jedzie
                 // Podgląd na kopii do 800 px (zapis i tak liczy w pełnej rozdzielczości).
-                val image = withContext(Dispatchers.Default) { runCatching { editor.render(rotate = false, workSide = PREVIEW_WORK_SIDE) { ensureActive() } }.getOrNull() }
+                val cut = withContext(Dispatchers.Default) { runCatching { editor.cutout(workSide = PREVIEW_WORK_SIDE) { ensureActive() } }.getOrNull() }
+                cutPreview = cut
+                if (cut == null) resultPreview = null
+            } finally {
+                cutting = false
+            }
+        }
+    }
+    LaunchedEffect(
+        cutPreview, tab, fitMode, editor.shape, editor.frame, editor.frameColor,
+        editor.shapeOffsetX, editor.shapeOffsetY, editor.shapeZoom, editor.shapeRotation, // obrót całości nie — podgląd obraca się przy rysowaniu
+    ) {
+        val cut = cutPreview
+        if (tab == 1 && !fitMode && cut != null) {
+            finishing = true
+            try {
+                kotlinx.coroutines.delay(80)
+                val image = withContext(Dispatchers.Default) { runCatching { editor.finish(cut, rotate = false) { ensureActive() } }.getOrNull() }
+                // finish może zwrócić samo wejście — wtedy to ten sam obraz, nic złego.
                 resultPreview = image?.asImageBitmap()
             } finally {
-                previewing = false
+                finishing = false
             }
         }
     }
@@ -671,9 +700,10 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
             if (tab == 0) {
                 MaskCanvas(editor, tool = tool, brushDp = brush, rotation = 0f, enabled = !busy)
             } else {
-                ResultPreview(resultPreview, editor.rotation)
+                val cut = cutPreview
+                if (fitMode && cut != null) ShapeFitCanvas(editor, cut) else ResultPreview(resultPreview, editor.rotation)
             }
-            if (busy || (tab == 1 && previewing && resultPreview == null)) CircularProgressIndicator(Modifier.align(Alignment.Center))
+            if (busy || (tab == 1 && previewing && (if (fitMode) cutPreview == null else resultPreview == null))) CircularProgressIndicator(Modifier.align(Alignment.Center))
         }
 
         message?.let {
@@ -731,6 +761,28 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                 Text(stringResource(R.string.som_editor_shape), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     StickerShapes.all.forEach { s -> FilterChip(selected = editor.shape == s.id, onClick = { editor.shape = s.id }, label = { Text(s.label) }) }
+                }
+                if (editor.shape != StickerShapes.NONE) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = fitting, onClick = { fitting = !fitting }, label = { Text(stringResource(R.string.som_editor_fit)) })
+                        TextButton(enabled = editor.shapeFitChanged, onClick = { editor.resetShapeFit() }) { Text(stringResource(R.string.som_editor_fit_reset)) }
+                    }
+                    if (fitMode) {
+                        Text(stringResource(R.string.som_editor_fit_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.som_editor_fit_zoom, (editor.shapeZoom * 100).roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Slider(value = editor.shapeZoom, onValueChange = { editor.shapeZoom = it }, valueRange = SHAPE_ZOOM_MIN..SHAPE_ZOOM_MAX)
+                        Text(stringResource(R.string.som_editor_fit_rotation, editor.shapeRotation.roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = { editor.shapeRotation = normalizedDegrees(editor.shapeRotation - 90f) }) { Text("↺ 90°") }
+                            Slider(
+                                value = editor.shapeRotation,
+                                onValueChange = { editor.shapeRotation = it },
+                                valueRange = -180f..180f,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = { editor.shapeRotation = normalizedDegrees(editor.shapeRotation + 90f) }) { Text("↻ 90°") }
+                        }
+                    }
                 }
                 Text(stringResource(R.string.som_editor_frame), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
@@ -893,6 +945,83 @@ private fun MaskCanvas(editor: CutoutEditor, tool: Tool, brushDp: Float, rotatio
                 else drawRect(cursorColor, topLeft, frameSize, style = dash)
             } else if (tool.paints) {
                 cursor?.let { drawCircle(cursorColor, radius = brushPx / 2f, center = it, style = Stroke(width = 2.dp.toPx())) }
+            }
+        }
+    }
+}
+
+private const val SHAPE_ZOOM_MIN = 0.25f
+private const val SHAPE_ZOOM_MAX = 6f
+
+// Kąt sprowadzony do -180..180 (jak suwak obrotu).
+private fun normalizedDegrees(d: Float): Float = (((d + 180f) % 360f + 360f) % 360f) - 180f
+
+// Dopasowanie obrazu w kształcie, na żywo: kształt stoi na środku, obraz pod nim jeździ.
+// Jeden palec = przesuwanie, dwa palce = powiększanie i obrót wokół palców (detectTransformGestures —
+// odpowiednik ManipulationDelta w WPF). Poza kształtem obraz jest przygaszony — widać, co zostanie ucięte.
+// Rysujemy w układzie ramki kształtu (piksele cutPreview) przeskalowanym do ekranu — ta sama geometria co
+// CutoutEditor.shapeMatrix, więc zapis wygląda dokładnie tak samo (ramki i obrotu całości tu nie widać).
+@Composable
+private fun ShapeFitCanvas(editor: CutoutEditor, cut: android.graphics.Bitmap) {
+    val image = remember(cut) { cut.asImageBitmap() }
+    val checker = rememberCheckerBrush()
+    val outline = MaterialTheme.colorScheme.secondary
+    val box = editor.shapeBox(cut.width, cut.height)
+    val shapePath = remember(editor.shape, box) {
+        box?.let { StickerShapes.path(editor.shape, it.width.toFloat(), it.height.toFloat())?.asComposePath() }
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val cw = constraints.maxWidth.toFloat()
+        val ch = constraints.maxHeight.toFloat()
+        if (box != null && shapePath != null) {
+            val bw = box.width.toFloat()
+            val bh = box.height.toFloat()
+            val ds = minOf(cw * 0.8f / bw, ch * 0.8f / bh) // piksele ramki → ekran
+            val left = (cw - bw * ds) / 2f
+            val top = (ch - bh * ds) / 2f
+            val boxCenter = Offset(left + bw * ds / 2f, top + bh * ds / 2f)
+            Canvas(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(editor, bw, bh, cw, ch) {
+                        detectTransformGestures { centroid, pan, zoom, turn ->
+                            // Środek obrazu na ekranie; obracamy i skalujemy go wokół palców (centroid), potem przesuwamy.
+                            val c = boxCenter + Offset(editor.shapeOffsetX * bw * ds, editor.shapeOffsetY * bh * ds)
+                            val newZoom = (editor.shapeZoom * zoom).coerceIn(SHAPE_ZOOM_MIN, SHAPE_ZOOM_MAX)
+                            val applied = newZoom / editor.shapeZoom
+                            val rad = Math.toRadians(turn.toDouble())
+                            val cos = kotlin.math.cos(rad).toFloat()
+                            val sin = kotlin.math.sin(rad).toFloat()
+                            val d = c - centroid
+                            val moved = centroid + Offset(d.x * cos - d.y * sin, d.x * sin + d.y * cos) * applied + pan
+                            editor.shapeOffsetX = ((moved.x - boxCenter.x) / (bw * ds)).coerceIn(-1.5f, 1.5f)
+                            editor.shapeOffsetY = ((moved.y - boxCenter.y) / (bh * ds)).coerceIn(-1.5f, 1.5f)
+                            editor.shapeZoom = newZoom
+                            editor.shapeRotation = normalizedDegrees(editor.shapeRotation + turn)
+                        }
+                    },
+            ) {
+                drawRect(checker)
+                val ox = editor.shapeOffsetX
+                val oy = editor.shapeOffsetY
+                val z = editor.shapeZoom
+                val r = editor.shapeRotation
+                // Obraz w układzie ramki: środek obrazu → środek ramki + przesunięcie, obrót, powiększenie.
+                fun DrawScope.fitted(alpha: Float) = withTransform({
+                    translate(bw / 2f + ox * bw, bh / 2f + oy * bh)
+                    rotate(r, pivot = Offset.Zero)
+                    scale(z, z, pivot = Offset.Zero)
+                }) {
+                    drawImage(image, topLeft = Offset(-image.width / 2f, -image.height / 2f), alpha = alpha)
+                }
+                withTransform({
+                    translate(left, top)
+                    scale(ds, ds, pivot = Offset.Zero)
+                }) {
+                    fitted(0.28f) // cały obraz przygaszony
+                    clipPath(shapePath) { fitted(1f) } // w kształcie — pełny
+                    drawPath(shapePath, outline, style = Stroke(width = 2.dp.toPx() / ds))
+                }
             }
         }
     }
