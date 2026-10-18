@@ -12,9 +12,11 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.1 | Etapy 1–11, runda 29.09, StickOnMe S0–S4, porządki X/Y/Z (animacje) | 21 |
 | 1.2 | Runda uwag 04.10: paczki 1–3 (OnHand, klawisz ON, pasek czuwania, tłumaczenie EN/PL) | 3 |
 | 1.2.1 | Hotfix: łuk trybów i lista trybów na przygaszonym całym ekranie | 1 |
+| 1.3.0 | StickOnMe: wydajność (tablica, biblioteka, edytor) — gałąź `feature/stickonme-perf` | 3 |
 | 1.4.0 | OnHand jako osobna aplikacja notatek (`feature/onhand`): On1–On4 + nowa ikona | 5 |
-| 1.5.0 | OnThemes — aplikacja motywów (`feature/onthemes`): T1–T5 (1.4.0 = OnHand na `feature/onhand`) | 5 |
-Razem od V1: 25 paczek. Kolejne duże tematy = 1.3, 1.4…; poprawki do nich = 1.3.1, 1.3.2…
+| 1.5.0 | OnThemes — aplikacja motywów (`feature/onthemes`): T1–T5 | 5 |
+| 1.6.0 | Scalenie 1.3 + 1.4 + 1.5 do `dev` (StickOnMe wydajność, OnHand, OnThemes w jednym buildzie) | 1 |
+Razem od V1: 39 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).
@@ -217,7 +219,13 @@ Kolejność ustalona 04.10: paczka 1 → paczka 2 → tłumaczenie → duże tem
       srebro, miedź, brąz + butelkowa zieleń, purpura…, połysk metalu), Black & White, Vintage, Standard, Night,
       Własny (+ propozycje: Pastel, AMOLED). Uporządkowana lista kolorów i krótka paleta na motyw. Kolory systemu:
       Good Lock nie ma API — pośrednio przez tapetę (Android 12+/One UI biorą kolory z tapety).
-- [ ] **1.3 — StickOnMe: wydajność** (gałąź `feature/stickonme-perf`) przy wielu zdjęciach (mniejsze kopie robocze, dekodowanie w tle, limit pamięci).
+- [x] **1.3 — StickOnMe: wydajność** (gałąź `feature/stickonme-perf`) przy wielu zdjęciach — 3 paczki:
+      1) tablica: nieruszane warstwy wypalone w dwa obrazy (pod / nad ruszaną), tablica czytana dopiero przy rysowaniu,
+      cache tekstu, obrazy i ramki wczytywane w tle; podgląd na kopiach ≤1024 px z limitem pamięci, eksport osobnym
+      rendererem w pełnej jakości; rozmiar logiczny obrazu warstwy (max 1400 px) — skala nie zależy od kopii.
+      2) biblioteka: miniatury w pamięci (LruCache) i na dysku (cache), max 3 dekodowania naraz, onTrimMemory.
+      3) edytor: ML Kit na kopii ≤1024 px, wynik i maska liczone w tle; podgląd „Wykończenia” na kopii 800 px;
+      zwalnianie bitmap (Cofnij, kroki pośrednie, eksport); szachownica jako wzór (shader).
 - [ ] KeepMeOn (oszczędzanie energii): tryb włączany przy słabej baterii, blokada zmiany trybu (odblokowanie odciskiem),
       najważniejsze aplikacje, bez animacji/tapety/odświeżania widżetów, ciemny motyw; propozycja w samouczku.
       Systemowego oszczędzania baterii aplikacja sama nie włączy (wymaga uprawnienia nadanego przez adb).
@@ -308,3 +316,34 @@ motyw „System” (kolory dynamiczne), „Kopiuj HEX”.
       Uwaga: dev (1.2.1) nie ma jeszcze OnHand 1.4.0 — przy scalaniu obu gałęzi do dev konflikty w
       `settings.gradle.kts`, `app/build.gradle.kts`, `LaunchOnMeApp.kt`, `Backup.kt`, `strings.xml`, ROADMAP.
 - [ ] (opcjonalnie T6) barwione ikony aplikacji z warstwy monochromatycznej (Android 13+).
+
+---
+
+# Runda uwag z 18.10 (po kilkunastu dniach używania)
+Stan wyjściowy: 1.6.0 = gałęzie `feature/stickonme-perf`, `feature/onhand`, `feature/onthemes` scalone do `dev`.
+
+### Paczka 1 — szybkie poprawki (1.6.1)
+- [ ] OnHand: okno zamyka się przy wyjściu z aplikacji (Home, Wstecz, przycisk).
+- [ ] OnMenu: mocniejsze przygaszenie tła + rozmycie (Android 12+, starsze — samo przygaszenie).
+- [ ] Tapeta w ustawieniach trybu nie daje się włączyć (regresja — podejrzenie: zmiany tapet w OnThemes T5).
+- [ ] Automatyczne przełączanie trybów często wraca do trybu startowego — wybór „lepki” do czasu realnej zmiany kontekstu.
+
+### Paczka 2 — OnModes (nazwy)
+- [ ] Tryby → **OnModes**, pojedynczy tryb „… On Mode” (np. Work On Mode, domyślny Start On Mode).
+- [ ] Animowany pasek ładowania na dolnym pasku (do ustalenia, jak ma wyglądać).
+
+### Szuflada aplikacji (osobny czat)
+- [ ] Jeden model danych (foldery + luźne aplikacje), dwa widoki do wyboru w Ustawieniach:
+      „foldery osobno + główna lista” albo „zintegrowany” (foldery wymieszane, opcja „foldery najpierw”).
+- [ ] Sortowanie głównej listy: alfabetycznie (domyślnie), najczęściej używane, ręcznie (układ zapamiętany przy przełączaniu).
+      „Najczęściej używane”: dane systemowe (UsageStatsManager, dostęp nadawany ręcznie w ustawieniach), bez dostępu —
+      własny licznik uruchomień z launchera.
+- [ ] Sekcja „Nowe” dla świeżo zainstalowanych aplikacji.
+- [ ] Folder: układ ręczny, w edycji opcja „Sortuj”.
+- [ ] Ustawienia szuflady per OnMode (opcjonalne nadpisanie globalnych); zmiana trybu przy otwartej szufladzie
+      zmienia układ dopiero po jej zamknięciu.
+
+### StickOnMe (osobny czat)
+- [ ] Rozbudowa edycji obrazów: przesuwanie / skalowanie / obrót obrazu wewnątrz kształtu (np. serce) — transformacja
+      obrazu oddzielona od maski. Reszta listy do ustalenia po testach wersji z 1.3.
+

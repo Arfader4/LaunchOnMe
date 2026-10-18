@@ -16,6 +16,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
@@ -67,7 +68,7 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
     // Kopia maski przed zmianą (cofanie do 12 kroków wstecz).
     fun snapshot() {
         undo.addLast(mask.copy(Bitmap.Config.ALPHA_8, false))
-        while (undo.size > 12) undo.removeFirst()
+        while (undo.size > 12) undo.removeFirst().recycle() // najstarszy krok — nigdzie nie rysowany
         undoCount = undo.size
     }
 
@@ -76,6 +77,7 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         undoCount = undo.size
         canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
         canvas.drawBitmap(previous, 0f, 0f, null)
+        previous.recycle()
         version++
     }
 
@@ -87,16 +89,33 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         version++
     }
 
-    // Maska z modelu (pewność 0..1 dla każdego piksela) → wypełnienie maski.
-    fun applyConfidence(confidence: FloatArray, width: Int, height: Int) {
-        snapshot()
+    // Maska z modelu (pewność 0..1 dla każdego piksela, rozmiar wejścia ML Kit) → gotowa maska w rozmiarze zdjęcia.
+    // Ciężka część (pętla po pikselach, skalowanie) — W TLE (Dispatchers.Default). Nie rusza bieżącej maski.
+    fun prepareMask(confidence: FloatArray, width: Int, height: Int): Bitmap {
         val small = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val pixels = IntArray(width * height) { i -> (confidence[i].coerceIn(0f, 1f) * 255).roundToInt() shl 24 }
         small.setPixels(pixels, 0, width, 0, 0, width, height)
+        val full = Bitmap.createBitmap(mask.width, mask.height, Bitmap.Config.ALPHA_8)
+        Canvas(full).drawBitmap(small, null, android.graphics.Rect(0, 0, mask.width, mask.height), Paint(Paint.FILTER_BITMAP_FLAG))
+        small.recycle()
+        return full
+    }
+
+    // Podmiana maski na przygotowaną — na wątku UI (tam też maluje pędzel), to już tylko kopia pikseli.
+    fun applyMask(prepared: Bitmap) {
+        snapshot()
         canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-        canvas.drawBitmap(small, null, android.graphics.Rect(0, 0, mask.width, mask.height), Paint(Paint.FILTER_BITMAP_FLAG))
+        canvas.drawBitmap(prepared, 0f, 0f, null)
+        prepared.recycle()
         hasAutoMask = true
         version++
+    }
+
+    // Zamknięcie edytora: kopie do "Cofnij" nigdzie nie są rysowane, więc można je od razu zwolnić (do 12 × kilka MB).
+    fun releaseUndo() {
+        undo.forEach { it.recycle() }
+        undo.clear()
+        undoCount = 0
     }
 
     // Całe zdjęcie (bez wycinania) albo wyczyszczenie maski.
@@ -123,21 +142,22 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
     // Maska z wykończoną krawędzią albo null, gdy suwaki są na zero (wtedy liczy się zwykła maska).
     // Rozmycie pudełkowe o promieniu R zamienia ostry brzeg w liniową rampę szerokości 2R —
     // z jasności piksela odczytujemy więc jego odległość od brzegu i rysujemy nowy brzeg, przesunięty do środka o "zwężenie".
-    fun finishedMask(check: () -> Unit = {}): Bitmap? {
-        val smooth = edgeSmooth.coerceAtLeast(0f)
-        val shrink = edgeShrink.coerceAtLeast(0f)
-        if (smooth < 0.5f && shrink < 0.5f) return null
+    // source / factor: maska robocza i jej skala względem zdjęcia (podgląd liczy na mniejszej kopii).
+    private fun finishedMask(source: Bitmap, factor: Float, check: () -> Unit = {}): Bitmap? {
+        val smooth = edgeSmooth.coerceAtLeast(0f) * factor
+        val shrink = edgeShrink.coerceAtLeast(0f) * factor
+        if (edgeSmooth < 0.5f && edgeShrink < 0.5f) return null
         val radius = kotlin.math.ceil(smooth / 2f + shrink).toInt().coerceAtLeast(1)
-        val w = mask.width
-        val h = mask.height
+        val w = source.width
+        val h = source.height
         val pixels = IntArray(w * h)
-        mask.getPixels(pixels, 0, w, 0, 0, w, h)
+        source.getPixels(pixels, 0, w, 0, 0, w, h)
         val alpha = IntArray(w * h) { pixels[it] ushr 24 }
         val blurred = boxBlur(boxBlur(alpha, w, h, radius, horizontal = true, check), w, h, radius, horizontal = false, check)
         val span = 2f * radius
         for (i in blurred.indices) {
             val distance = blurred[i] / 255f * span - radius // >0 = wewnątrz obiektu
-            val a = if (smooth < 0.5f) {
+            val a = if (smooth < 0.5f) { // (po przeskalowaniu wygładzenie poniżej pół piksela = ostry brzeg)
                 if (distance >= shrink) 1f else 0f
             } else {
                 ((distance - shrink) / smooth + 0.5f).coerceIn(0f, 1f)
@@ -170,28 +190,60 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
 
     // Gotowa naklejka: zdjęcie × maska, przycięte do widocznej części, obrócone i przeskalowane.
     // Kolejność: wycięcie → przycięcie → kształt → ramka → skala i obrót. check() = punkt przerwania (podgląd w tle).
-    fun render(rotate: Boolean = true, check: () -> Unit = {}): Bitmap? {
-        val cut = Bitmap.createBitmap(photo.width, photo.height, Bitmap.Config.ARGB_8888)
-        Canvas(cut).apply {
-            drawBitmap(photo, 0f, 0f, null)
-            drawBitmap(finishedMask(check) ?: mask, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
+    // workSide: podgląd liczony na kopii o dłuższym boku najwyżej workSide px (szybciej, mniej pamięci); null = pełna
+    // jakość (zapis). Wygładzenie i zwężenie krawędzi skalują się razem z kopią, więc podgląd wygląda tak samo.
+    // Pośrednie bitmapy są zwalniane od razu (recycle) — przy kilku MB każda GC nie nadąża za suwakiem.
+    fun render(rotate: Boolean = true, workSide: Int? = null, check: () -> Unit = {}): Bitmap? {
+        val longest = maxOf(photo.width, photo.height)
+        val factor = if (workSide != null && longest > workSide) workSide.toFloat() / longest else 1f
+        val src = if (factor < 1f) scaled(photo, factor) else photo
+        val msk = if (factor < 1f) scaled(mask, factor) else mask
+        try {
+            val cut = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+            val finished = finishedMask(msk, factor, check)
+            Canvas(cut).apply {
+                drawBitmap(src, 0f, 0f, null)
+                drawBitmap(finished ?: msk, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
+            }
+            finished?.recycle()
+            check()
+            val bounds = visibleBounds(cut)
+            if (bounds == null) {
+                cut.recycle()
+                return null
+            }
+            var trimmed = Bitmap.createBitmap(cut, bounds.left, bounds.top, bounds.width(), bounds.height())
+            if (trimmed !== cut) cut.recycle()
+            check()
+            val kind = StickerShapes.of(shape)
+            if (kind.id != StickerShapes.NONE) trimmed = replaced(trimmed, applyShape(trimmed, kind))
+            if (frame != Layer.FRAME_NONE) trimmed = replaced(trimmed, BoardRenderer().frameSticker(trimmed, frame, frameColor))
+            check()
+            val scale = outputSide.toFloat() / maxOf(trimmed.width, trimmed.height)
+            val matrix = Matrix().apply {
+                postScale(scale, scale)
+                if (rotate) postRotate(rotation)
+            }
+            // createBitmap z macierzą sam powiększa płótno o obrócone rogi (tło przezroczyste).
+            return replaced(trimmed, Bitmap.createBitmap(trimmed, 0, 0, trimmed.width, trimmed.height, matrix, true))
+        } finally {
+            if (src !== photo) src.recycle()
+            if (msk !== mask) msk.recycle()
         }
-        check()
-        val bounds = visibleBounds(cut) ?: return null
-        var trimmed = Bitmap.createBitmap(cut, bounds.left, bounds.top, bounds.width(), bounds.height())
-        check()
-        val kind = StickerShapes.of(shape)
-        if (kind.id != StickerShapes.NONE) trimmed = applyShape(trimmed, kind)
-        if (frame != Layer.FRAME_NONE) trimmed = BoardRenderer().frameSticker(trimmed, frame, frameColor)
-        check()
-        val scale = outputSide.toFloat() / maxOf(trimmed.width, trimmed.height)
-        val matrix = Matrix().apply {
-            postScale(scale, scale)
-            if (rotate) postRotate(rotation)
-        }
-        // createBitmap z macierzą sam powiększa płótno o obrócone rogi (tło przezroczyste).
-        return Bitmap.createBitmap(trimmed, 0, 0, trimmed.width, trimmed.height, matrix, true)
     }
+
+    // Następny krok obróbki gotowy → poprzedni wynik do zwolnienia (chyba że to ten sam obiekt).
+    private fun replaced(old: Bitmap, new: Bitmap): Bitmap {
+        if (new !== old) old.recycle()
+        return new
+    }
+
+    private fun scaled(source: Bitmap, factor: Float): Bitmap = Bitmap.createScaledBitmap(
+        source,
+        (source.width * factor).roundToInt().coerceAtLeast(1),
+        (source.height * factor).roundToInt().coerceAtLeast(1),
+        true,
+    )
 
     // Kształt: kwadratowe (koło, serce…) najpierw kadrujemy do kwadratu ze środka, potem zostawiamy tylko wnętrze ścieżki.
     private fun applyShape(source: Bitmap, kind: StickerShapes.Shape): Bitmap {
@@ -207,6 +259,7 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
             drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK })
             drawBitmap(base, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN) })
         }
+        if (base !== source) base.recycle() // pomocniczy kwadrat (źródło zwalnia wywołujący)
         return out
     }
 
@@ -239,27 +292,45 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
     }
 }
 
-// Maska pewności z ML Kit (na telefonie, zdjęcie nigdzie nie wychodzi). Zwraca (wartości, szerokość, wysokość).
+// Maska pewności z ML Kit (na telefonie, zdjęcie nigdzie nie wychodzi). Zwraca (wartości, szerokość, wysokość)
+// w rozmiarze WEJŚCIA modelu — maska i tak jest potem skalowana do zdjęcia (CutoutEditor.prepareMask).
+// Model dostaje kopię najwyżej ML_SIDE px (szybciej, a wynik i tak jest gładko skalowany), a wynik odbieramy
+// na wątku w tle (executor), nie na wątku UI — kopiowanie milionów liczb nie zacina ekranu.
+private const val ML_SIDE = 1024
+
 suspend fun autoMask(photo: Bitmap): Triple<FloatArray, Int, Int>? = withContext(Dispatchers.Default) {
-    suspendCancellableCoroutine { cont ->
+    val longest = maxOf(photo.width, photo.height)
+    val input = if (longest > ML_SIDE) {
+        val f = ML_SIDE.toFloat() / longest
+        Bitmap.createScaledBitmap(photo, (photo.width * f).roundToInt().coerceAtLeast(1), (photo.height * f).roundToInt().coerceAtLeast(1), true)
+    } else {
+        photo
+    }
+    val background = Dispatchers.Default.asExecutor()
+    // Kopii "input" NIE zwalniamy ręcznie: po anulowaniu ML Kit może ją jeszcze czytać na swoim wątku.
+    // To ok. 4 MB — zbierze ją GC, gdy model skończy.
+    val iw = input.width
+    val ih = input.height
+    suspendCancellableCoroutine<Triple<FloatArray, Int, Int>?> { cont ->
         val segmenter = SubjectSegmentation.getClient(
             SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build(),
         )
-        segmenter.process(InputImage.fromBitmap(photo, 0))
-            .addOnSuccessListener { result ->
+        segmenter.process(InputImage.fromBitmap(input, 0))
+            .addOnSuccessListener(background) { result ->
                 val buffer = result.foregroundConfidenceMask
-                segmenter.close()
                 if (buffer == null) {
+                    segmenter.close()
                     cont.resume(null)
                 } else {
                     buffer.rewind()
                     val values = FloatArray(buffer.remaining())
                     buffer.get(values)
-                    // Maska ma rozmiar zdjęcia wejściowego.
-                    cont.resume(Triple(values, photo.width, photo.height).takeIf { values.size == photo.width * photo.height })
+                    segmenter.close() // dopiero po skopiowaniu wyniku (bufor może należeć do segmentera)
+                    // Maska ma rozmiar obrazu wejściowego.
+                    cont.resume(Triple(values, iw, ih).takeIf { values.size == iw * ih })
                 }
             }
-            .addOnFailureListener { e ->
+            .addOnFailureListener(background) { e ->
                 segmenter.close()
                 cont.resumeWithException(e)
             }
