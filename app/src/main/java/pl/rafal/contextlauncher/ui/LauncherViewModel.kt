@@ -891,6 +891,27 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    // 1.6.3 OnModes: wbudowane tryby dostają nazwy "… On Mode". Zmieniamy tylko te, które wciąż mają starą,
+    // domyślną nazwę (po angielsku albo po polsku) — nazwy nadane przez użytkownika zostają. Raz na instalację.
+    private fun renameBuiltInModesOnce() {
+        if (appPrefs.onModesNamesDone.value) return
+        val renames = mapOf(
+            "Start" to R.string.tpl_start_name,
+            "Work" to R.string.tpl_work_name, "Praca" to R.string.tpl_work_name,
+            "Home" to R.string.tpl_home_name, "Dom" to R.string.tpl_home_name,
+            "Travel" to R.string.tpl_travel_name, "Podróż" to R.string.tpl_travel_name,
+            "Study" to R.string.tpl_study_name, "Studia" to R.string.tpl_study_name,
+            "Workout" to R.string.tpl_sport_name, "Trening" to R.string.tpl_sport_name,
+            "Everyday" to R.string.tpl_default_name, "Codzienny" to R.string.tpl_default_name,
+        )
+        viewModelScope.launch {
+            modeDao.getAll().forEach { mode ->
+                renames[mode.name.trim()]?.let { res -> modeDao.rename(mode.id, AppText.get(res)) }
+            }
+            appPrefs.onModesNamesDone.set(true)
+        }
+    }
+
     fun renameMode(mode: ModeEntity, name: String) {
         viewModelScope.launch { modeDao.rename(mode.id, name.trim()) }
     }
@@ -923,6 +944,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // Ikona OnThemes ma wersję jasną i ciemną. Gdy w launcherze zmieni się jasność (Jasny / Ciemny / Auto),
     // wczytujemy listę aplikacji jeszcze raz, żeby ikona pasowała do motywu (drop(1) = pomiń wartość startową).
     init {
+        renameBuiltInModesOnce()
         viewModelScope.launch {
             themePrefs.themeMode.drop(1).collect {
                 runCatching { repository.loadApps() }.onSuccess { allApps.value = it }

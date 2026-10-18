@@ -66,6 +66,7 @@ class AppPrefs private constructor(context: Context) {
     // --- Tryby i sugestie ---
     val autoSwitch = bool("auto_switch", false)           // przełączaj sam zamiast tylko podpowiadać
     val applyPhoneSettings = bool("apply_phone_settings", true)
+    val onModesNamesDone = bool("onmodes_names_v1", false) // 1.6.3: wbudowane tryby przemianowane na "… On Mode"
     // 1.6.2: ile sekund warunki muszą pasować, zanim automat sam przełączy (0 = od razu; dawniej stałe 60 s).
     val autoDelaySec = Setting("auto_delay_sec", 60, { k, d -> getInt(k, d) }, { k, v -> putInt(k, v) })
     val autoCountdown = Setting(

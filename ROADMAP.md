@@ -18,7 +18,8 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.6.0 | Scalenie 1.3 + 1.4 + 1.5 do `dev` (StickOnMe wydajność, OnHand, OnThemes w jednym buildzie) | 1 |
 | 1.6.1 | Runda 18.10, paczka 1: OnHand przy wyjściu, rozmycie pod menu, tapeta po cudzej zmianie, „lepkie” tryby | 1 |
 | 1.6.2 | Runda 18.10, paczka 2a: czas oczekiwania automatu (0–60 s) i odliczanie (brak / pasek / kółko) | 1 |
-Razem od V1: 41 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
+| 1.6.3 | Runda 18.10, paczka 2b: OnModes — wbudowane tryby „… On Mode”, tytuły OnModes | 1 |
+Razem od V1: 42 paczki. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).
@@ -344,7 +345,10 @@ Stan wyjściowy: 1.6.0 = gałęzie `feature/stickonme-perf`, `feature/onhand`, `
       i „Odliczanie przed przełączeniem”: Brak / Pasek / Kółko wokół ✓ (`AutoCountdown`). Pasek = kolor docelowego trybu
       wypełnia pasek wyszukiwania od lewej; kółko = obwód wokół zielonego ✓. Postęp liczony z zegara co klatkę
       (`countdownProgress` w `SmartSearchBar.kt`), stan z `LauncherViewModel.autoCountdown`.
-- [ ] 2b: Tryby → **OnModes**, pojedynczy tryb „… On Mode” (np. Work On Mode, domyślny Start On Mode).
+- [x] 2b: **OnModes** — wbudowane szablony mają nazwy „… On Mode” (Start / Work / Home / Travel / Study / Workout /
+      Everyday On Mode, w obu językach). Istniejące tryby: zmiana tylko, gdy mają starą domyślną nazwę (EN lub PL),
+      raz na instalację (`renameBuiltInModesOnce`, flaga `onmodes_names_v1`); własne nazwy zostają, zmiana nazwy działa jak dotąd.
+      Tytuły (lista, sekcja Ustawień, „+ Nowy OnMode”, kreator, samouczek, widżet tarczy) → OnModes; w zdaniach zostaje „tryb”.
 
 ### Szuflada aplikacji (osobny czat)
 - [ ] Jeden model danych (foldery + luźne aplikacje), dwa widoki do wyboru w Ustawieniach:
