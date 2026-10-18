@@ -1178,4 +1178,12 @@
     <string name="handy_onhand_untitled">Notatka bez tytułu</string>
     <!-- 1.6.1 -->
     <string name="vm_auto_status_skipped">automat pominięty: wybrałeś inny tryb; czeka na kolejną zmianę sytuacji</string>
+    <!-- 1.6.2 -->
+    <string name="set_auto_delay_title">Przełączaj sam po</string>
+    <string name="set_auto_delay_now">Od razu</string>
+    <string name="set_auto_delay_sec">%1$d s</string>
+    <string name="set_auto_countdown_title">Odliczanie przed przełączeniem</string>
+    <string name="data_countdown_none">Brak</string>
+    <string name="data_countdown_bar">Pasek</string>
+    <string name="data_countdown_ring">Kółko wokół ✓</string>
 </resources>

@@ -2041,7 +2041,23 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _autoStatus = MutableStateFlow<String?>(null)
     val autoStatus: StateFlow<String?> = _autoStatus.asStateFlow()
 
+    // 1.6.2: trwające odliczanie automatu (do paska / kółka przy ✓). key = klucz sugestii, czasy w ms od epoki.
+    data class AutoCountdownState(val key: String, val startMs: Long, val endMs: Long)
+    private val _autoCountdown = MutableStateFlow<AutoCountdownState?>(null)
+    val autoCountdown: StateFlow<AutoCountdownState?> = _autoCountdown.asStateFlow()
+
     private fun maybeAutoSwitch(suggestion: Suggestion?) {
+        // try/finally ≈ jak w C#: finally wykona się przy każdym return. Odliczanie ustawia tylko gałąź "czekamy",
+        // każda inna droga je czyści. Ta sama wartość nie jest wysyłana ponownie, więc animacja nie startuje od nowa.
+        var countdown: AutoCountdownState? = null
+        try {
+            maybeAutoSwitchInner(suggestion) { countdown = it }
+        } finally {
+            _autoCountdown.value = countdown
+        }
+    }
+
+    private fun maybeAutoSwitchInner(suggestion: Suggestion?, setCountdown: (AutoCountdownState) -> Unit) {
         autoRecheck?.cancel()
         _autoStatus.value = null
         if (suggestion == null || !appPrefs.autoSwitch.value) {
@@ -2095,10 +2111,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
-        if (now - since < STABLE_MS) {
+        val stableMs = appPrefs.autoDelaySec.value * 1000L // ile warunki muszą pasować (Ustawienia, 0–60 s)
+        if (now - since < stableMs) {
             // Sugestia może się już nie zmienić (StateFlow nie powtarza tej samej wartości), więc sprawdzamy ponownie sami.
-            _autoStatus.value = AppText.get(R.string.vm_auto_status_countdown, (STABLE_MS - (now - since)) / 1000 + 1)
-            scheduleAutoRecheck(STABLE_MS - (now - since))
+            _autoStatus.value = AppText.get(R.string.vm_auto_status_countdown, (stableMs - (now - since)) / 1000 + 1)
+            setCountdown(AutoCountdownState(suggestion.key, since, since + stableMs))
+            scheduleAutoRecheck(stableMs - (now - since))
             return
         }
 
@@ -2114,7 +2132,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private fun scheduleAutoRecheck(afterMs: Long) {
         autoRecheck = viewModelScope.launch {
-            delay(afterMs + 1_000)
+            delay(afterMs + 300) // chwila zapasu na zegar; krótko, żeby pasek odliczania kończył się razem z przełączeniem
             maybeAutoSwitch(this@LauncherViewModel.suggestion.value) // pole klasy, nie parametr o tej samej nazwie
         }
     }
@@ -2393,7 +2411,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     companion object {
         const val COLUMNS = 4 // kolumny w szufladzie aplikacji
         private const val MANUAL_GRACE_MS = 30 * 60_000L
-        private const val STABLE_MS = 60_000L
     }
 }
 

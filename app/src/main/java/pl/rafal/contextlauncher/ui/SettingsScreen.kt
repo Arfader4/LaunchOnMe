@@ -76,6 +76,8 @@ fun SettingsScreen(
     val autoSwitch by prefs.autoSwitch.flow.collectAsState()
     val applyPhone by prefs.applyPhoneSettings.flow.collectAsState()
     val dismissDuration by prefs.dismissDuration.flow.collectAsState()
+    val autoDelay by prefs.autoDelaySec.flow.collectAsState()
+    val autoCountdown by prefs.autoCountdown.flow.collectAsState()
     val uniformLook by prefs.uniformLook.flow.collectAsState()
     val showLabels by prefs.showLabels.flow.collectAsState()
     val shortcuts by prefs.modeShortcuts.flow.collectAsState()
@@ -202,6 +204,27 @@ fun SettingsScreen(
                     checked = autoSwitch,
                     onChange = prefs.autoSwitch::set,
                 )
+            }
+            // 1.6.2: ile automat czeka i jak pokazuje odliczanie (widoczne tylko z włączonym automatem).
+            if (autoSwitch) {
+                item {
+                    Choice(
+                        title = stringResource(R.string.set_auto_delay_title),
+                        options = pl.rafal.contextlauncher.data.AppPrefs.AUTO_DELAY_OPTIONS,
+                        selected = autoDelay,
+                        labelOf = { sec -> if (sec == 0) pl.rafal.contextlauncher.AppText.get(R.string.set_auto_delay_now) else pl.rafal.contextlauncher.AppText.get(R.string.set_auto_delay_sec, sec) },
+                        onSelect = prefs.autoDelaySec::set,
+                    )
+                }
+                item {
+                    Choice(
+                        title = stringResource(R.string.set_auto_countdown_title),
+                        options = pl.rafal.contextlauncher.data.AutoCountdown.entries,
+                        selected = autoCountdown,
+                        labelOf = { it.label },
+                        onSelect = prefs.autoCountdown::set,
+                    )
+                }
             }
             item {
                 Choice(

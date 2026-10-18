@@ -669,6 +669,10 @@ private fun LauncherContent(
 
     // --- Pasek wyszukiwania w trybie czuwania ---
     // Przypięta propozycja: komunikat automatu (✓ zostaw / ✕ cofnij) albo sugestia trybu (✓ przełącz / ✕ odrzuć).
+    // 1.6.2: odliczanie automatu do paska / kółka (tylko dla sugestii, która właśnie jest odliczana).
+    val autoCountdown by viewModel.autoCountdown.collectAsState()
+    val countdownStyle by viewModel.settings.autoCountdown.flow.collectAsState()
+    fun countdownFor(key: String): Pair<Long, Long>? = autoCountdown?.takeIf { it.key == key }?.let { it.startMs to it.endMs }
     val smartPrompt: SmartItem.Prompt? = run {
         val notice = autoNotice
         val noticeMode = notice?.let { n -> modes.firstOrNull { it.id == n.modeId } }
@@ -697,6 +701,8 @@ private fun LauncherContent(
                     onAccept = { viewModel.acceptSuggestion(current) },
                     rejectLabel = stringResource(R.string.ls_prompt_dismiss_suggestion),
                     onReject = { viewModel.dismissSuggestion(current) },
+                    countdown = countdownFor(current.key),
+                    countdownStyle = countdownStyle,
                 )
             }
             current is pl.rafal.contextlauncher.suggest.Suggestion.EndMode -> modes.firstOrNull { it.id == current.backToModeId }?.let { m ->
@@ -709,6 +715,8 @@ private fun LauncherContent(
                     onAccept = { viewModel.acceptSuggestion(current) },
                     rejectLabel = stringResource(R.string.ls_prompt_dismiss_suggestion),
                     onReject = { viewModel.dismissSuggestion(current) },
+                    countdown = countdownFor(current.key),
+                    countdownStyle = countdownStyle,
                 )
             }
             else -> null

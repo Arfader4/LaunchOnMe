@@ -17,7 +17,8 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.5.0 | OnThemes — aplikacja motywów (`feature/onthemes`): T1–T5 | 5 |
 | 1.6.0 | Scalenie 1.3 + 1.4 + 1.5 do `dev` (StickOnMe wydajność, OnHand, OnThemes w jednym buildzie) | 1 |
 | 1.6.1 | Runda 18.10, paczka 1: OnHand przy wyjściu, rozmycie pod menu, tapeta po cudzej zmianie, „lepkie” tryby | 1 |
-Razem od V1: 40 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
+| 1.6.2 | Runda 18.10, paczka 2a: czas oczekiwania automatu (0–60 s) i odliczanie (brak / pasek / kółko) | 1 |
+Razem od V1: 41 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).
@@ -338,9 +339,12 @@ Stan wyjściowy: 1.6.0 = gałęzie `feature/stickonme-perf`, `feature/onhand`, `
       Sugestia, która wisiała przy ręcznej zmianie, nie przełącza sama nigdy (dawniej po 30 min) — tylko propozycja.
       Testy w `SuggestionEngineTest`.
 
-### Paczka 2 — OnModes (nazwy)
-- [ ] Tryby → **OnModes**, pojedynczy tryb „… On Mode” (np. Work On Mode, domyślny Start On Mode).
-- [ ] Animowany pasek ładowania na dolnym pasku (do ustalenia, jak ma wyglądać).
+### Paczka 2 — odliczanie automatu (2a, 1.6.2) i OnModes (2b)
+- [x] 2a: Ustawienia → Tryby: „Przełączaj sam po” 0 / 5 / 10 / 15 / 30 / 45 / 60 s (dawniej stałe 60 s, `autoDelaySec`)
+      i „Odliczanie przed przełączeniem”: Brak / Pasek / Kółko wokół ✓ (`AutoCountdown`). Pasek = kolor docelowego trybu
+      wypełnia pasek wyszukiwania od lewej; kółko = obwód wokół zielonego ✓. Postęp liczony z zegara co klatkę
+      (`countdownProgress` w `SmartSearchBar.kt`), stan z `LauncherViewModel.autoCountdown`.
+- [ ] 2b: Tryby → **OnModes**, pojedynczy tryb „… On Mode” (np. Work On Mode, domyślny Start On Mode).
 
 ### Szuflada aplikacji (osobny czat)
 - [ ] Jeden model danych (foldery + luźne aplikacje), dwa widoki do wyboru w Ustawieniach:

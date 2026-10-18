@@ -1162,4 +1162,12 @@
     <string name="handy_onhand_untitled">Untitled note</string>
     <!-- 1.6.1 -->
     <string name="vm_auto_status_skipped">auto skipped: you picked another mode; waits for the next change of context</string>
+    <!-- 1.6.2 -->
+    <string name="set_auto_delay_title">Switch automatically after</string>
+    <string name="set_auto_delay_now">At once</string>
+    <string name="set_auto_delay_sec">%1$d s</string>
+    <string name="set_auto_countdown_title">Countdown before switching</string>
+    <string name="data_countdown_none">None</string>
+    <string name="data_countdown_bar">Bar</string>
+    <string name="data_countdown_ring">Ring around ✓</string>
 </resources>

@@ -48,6 +48,14 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import androidx.compose.ui.res.stringResource
 import pl.rafal.contextlauncher.R
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import pl.rafal.contextlauncher.data.AutoCountdown
 import pl.rafal.contextlauncher.data.AppInfo
 
 // Co pasek wyszukiwania pokazuje w trybie czuwania. sealed interface ≈ zamknięta hierarchia klas
@@ -65,6 +73,9 @@ sealed interface SmartItem {
         val onAccept: () -> Unit,
         val rejectLabel: String,
         val onReject: () -> Unit,
+        // 1.6.2: odliczanie automatu (start, koniec w ms od epoki) i jak je pokazać; null = brak odliczania.
+        val countdown: Pair<Long, Long>? = null,
+        val countdownStyle: AutoCountdown = AutoCountdown.NONE,
     ) : SmartItem
 
     // Ostatnio używane aplikacje (np. z ostatniej godziny) — dotknięcie ikony je otwiera.
@@ -115,6 +126,12 @@ fun SmartSearchBar(
     }
     val current: SmartItem? = pinned ?: items.getOrNull(index % count.coerceAtLeast(1))
     val border = pinned?.let { Color(it.color).copy(alpha = 0.7f) }
+    // Odliczanie automatu: postęp 0..1 liczony co klatkę z zegara (patrz countdownProgress).
+    val countdown = pinned?.takeIf { it.countdownStyle != AutoCountdown.NONE }?.countdown
+    val progress = countdownProgress(countdown)
+    val barColor = pinned?.let { Color(it.color).copy(alpha = 0.32f) } ?: Color.Transparent
+    val showBar = countdown != null && pinned?.countdownStyle == AutoCountdown.BAR
+    val ringProgress: (() -> Float)? = if (countdown != null && pinned?.countdownStyle == AutoCountdown.RING) ({ progress.value }) else null
     val searchLabel = stringResource(R.string.search_apps)
 
     Row(
@@ -123,6 +140,11 @@ fun SmartSearchBar(
             .height(56.dp)
             .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surface)
+            // Pasek odliczania: kolor docelowego trybu wypełnia pasek od lewej. Stan czytany tylko przy rysowaniu.
+            .then(
+                if (showBar) Modifier.drawBehind { drawRect(barColor, size = Size(size.width * progress.value, size.height)) }
+                else Modifier,
+            )
             .then(if (border != null) Modifier.border(1.dp, border, RoundedCornerShape(28.dp)) else Modifier)
             .padding(start = 6.dp, end = 6.dp),
     ) {
@@ -164,7 +186,7 @@ fun SmartSearchBar(
                             .clickable(onClick = onSearch)
                             .padding(top = 16.dp),
                     )
-                    is SmartItem.Prompt -> PromptContent(item)
+                    is SmartItem.Prompt -> PromptContent(item, ringProgress)
                     is SmartItem.Recent -> Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("🕘", style = MaterialTheme.typography.titleSmall)
                         Spacer(Modifier.width(6.dp))
@@ -235,7 +257,7 @@ fun SmartSearchBar(
 
 // Propozycja trybu (dawniej osobny pasek nad dolnym rzędem, zasłaniający menu): tytuł, powód, ✓ / ✕.
 @Composable
-private fun PromptContent(item: SmartItem.Prompt) {
+private fun PromptContent(item: SmartItem.Prompt, ringProgress: (() -> Float)?) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
         ModeDot(item.color)
         Spacer(Modifier.width(8.dp))
@@ -255,8 +277,50 @@ private fun PromptContent(item: SmartItem.Prompt) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        RoundAction("✓", Color(0xFF4FC27E), item.acceptLabel, item.onAccept)
+        if (ringProgress != null) {
+            // Kółko odliczania: obwód wokół ✓ zamyka się, gdy automat zaraz przełączy.
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(46.dp)
+                    .drawBehind {
+                        val stroke = 3.dp.toPx()
+                        drawArc(
+                            color = AcceptColor,
+                            startAngle = -90f,
+                            sweepAngle = 360f * ringProgress(),
+                            useCenter = false,
+                            topLeft = androidx.compose.ui.geometry.Offset(stroke / 2, stroke / 2),
+                            size = Size(size.width - stroke, size.height - stroke),
+                            style = Stroke(width = stroke, cap = StrokeCap.Round),
+                        )
+                    },
+            ) { RoundAction("✓", AcceptColor, item.acceptLabel, item.onAccept) }
+        } else {
+            RoundAction("✓", AcceptColor, item.acceptLabel, item.onAccept)
+        }
         Spacer(Modifier.width(2.dp))
         RoundAction("✕", MaterialTheme.colorScheme.error, item.rejectLabel, item.onReject)
     }
+}
+
+// Postęp odliczania 0..1, odświeżany co klatkę (withFrameMillis ≈ CompositionTarget.Rendering z WPF),
+// liczony z zegara — po wyjściu i powrocie na ekran pasek jest od razu tam, gdzie powinien.
+@Composable
+private fun countdownProgress(range: Pair<Long, Long>?): State<Float> {
+    val progress = remember(range) { mutableFloatStateOf(0f) }
+    LaunchedEffect(range) {
+        if (range != null) {
+            val (start, end) = range
+            val total = (end - start).coerceAtLeast(1L).toFloat()
+            var done = false
+            while (!done) {
+                withFrameMillis { }
+                val value = ((System.currentTimeMillis() - start) / total).coerceIn(0f, 1f)
+                progress.floatValue = value
+                done = value >= 1f
+            }
+        }
+    }
+    return progress
 }

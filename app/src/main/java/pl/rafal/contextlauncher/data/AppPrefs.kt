@@ -16,6 +16,13 @@ enum class DismissDuration(@StringRes private val labelRes: Int) {
     val label: String get() = AppText.get(labelRes)
 }
 
+// 1.6.2: jak pokazać odliczanie automatu (ile zostało do samodzielnego przełączenia trybu).
+enum class AutoCountdown(@StringRes private val labelRes: Int) {
+    NONE(R.string.data_countdown_none), BAR(R.string.data_countdown_bar), RING(R.string.data_countdown_ring);
+
+    val label: String get() = AppText.get(labelRes)
+}
+
 // Ogólne ustawienia launchera (ekran Ustawienia). Każde ustawienie to StateFlow, więc UI odświeża się samo.
 // Jedna instancja na proces (singleton): kafelek, skróty i automat muszą widzieć te same wartości co ekran.
 // Wcześniej każdy tworzył własną kopię i np. launcher nie wiedział, że kafelek właśnie zmienił tryb.
@@ -59,6 +66,14 @@ class AppPrefs private constructor(context: Context) {
     // --- Tryby i sugestie ---
     val autoSwitch = bool("auto_switch", false)           // przełączaj sam zamiast tylko podpowiadać
     val applyPhoneSettings = bool("apply_phone_settings", true)
+    // 1.6.2: ile sekund warunki muszą pasować, zanim automat sam przełączy (0 = od razu; dawniej stałe 60 s).
+    val autoDelaySec = Setting("auto_delay_sec", 60, { k, d -> getInt(k, d) }, { k, v -> putInt(k, v) })
+    val autoCountdown = Setting(
+        "auto_countdown",
+        AutoCountdown.BAR,
+        { k, d -> runCatching { AutoCountdown.valueOf(getString(k, d.name)!!) }.getOrDefault(d) },
+        { k, v -> putString(k, v.name) },
+    )
     val dismissDuration = Setting(
         "dismiss_duration",
         DismissDuration.THREE_HOURS,
@@ -116,6 +131,7 @@ class AppPrefs private constructor(context: Context) {
     val modeShortcuts = bool("mode_shortcuts", true)      // skróty "Włącz tryb …" dla innych aplikacji i procedur
 
     companion object {
+        val AUTO_DELAY_OPTIONS = listOf(0, 5, 10, 15, 30, 45, 60) // sekundy do wyboru w Ustawieniach
         private const val KEY_HOME = "home_mode_id"
         private const val NONE = -1L
 
