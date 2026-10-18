@@ -19,7 +19,8 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.6.1 | Runda 18.10, paczka 1: OnHand przy wyjściu, rozmycie pod menu, tapeta po cudzej zmianie, „lepkie” tryby | 1 |
 | 1.6.2 | Runda 18.10, paczka 2a: czas oczekiwania automatu (0–60 s) i odliczanie (brak / pasek / kółko) | 1 |
 | 1.6.3 | Runda 18.10, paczka 2b: OnModes — wbudowane tryby „… On Mode”, tytuły OnModes | 1 |
-Razem od V1: 42 paczki. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
+| 1.7.0 | Szuflada aplikacji: dwa widoki, sortowanie (A–Z / najczęściej / własna), sekcja „Nowe”, ustawienia per OnMode | 1 |
+Razem od V1: 43 paczki. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).
@@ -351,15 +352,20 @@ Stan wyjściowy: 1.6.0 = gałęzie `feature/stickonme-perf`, `feature/onhand`, `
       Tytuły (lista, sekcja Ustawień, „+ Nowy OnMode”, kreator, samouczek, widżet tarczy) → OnModes; w zdaniach zostaje „tryb”.
 
 ### Szuflada aplikacji (osobny czat)
-- [ ] Jeden model danych (foldery + luźne aplikacje), dwa widoki do wyboru w Ustawieniach:
-      „foldery osobno + główna lista” albo „zintegrowany” (foldery wymieszane, opcja „foldery najpierw”).
-- [ ] Sortowanie głównej listy: alfabetycznie (domyślnie), najczęściej używane, ręcznie (układ zapamiętany przy przełączaniu).
-      „Najczęściej używane”: dane systemowe (UsageStatsManager, dostęp nadawany ręcznie w ustawieniach), bez dostępu —
-      własny licznik uruchomień z launchera.
-- [ ] Sekcja „Nowe” dla świeżo zainstalowanych aplikacji.
+- [x] 1.7.0: dwa widoki do wyboru w Ustawieniach: „Zakładki: Wszystkie | Foldery” albo „Jedna lista z folderami”
+      (foldery z korzenia między aplikacjami, opcja „Foldery na początku”; dotknięcie otwiera folder w szufladzie,
+      „‹ Wszystkie aplikacje” / Wstecz wraca; „Nowy folder” w menu ⇅). Model: `data/DrawerSettings.kt` (`DrawerView`).
+- [x] 1.7.0: sortowanie: A–Z (domyślnie), najczęściej używane (własny licznik uruchomień w aktywnym trybie; folder = suma
+      jego aplikacji), własna kolejność — menu ⇅ → „Ułóż ręcznie…”: przytrzymaj i przeciągnij, „Gotowe” zapisuje.
+      Kolejność zostaje zapamiętana po przełączeniu na inne sortowanie; nowe aplikacje dopisują się na końcu (A–Z).
+      Logika czysta i z testami: `data/DrawerArrange.kt` + `DrawerArrangeTest`.
+- [ ] „Najczęściej używane” z danych systemowych (UsageStatsManager, dostęp nadawany ręcznie) — na razie tylko własny licznik.
+- [x] 1.7.0: sekcja „Nowe”: zainstalowane w ostatnich 7 dniach i jeszcze nieotwarte (w żadnym trybie); znika po
+      otwarciu albo z menu „Usuń z »Nowych«” (`LauncherViewModel.newApps`, `AppInfo.installedAt`).
 - [ ] Folder: układ ręczny, w edycji opcja „Sortuj”.
-- [ ] Ustawienia szuflady per OnMode (opcjonalne nadpisanie globalnych); zmiana trybu przy otwartej szufladzie
-      zmienia układ dopiero po jej zamknięciu.
+- [x] 1.7.0: ustawienia ogólne (Ustawienia → Szuflada aplikacji) + opcjonalnie własne w OnMode (arkusz trybu →
+      „Własna szuflada w tym OnMode”; własna kolejność też per tryb). Zmiana trybu przy otwartej szufladzie przestawia
+      ją dopiero po zamknięciu. Rząd „Często w …” można wyłączyć (chowa się sam przy sortowaniu „najczęściej”).
 
 ### StickOnMe (osobny czat)
 - [ ] Rozbudowa edycji obrazów: przesuwanie / skalowanie / obrót obrazu wewnątrz kształtu (np. serce) — transformacja

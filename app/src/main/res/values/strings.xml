@@ -1170,4 +1170,37 @@
     <string name="data_countdown_none">None</string>
     <string name="data_countdown_bar">Bar</string>
     <string name="data_countdown_ring">Ring around ✓</string>
+
+    <!-- 1.7.0: szuflada per OnMode -->
+    <string name="drawer_back_to_list">‹ All apps</string>
+    <string name="drawer_arrange">Arrange manually…</string>
+    <string name="drawer_settings">Drawer settings</string>
+    <string name="drawer_sort_alpha">Alphabetical</string>
+    <string name="drawer_sort_most_used">Most used</string>
+    <string name="drawer_sort_manual">Custom order</string>
+    <string name="drawer_sort_alpha_short">A–Z</string>
+    <string name="drawer_sort_most_used_short">Most used</string>
+    <string name="drawer_sort_manual_short">Custom</string>
+    <string name="drawer_section_new">New</string>
+    <string name="drawer_new_dismiss">Remove from New</string>
+    <string name="drawer_arrange_title">Custom order</string>
+    <string name="drawer_arrange_done">Done</string>
+    <string name="drawer_arrange_hint">Touch and hold an icon, then drag it to a new spot. The order is saved for this OnMode.</string>
+    <string name="dset_title">App drawer</string>
+    <string name="dset_view">View</string>
+    <string name="dset_view_tabs">Tabs: All | Folders</string>
+    <string name="dset_view_integrated">One list with folders</string>
+    <string name="dset_sort">Sorting</string>
+    <string name="dset_manual_hint">Arrange it in the drawer: ⇅ → Arrange manually. Your order is kept when you switch sorting.</string>
+    <string name="dset_folders_first">Folders first</string>
+    <string name="dset_folders_first_desc">Folders at the top of the list, then apps</string>
+    <string name="dset_folders_first_off">Only in the “One list with folders” view</string>
+    <string name="dset_show_new">“New” section</string>
+    <string name="dset_show_new_desc">Apps installed in the last 7 days that you have not opened yet</string>
+    <string name="dset_show_frequent">“Frequent” row</string>
+    <string name="dset_show_frequent_desc">Most used apps in this OnMode above the list (hidden when sorting by most used)</string>
+    <string name="dset_own">Own drawer in this OnMode</string>
+    <string name="dset_own_on">Different from Settings — changes apply only here</string>
+    <string name="dset_own_off">Now as in Settings: %1$s</string>
+    <string name="dset_global_hint">Used in every OnMode without its own drawer settings (set in the OnMode settings).</string>
 </resources>

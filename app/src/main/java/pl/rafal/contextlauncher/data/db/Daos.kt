@@ -190,6 +190,11 @@ interface SuggestionDao {
     @Query("SELECT * FROM launch_stats ORDER BY lastLaunched DESC LIMIT 24")
     fun observeRecent(): Flow<List<LaunchStatEntity>>
 
+    // 1.7.0: kiedy każdą aplikację otwarto ostatnio w JAKIMKOLWIEK trybie — sekcja "Nowe" w szufladzie
+    // chowa aplikację, gdy tylko zostanie otwarta po instalacji.
+    @Query("SELECT packageName, className, userSerial, MAX(lastLaunched) AS lastLaunched FROM launch_stats GROUP BY packageName, className, userSerial")
+    fun observeLastLaunched(): Flow<List<LastLaunch>>
+
     @Insert
     suspend fun insertRule(rule: SuggestionRuleEntity): Long
 
@@ -241,3 +246,11 @@ interface AppRestrictionDao {
     @Query("DELETE FROM app_restrictions WHERE modeId = :modeId AND packageName = :packageName AND userSerial = :userSerial")
     suspend fun delete(modeId: Long, packageName: String, userSerial: Long)
 }
+
+// Wynik zapytania z GROUP BY (nie tabela) — Room sam dopasuje kolumny po nazwach, jak Dapper do klasy DTO.
+data class LastLaunch(
+    val packageName: String,
+    val className: String,
+    val userSerial: Long,
+    val lastLaunched: Long,
+)

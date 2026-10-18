@@ -1,21 +1,23 @@
 package pl.rafal.contextlauncher.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.material3.AssistChip
 import androidx.compose.foundation.background
-import androidx.compose.ui.Alignment
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -23,14 +25,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridItemInfo
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -39,31 +48,66 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Velocity
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import kotlinx.coroutines.launch
 import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.AppInfo
+import pl.rafal.contextlauncher.data.DrawerArrange
+import pl.rafal.contextlauncher.data.DrawerItem
+import pl.rafal.contextlauncher.data.DrawerOrder
+import pl.rafal.contextlauncher.data.DrawerSettings
+import pl.rafal.contextlauncher.data.DrawerSort
+import pl.rafal.contextlauncher.data.DrawerView
+import pl.rafal.contextlauncher.data.FolderTree
+import pl.rafal.contextlauncher.data.db.FolderEntity
+import java.text.Collator
 
-// Szuflada z dwiema zakładkami: wszystkie aplikacje (z wyszukiwarką) i foldery.
+// Pozycja na liście szuflady: aplikacja albo folder (w widoku "jedna lista" foldery stoją między aplikacjami).
+private sealed interface DrawerEntry {
+    val key: String
+    val label: String
+
+    data class App(val app: AppInfo) : DrawerEntry {
+        override val key get() = DrawerOrder.APP + app.key
+        override val label get() = app.label
+    }
+
+    data class Folder(val folder: FolderEntity) : DrawerEntry {
+        override val key get() = DrawerOrder.FOLDER + folder.id
+        override val label get() = folder.name
+    }
+}
+
+// Szuflada aplikacji. Od 1.7.0 jej wygląd zależy od OnMode (DrawerSettings):
+//  • widok: zakładki Wszystkie | Foldery albo jedna lista z folderami,
+//  • sortowanie: A–Z, najczęściej używane w tym trybie, własna kolejność (układana palcem),
+//  • sekcje: "Nowe" (świeżo zainstalowane) i "Często w …".
 // Ekran nie zna ViewModelu: dostaje dane i funkcje zwrotne, więc łatwo go testować i podglądać.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,7 +118,7 @@ fun AppDrawer(
     onQueryChange: (String) -> Unit,              // (String) -> Unit ≈ Action<string>
     onAppClick: (AppInfo) -> Unit,
     menuFor: (AppInfo) -> List<MenuAction>,       // ≈ Func<AppInfo, List<MenuAction>>
-    foldersContent: @Composable () -> Unit,       // zakładka "Foldery" (slot)
+    foldersContent: @Composable (startFolderId: Long?) -> Unit, // przeglądarka folderów (od korzenia albo od danego folderu)
     frequent: List<AppInfo>,                      // najczęściej uruchamiane w aktywnym trybie
     frequentLabel: String,
     autoFocusSearch: Boolean,                     // true = od razu kursor i klawiatura w wyszukiwarce
@@ -83,8 +127,34 @@ fun AppDrawer(
     translucent: Boolean = false,                 // tapeta prześwituje przez tło (jak w One UI)
     modifier: Modifier = Modifier,
     onOpenAppSettings: (() -> Unit)? = null,      // skrót do systemowych ustawień "Aplikacje"
+    // --- 1.7.0: szuflada per OnMode ---
+    settings: DrawerSettings = DrawerSettings.DEFAULT,
+    onSettingsChange: (DrawerSettings) -> Unit = {},
+    launchCounts: Map<String, Int> = emptyMap(),  // uruchomienia w aktywnym trybie (AppInfo.key → liczba)
+    manualOrder: List<String> = emptyList(),      // własna kolejność aktywnego trybu (DrawerOrder)
+    onManualOrderChange: (List<String>) -> Unit = {},
+    newApps: List<AppInfo> = emptyList(),
+    onDismissNew: (AppInfo) -> Unit = {},
+    folderTree: FolderTree = FolderTree.EMPTY,
+    onCreateFolder: (String) -> Unit = {},        // nowy folder w korzeniu (widok "jedna lista")
+    onOpenDrawerSettings: (() -> Unit)? = null,   // pełne ustawienia szuflady w ustawieniach OnMode
 ) {
+    val integrated = settings.view == DrawerView.INTEGRATED
     var showFolders by rememberSaveable { mutableStateOf(false) }
+    var arranging by rememberSaveable { mutableStateOf(false) }
+    var openFolderId by rememberSaveable { mutableStateOf<Long?>(null) } // folder otwarty z jednej listy
+    var newFolderOpen by remember { mutableStateOf(false) }
+
+    // Wpisywanie w wyszukiwarkę wraca z otwartego folderu do listy wyników.
+    LaunchedEffect(query) { if (query.isNotBlank()) openFolderId = null }
+
+    val collator = remember { Collator.getInstance() }
+    val rootFolders = if (integrated) folderTree.subfolders(null) else emptyList()
+    val entries = remember(apps, rootFolders, folderTree, settings, launchCounts, manualOrder, query) {
+        val needle = query.trim()
+        val folders = if (needle.isEmpty()) rootFolders else rootFolders.filter { it.name.contains(needle, ignoreCase = true) }
+        arrangeEntries(apps, folders, folderTree, settings, launchCounts, manualOrder, collator)
+    }
 
     // Zamykanie gestem w dół. Lista sama przewija się w dół/górę; to, czego NIE zużyła (bo jest już na górze),
     // trafia do nas przez "nested scroll" — jak zdarzenie, które kontrolka przepuszcza do rodzica.
@@ -143,66 +213,271 @@ fun AppDrawer(
             .imePadding() // lista kończy się nad klawiaturą
             .padding(horizontal = 16.dp),
     ) {
+        if (arranging) {
+            // Układanie własnej kolejności: w zakładkach same aplikacje, w jednej liście — z folderami.
+            ArrangeGrid(
+                initial = entries.filter { integrated || it is DrawerEntry.App },
+                folderTree = folderTree,
+                collator = collator,
+                onDone = { keys ->
+                    onManualOrderChange(keys)
+                    if (settings.sort != DrawerSort.MANUAL) onSettingsChange(settings.copy(sort = DrawerSort.MANUAL))
+                    arranging = false
+                },
+                onCancel = { arranging = false },
+            )
+        } else {
+            DrawerContent(
+                integrated = integrated,
+                showFolders = showFolders,
+                onShowFolders = { showFolders = it },
+                settings = settings,
+                onSettingsChange = onSettingsChange,
+                onArrange = {
+                    onQueryChange("") // układamy całą listę, nie wyniki wyszukiwania
+                    arranging = true
+                },
+                onNewFolder = { newFolderOpen = true },
+                onOpenDrawerSettings = onOpenDrawerSettings,
+                onOpenAppSettings = onOpenAppSettings,
+                entries = entries,
+                sections = DrawerSections(
+                    newApps = if (settings.showNew) newApps else emptyList(),
+                    // Przy sortowaniu "najczęściej używane" ten rząd powtarzałby początek listy.
+                    frequent = if (settings.showFrequent && settings.sort != DrawerSort.MOST_USED) frequent else emptyList(),
+                    frequentLabel = frequentLabel,
+                ),
+                folderTree = folderTree,
+                openFolderId = openFolderId,
+                onOpenFolder = { openFolderId = it },
+                foldersContent = foldersContent,
+                query = query,
+                onQueryChange = onQueryChange,
+                onAppClick = onAppClick,
+                menuFor = menuFor,
+                onDismissNew = onDismissNew,
+                autoFocusSearch = autoFocusSearch,
+                hiddenApps = hiddenApps,
+                dragOut = dragOut,
+            )
+        }
+    }
+    if (newFolderOpen) {
+        TextInputDialog(
+            title = stringResource(R.string.folder_new_folder),
+            initial = "",
+            confirmLabel = stringResource(R.string.common_create),
+            onConfirm = { name ->
+                onCreateFolder(name)
+                newFolderOpen = false
+            },
+            onDismiss = { newFolderOpen = false },
+        )
+    }
+}
+
+// Zwykły widok szuflady (poza układaniem): nagłówek + zakładki albo jedna lista.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DrawerContent(
+    integrated: Boolean,
+    showFolders: Boolean,
+    onShowFolders: (Boolean) -> Unit,
+    settings: DrawerSettings,
+    onSettingsChange: (DrawerSettings) -> Unit,
+    onArrange: () -> Unit,
+    onNewFolder: () -> Unit,
+    onOpenDrawerSettings: (() -> Unit)?,
+    onOpenAppSettings: (() -> Unit)?,
+    entries: List<DrawerEntry>,
+    sections: DrawerSections,
+    folderTree: FolderTree,
+    openFolderId: Long?,
+    onOpenFolder: (Long?) -> Unit,
+    foldersContent: @Composable (startFolderId: Long?) -> Unit,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onAppClick: (AppInfo) -> Unit,
+    menuFor: (AppInfo) -> List<MenuAction>,
+    onDismissNew: (AppInfo) -> Unit,
+    autoFocusSearch: Boolean,
+    hiddenApps: List<AppInfo>,
+    dragOut: ExternalDrag?,
+) {
+    Column {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         ) {
-            FilterChip(selected = !showFolders, onClick = { showFolders = false }, label = { Text(stringResource(R.string.drawer_tab_all)) })
-            FilterChip(selected = showFolders, onClick = { showFolders = true }, label = { Text(stringResource(R.string.drawer_tab_folders)) })
+            if (!integrated) {
+                FilterChip(selected = !showFolders, onClick = { onShowFolders(false) }, label = { Text(stringResource(R.string.drawer_tab_all)) })
+                FilterChip(selected = showFolders, onClick = { onShowFolders(true) }, label = { Text(stringResource(R.string.drawer_tab_folders)) })
+            }
             Spacer(Modifier.weight(1f))
+            if (integrated || !showFolders) {
+                SortMenu(
+                    settings = settings,
+                    onSettingsChange = onSettingsChange,
+                    onArrange = onArrange,
+                    onNewFolder = if (integrated) onNewFolder else null,
+                    onOpenDrawerSettings = onOpenDrawerSettings,
+                )
+            }
             if (onOpenAppSettings != null) {
                 AssistChip(onClick = onOpenAppSettings, label = { Text(stringResource(R.string.drawer_app_settings)) })
             }
         }
 
-        // Przesunięcie palcem w lewo → Foldery, w prawo → Wszystkie (jak zakładki w Galerii).
-        // Przeciąganie ikony po przytrzymaniu "zjada" gest, więc nie przełącza zakładek przypadkiem.
-        val swipeThreshold = with(density) { 72.dp.toPx() }
-        var swipe by remember { mutableFloatStateOf(0f) }
-        Box(
-            Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onDragStart = { swipe = 0f },
-                        onDragEnd = {
-                            if (swipe < -swipeThreshold) showFolders = true
-                            if (swipe > swipeThreshold) showFolders = false
-                            swipe = 0f
-                        },
-                        onDragCancel = { swipe = 0f },
-                    ) { _, dx -> swipe += dx }
-                },
-        ) {
-            AnimatedContent(
-                targetState = showFolders,
-                transitionSpec = {
-                    // Foldery wjeżdżają z prawej, Wszystkie z lewej.
-                    val dir = if (targetState) 1 else -1
-                    (slideInHorizontally { it * dir / 3 } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir / 3 } + fadeOut())
-                },
-                label = "zakladki",
-            ) { folders ->
-                if (folders) {
-                    Column { foldersContent() }
-                } else {
-                    Column { AllAppsTab(apps, query, onQueryChange, onAppClick, menuFor, frequent, frequentLabel, autoFocusSearch, hiddenApps, dragOut) }
+        if (integrated) {
+            if (openFolderId != null && folderTree.folder(openFolderId) != null) {
+                // Wstecz z folderu otwartego z listy wraca do listy (głębiej cofa sama przeglądarka folderów).
+                BackHandler { onOpenFolder(null) }
+                Column {
+                    TextButton(onClick = { onOpenFolder(null) }) { Text(stringResource(R.string.drawer_back_to_list)) }
+                    foldersContent(openFolderId)
+                }
+            } else {
+                AllAppsTab(
+                    entries, sections, folderTree, query, onQueryChange, onAppClick, menuFor, onDismissNew,
+                    onFolderClick = { onOpenFolder(it) }, autoFocusSearch, hiddenApps, dragOut,
+                )
+            }
+        } else {
+            // Przesunięcie palcem w lewo → Foldery, w prawo → Wszystkie (jak zakładki w Galerii).
+            // Przeciąganie ikony po przytrzymaniu "zjada" gest, więc nie przełącza zakładek przypadkiem.
+            val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
+            var swipe by remember { mutableFloatStateOf(0f) }
+            val currentOnShowFolders by rememberUpdatedState(onShowFolders)
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { swipe = 0f },
+                            onDragEnd = {
+                                if (swipe < -swipeThreshold) currentOnShowFolders(true)
+                                if (swipe > swipeThreshold) currentOnShowFolders(false)
+                                swipe = 0f
+                            },
+                            onDragCancel = { swipe = 0f },
+                        ) { _, dx -> swipe += dx }
+                    },
+            ) {
+                AnimatedContent(
+                    targetState = showFolders,
+                    transitionSpec = {
+                        // Foldery wjeżdżają z prawej, Wszystkie z lewej.
+                        val dir = if (targetState) 1 else -1
+                        (slideInHorizontally { it * dir / 3 } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir / 3 } + fadeOut())
+                    },
+                    label = "zakladki",
+                ) { folders ->
+                    if (folders) {
+                        Column { foldersContent(null) }
+                    } else {
+                        Column {
+                            AllAppsTab(
+                                entries, sections, folderTree, query, onQueryChange, onAppClick, menuFor, onDismissNew,
+                                onFolderClick = {}, autoFocusSearch, hiddenApps, dragOut,
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+// Sekcje nad główną listą (tylko bez wpisanego tekstu).
+private class DrawerSections(val newApps: List<AppInfo>, val frequent: List<AppInfo>, val frequentLabel: String)
+
+private fun arrangeEntries(
+    apps: List<AppInfo>,
+    folders: List<FolderEntity>,
+    tree: FolderTree,
+    settings: DrawerSettings,
+    counts: Map<String, Int>,
+    manualOrder: List<String>,
+    collator: Collator,
+): List<DrawerEntry> {
+    val all: List<DrawerEntry> = folders.map { DrawerEntry.Folder(it) } + apps.map { DrawerEntry.App(it) }
+    val byKey = all.associateBy { it.key }
+    val items = all.map { e ->
+        when (e) {
+            is DrawerEntry.App -> DrawerItem(e.key, e.label, isFolder = false, uses = counts[e.app.key] ?: 0)
+            is DrawerEntry.Folder -> DrawerItem(e.key, e.label, isFolder = true, uses = folderUses(tree, e.folder.id, counts))
+        }
+    }
+    return DrawerArrange.arrange(items, settings.sort, settings.foldersFirst && folders.isNotEmpty(), manualOrder, collator)
+        .mapNotNull { byKey[it.key] }
+}
+
+// Folder w sortowaniu "najczęściej": suma uruchomień jego aplikacji (z podfolderami).
+private fun folderUses(tree: FolderTree, id: Long, counts: Map<String, Int>): Int =
+    tree.apps(id).sumOf { counts[it.app.key] ?: 0 } + tree.subfolders(id).sumOf { folderUses(tree, it.id, counts) }
+
+// Przycisk sortowania w nagłówku szuflady: szybka zmiana (w tym OnMode albo ogólnie) + układanie + skrót do ustawień.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SortMenu(
+    settings: DrawerSettings,
+    onSettingsChange: (DrawerSettings) -> Unit,
+    onArrange: () -> Unit,
+    onNewFolder: (() -> Unit)?,
+    onOpenDrawerSettings: (() -> Unit)?,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        AssistChip(onClick = { open = true }, label = { Text("⇅ " + sortShortLabel(settings.sort)) })
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DrawerSort.entries.forEach { sort ->
+                DropdownMenuItem(
+                    text = { Text(drawerSortLabel(sort)) },
+                    leadingIcon = { Text(if (sort == settings.sort) "✓" else " ") },
+                    onClick = {
+                        open = false
+                        onSettingsChange(settings.copy(sort = sort))
+                    },
+                )
+            }
+            HorizontalDivider()
+            DropdownMenuItem(text = { Text(stringResource(R.string.drawer_arrange)) }, onClick = { open = false; onArrange() })
+            if (onNewFolder != null) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.folder_new_folder)) }, onClick = { open = false; onNewFolder() })
+            }
+            if (onOpenDrawerSettings != null) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.drawer_settings)) }, onClick = { open = false; onOpenDrawerSettings() })
+            }
+        }
+    }
+}
+
+@Composable
+fun drawerSortLabel(sort: DrawerSort): String = when (sort) {
+    DrawerSort.ALPHA -> stringResource(R.string.drawer_sort_alpha)
+    DrawerSort.MOST_USED -> stringResource(R.string.drawer_sort_most_used)
+    DrawerSort.MANUAL -> stringResource(R.string.drawer_sort_manual)
+}
+
+@Composable
+private fun sortShortLabel(sort: DrawerSort): String = when (sort) {
+    DrawerSort.ALPHA -> stringResource(R.string.drawer_sort_alpha_short)
+    DrawerSort.MOST_USED -> stringResource(R.string.drawer_sort_most_used_short)
+    DrawerSort.MANUAL -> stringResource(R.string.drawer_sort_manual_short)
+}
+
 @Composable
 private fun AllAppsTab(
-    apps: List<AppInfo>,
+    entries: List<DrawerEntry>,
+    sections: DrawerSections,
+    folderTree: FolderTree,
     query: String,
     onQueryChange: (String) -> Unit,
     onAppClick: (AppInfo) -> Unit,
     menuFor: (AppInfo) -> List<MenuAction>,
-    frequent: List<AppInfo>,
-    frequentLabel: String,
+    onDismissNew: (AppInfo) -> Unit,
+    onFolderClick: (Long) -> Unit,
     autoFocusSearch: Boolean,
     hiddenApps: List<AppInfo>,
     dragOut: ExternalDrag?,
@@ -227,7 +502,9 @@ private fun AllAppsTab(
             ),
             // Enter na klawiaturze uruchamia pierwszą znalezioną aplikację.
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { apps.firstOrNull()?.let(onAppClick) }),
+            keyboardActions = KeyboardActions(onGo = {
+                entries.firstNotNullOfOrNull { (it as? DrawerEntry.App)?.app }?.let(onAppClick)
+            }),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 12.dp)
@@ -237,7 +514,11 @@ private fun AllAppsTab(
         // Lazy = rysuje tylko to, co widać (jak wirtualizacja w ListView/ItemsControl).
         // Szuflada wchodzi do kompozycji przy otwarciu, więc to jest chwila otwarcia (start "fali" ikon).
         val openedAt = remember { System.currentTimeMillis() }
-        val frequentOffset = if (query.isBlank()) frequent.size else 0
+        val browsing = query.isBlank()
+        val newApps = if (browsing) sections.newApps else emptyList()
+        val frequent = if (browsing) sections.frequent else emptyList()
+        val headOffset = newApps.size + frequent.size
+        val dismissLabel = stringResource(R.string.drawer_new_dismiss)
         LazyVerticalGrid(
             columns = GridCells.Fixed(LauncherViewModel.COLUMNS),
             contentPadding = PaddingValues(bottom = 16.dp),
@@ -245,26 +526,53 @@ private fun AllAppsTab(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            // Bez wpisanego tekstu: najpierw rząd "Często w trybie…", potem wszystkie.
-            if (query.isBlank() && frequent.isNotEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel(frequentLabel) }
-                itemsIndexed(frequent, key = { _, a -> "fav:" + a.key }) { index, app ->
+            // "Nowe": świeżo zainstalowane, znikają po pierwszym otwarciu (albo ręcznie z menu).
+            if (newApps.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel(stringResource(R.string.drawer_section_new)) }
+                itemsIndexed(newApps, key = { _, a -> "new:" + a.key }) { index, app ->
                     AppTile(
-                        app = app, onClick = { onAppClick(app) }, menu = menuFor(app), dragOut = dragOut,
+                        app = app, onClick = { onAppClick(app) },
+                        menu = listOf(MenuAction(dismissLabel) { onDismissNew(app) }) + menuFor(app),
+                        dragOut = dragOut,
                         modifier = Modifier.animateItem().staggerIn(index, openedAt),
                     )
                 }
+            }
+            // Rząd "Często w trybie…".
+            if (frequent.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel(sections.frequentLabel) }
+                itemsIndexed(frequent, key = { _, a -> "fav:" + a.key }) { index, app ->
+                    AppTile(
+                        app = app, onClick = { onAppClick(app) }, menu = menuFor(app), dragOut = dragOut,
+                        modifier = Modifier.animateItem().staggerIn(index + newApps.size, openedAt),
+                    )
+                }
+            }
+            if (headOffset > 0) {
                 item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel(stringResource(R.string.drawer_all_apps)) }
             }
-            // animateItem: przy wpisywaniu w wyszukiwarkę ikony płynnie przesuwają się na nowe miejsca.
-            itemsIndexed(apps, key = { _, a -> a.key }) { index, app ->
-                AppTile(
-                    app = app, onClick = { onAppClick(app) }, menu = menuFor(app), dragOut = dragOut,
-                    modifier = Modifier.animateItem().staggerIn(index + frequentOffset, openedAt),
-                )
+            // animateItem: przy wpisywaniu w wyszukiwarkę i zmianie sortowania ikony płynnie jadą na nowe miejsca.
+            itemsIndexed(entries, key = { _, e -> e.key }) { index, entry ->
+                val itemModifier = Modifier.animateItem().staggerIn(index + headOffset, openedAt)
+                when (entry) {
+                    is DrawerEntry.App -> AppTile(
+                        app = entry.app, onClick = { onAppClick(entry.app) }, menu = menuFor(entry.app), dragOut = dragOut,
+                        modifier = itemModifier,
+                    )
+                    is DrawerEntry.Folder -> Box(itemModifier) {
+                        FolderTile(
+                            folder = entry.folder,
+                            name = entry.folder.name,
+                            preview = folderTree.previewApps(entry.folder.id),
+                            count = folderTree.totalApps(entry.folder.id),
+                            onClick = { onFolderClick(entry.folder.id) },
+                            dragOut = dragOut,
+                        )
+                    }
+                }
             }
             // Ukryte: tylko na liście (nie w wyszukiwaniu), zwinięte za jednym dotknięciem.
-            if (query.isBlank() && hiddenApps.isNotEmpty()) {
+            if (browsing && hiddenApps.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     TextButton(onClick = { showHidden = !showHidden }) {
                         Text(if (showHidden) stringResource(R.string.drawer_hide_hidden) else stringResource(R.string.drawer_show_hidden, hiddenApps.size))
@@ -273,6 +581,150 @@ private fun AllAppsTab(
                 if (showHidden) {
                     items(hiddenApps, key = { "hidden:" + it.key }) { app ->
                         AppTile(app = app, onClick = { onAppClick(app) }, menu = menuFor(app), dragOut = dragOut)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Układanie własnej kolejności: przytrzymaj ikonę i przeciągnij na nowe miejsce (pozostałe się rozstępują).
+// Zmiany trafiają do zapisu dopiero po "Gotowe"; "Anuluj" i Wstecz zostawiają poprzednią kolejność.
+@Composable
+private fun ArrangeGrid(
+    initial: List<DrawerEntry>,
+    folderTree: FolderTree,
+    collator: Collator,
+    onDone: (List<String>) -> Unit,
+    onCancel: () -> Unit,
+) {
+    var list by remember { mutableStateOf(initial) }
+    var dragKey by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var awaitIndex by remember { mutableStateOf(-1) } // po zamianie: czekamy, aż układ siatki ją pokaże
+    val gridState = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    val edge = with(LocalDensity.current) { 64.dp.toPx() }
+
+    BackHandler(onBack = onCancel)
+
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        ) {
+            Text(
+                stringResource(R.string.drawer_arrange_title),
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            // Punkt wyjścia od nowa: A–Z (domyślna "własna" kolejność).
+            TextButton(onClick = { list = list.sortedWith(compareBy<DrawerEntry, Any>(collator) { it.label }) }) {
+                Text(stringResource(R.string.drawer_sort_alpha_short))
+            }
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.common_cancel)) }
+            Button(onClick = { onDone(list.map { it.key }) }) { Text(stringResource(R.string.drawer_arrange_done)) }
+        }
+        Text(
+            stringResource(R.string.drawer_arrange_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 8.dp),
+        )
+
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Fixed(LauncherViewModel.COLUMNS),
+            contentPadding = PaddingValues(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    fun LazyGridItemInfo.hit(p: Offset) =
+                        p.x >= offset.x && p.x < offset.x + size.width && p.y >= offset.y && p.y < offset.y + size.height
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { pos ->
+                            gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.hit(pos) }?.let {
+                                dragKey = it.key as? String
+                                dragOffset = Offset.Zero
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                        },
+                        onDrag = { change, amount ->
+                            val key = dragKey
+                            val info = gridState.layoutInfo
+                            val current = if (key == null) null else info.visibleItemsInfo.firstOrNull { it.key == key }
+                            if (key != null && current != null) {
+                                change.consume()
+                                dragOffset += amount
+                                val center = Offset(
+                                    current.offset.x + current.size.width / 2f,
+                                    current.offset.y + current.size.height / 2f,
+                                ) + dragOffset
+                                // Po zamianie stare położenie z układu jest nieaktualne do następnej klatki —
+                                // do tego czasu nie sprawdzamy kolejnej zamiany (inaczej ikony "migają" tam i z powrotem).
+                                if (awaitIndex >= 0 && current.index == awaitIndex) awaitIndex = -1
+                                // Środek przeciąganej ikony nad inną → zamiana miejsc (reszta przesuwa się o jedno).
+                                val target = if (awaitIndex >= 0) null
+                                else info.visibleItemsInfo.firstOrNull { it.key != key && it.hit(center) }
+                                val from = list.indexOfFirst { it.key == key }
+                                val to = if (target == null) -1 else list.indexOfFirst { it.key == target.key }
+                                if (target != null && from >= 0 && to >= 0) {
+                                    list = list.toMutableList().apply { add(to, removeAt(from)) }
+                                    awaitIndex = to
+                                    // Ikona "przeskoczyła" w układzie na miejsce celu — przesunięcie liczymy od nowego miejsca.
+                                    dragOffset += Offset(
+                                        (current.offset.x - target.offset.x).toFloat(),
+                                        (current.offset.y - target.offset.y).toFloat(),
+                                    )
+                                }
+                                // Przy krawędzi lista sama się przewija; ikona zostaje pod palcem.
+                                val y = change.position.y
+                                val step = when {
+                                    y < edge -> -24f
+                                    y > info.viewportSize.height - edge -> 24f
+                                    else -> 0f
+                                }
+                                if (step != 0f) scope.launch {
+                                    val used = gridState.scrollBy(step)
+                                    dragOffset += Offset(0f, used)
+                                }
+                            }
+                        },
+                        onDragEnd = { dragKey = null; dragOffset = Offset.Zero; awaitIndex = -1 },
+                        onDragCancel = { dragKey = null; dragOffset = Offset.Zero; awaitIndex = -1 },
+                    )
+                },
+        ) {
+            items(list, key = { it.key }) { entry ->
+                val dragging = entry.key == dragKey
+                Box(
+                    if (dragging) Modifier
+                        .zIndex(1f)
+                        .graphicsLayer { translationX = dragOffset.x; translationY = dragOffset.y }
+                        .scale(1.08f)
+                    else Modifier.animateItem(),
+                ) {
+                    when (entry) {
+                        is DrawerEntry.App -> AppTile(app = entry.app, onClick = {}, menu = emptyList(), enabled = false)
+                        is DrawerEntry.Folder -> Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            FolderBadge(entry.folder, folderTree.previewApps(entry.folder.id), 52.dp)
+                            Text(
+                                entry.folder.name,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
                     }
                 }
             }

@@ -101,6 +101,17 @@ class AppPrefs private constructor(context: Context) {
     val maxPages = intPref("max_pages", 3)              // ile stron może mieć karta trybu (przesuwanie w bok)
     // Układ kart per tryb (odstępy, własny rozmiar ikon) — JSON, patrz ModeLayout.
     val modeLayouts = Setting("mode_layouts", "{}", { k, d -> getString(k, d) ?: d }, { k, v -> putString(k, v) })
+    // 1.7.0: szuflada — ustawienia ogólne, nadpisania per OnMode (DrawerSettings) i własna kolejność (DrawerOrder), JSON.
+    val drawerDefault = Setting("drawer_default", "", { k, d -> getString(k, d) ?: d }, { k, v -> putString(k, v) })
+    val drawerSettings = Setting("drawer_settings", "{}", { k, d -> getString(k, d) ?: d }, { k, v -> putString(k, v) })
+    val drawerOrders = Setting("drawer_orders", "{}", { k, d -> getString(k, d) ?: d }, { k, v -> putString(k, v) })
+    // Aplikacje ręcznie usunięte z sekcji "Nowe" (AppInfo.key).
+    val drawerNewDismissed = Setting(
+        "drawer_new_dismissed",
+        emptySet<String>(),
+        { k, d -> getStringSet(k, d).orEmpty().toSet() },
+        { k, v -> putStringSet(k, v) },
+    )
     val labelScale = intPref("label_scale", 100)         // rozmiar podpisów w %: 85 / 100 / 115
     val notificationDots = bool("notification_dots", true) // kropka na ikonie, gdy aplikacja ma powiadomienie
     val showWallpaper = bool("show_wallpaper", false)     // tapeta systemu w tle launchera zamiast jednolitego koloru

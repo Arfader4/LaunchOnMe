@@ -1186,4 +1186,37 @@
     <string name="data_countdown_none">Brak</string>
     <string name="data_countdown_bar">Pasek</string>
     <string name="data_countdown_ring">Kółko wokół ✓</string>
+
+    <!-- 1.7.0: szuflada per OnMode -->
+    <string name="drawer_back_to_list">‹ Wszystkie aplikacje</string>
+    <string name="drawer_arrange">Ułóż ręcznie…</string>
+    <string name="drawer_settings">Ustawienia szuflady</string>
+    <string name="drawer_sort_alpha">Alfabetycznie</string>
+    <string name="drawer_sort_most_used">Najczęściej używane</string>
+    <string name="drawer_sort_manual">Własna kolejność</string>
+    <string name="drawer_sort_alpha_short">A–Z</string>
+    <string name="drawer_sort_most_used_short">Częste</string>
+    <string name="drawer_sort_manual_short">Własna</string>
+    <string name="drawer_section_new">Nowe</string>
+    <string name="drawer_new_dismiss">Usuń z „Nowych”</string>
+    <string name="drawer_arrange_title">Własna kolejność</string>
+    <string name="drawer_arrange_done">Gotowe</string>
+    <string name="drawer_arrange_hint">Przytrzymaj ikonę i przeciągnij ją w nowe miejsce. Kolejność zapisze się dla tego OnMode.</string>
+    <string name="dset_title">Szuflada aplikacji</string>
+    <string name="dset_view">Widok</string>
+    <string name="dset_view_tabs">Zakładki: Wszystkie | Foldery</string>
+    <string name="dset_view_integrated">Jedna lista z folderami</string>
+    <string name="dset_sort">Sortowanie</string>
+    <string name="dset_manual_hint">Układasz ją w szufladzie: ⇅ → Ułóż ręcznie. Kolejność zostaje zapamiętana także po zmianie sortowania.</string>
+    <string name="dset_folders_first">Foldery na początku</string>
+    <string name="dset_folders_first_desc">Najpierw foldery, potem aplikacje</string>
+    <string name="dset_folders_first_off">Tylko w widoku „Jedna lista z folderami”</string>
+    <string name="dset_show_new">Sekcja „Nowe”</string>
+    <string name="dset_show_new_desc">Aplikacje zainstalowane w ostatnich 7 dniach, jeszcze nieotwarte</string>
+    <string name="dset_show_frequent">Rząd „Często w …”</string>
+    <string name="dset_show_frequent_desc">Najczęściej używane w tym OnMode nad listą (chowa się przy sortowaniu „najczęściej”)</string>
+    <string name="dset_own">Własna szuflada w tym OnMode</string>
+    <string name="dset_own_on">Inna niż w Ustawieniach — zmiany działają tylko tutaj</string>
+    <string name="dset_own_off">Teraz jak w Ustawieniach: %1$s</string>
+    <string name="dset_global_hint">Obowiązują w każdym OnMode bez własnych ustawień szuflady (ustawiasz je w ustawieniach OnMode).</string>
 </resources>

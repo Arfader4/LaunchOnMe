@@ -62,6 +62,7 @@ class AppRepository(
                     userSerial = serial,
                     icon = (ownThemedIcon(activity) ?: activity.getIcon(0)).toBitmap(width = 144, height = 144).asImageBitmap(),
                     category = activity.applicationInfo.category,
+                    installedAt = activity.firstInstallTime,
                 )
             }
         }.sortedWith(compareBy(collator) { it.label })

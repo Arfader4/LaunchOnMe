@@ -249,6 +249,11 @@ private fun LauncherContent(
     val autoStatus by viewModel.autoStatus.collectAsState()
     val blockedKeys by viewModel.blockedKeys.collectAsState()
     val hiddenApps by viewModel.hiddenApps.collectAsState()
+    // 1.7.0: szuflada per OnMode.
+    val drawerDefault by viewModel.drawerDefault.collectAsState()
+    val drawerOverrides by viewModel.drawerOverrides.collectAsState()
+    val drawerOrders by viewModel.drawerOrders.collectAsState()
+    val newApps by viewModel.newApps.collectAsState()
     val blockedLaunch by viewModel.blockedLaunch.collectAsState()
     val restrictions by viewModel.restrictions.collectAsState()
     val glance by viewModel.glance.collectAsState()
@@ -1106,6 +1111,10 @@ private fun LauncherContent(
             enter = slideInVertically(Motion.panelOffset) { it / 3 } + fadeIn(Motion.fastOut()),
             exit = slideOutVertically(Motion.fastOut()) { it / 4 } + fadeOut(Motion.fastOut()),
         ) {
+            // Tryb z chwili otwarcia: remember wewnątrz AnimatedVisibility żyje tyle co otwarta szuflada,
+            // więc automat zmieniający tryb przestawi szufladę dopiero po jej zamknięciu (bez skakania pod palcem).
+            val drawerModeId = remember { activeMode?.id }
+            val drawerScope = drawerModeId?.takeIf { it in drawerOverrides } ?: pl.rafal.contextlauncher.data.DrawerOrder.GLOBAL
             AppDrawer(
                 onClose = ::closeDrawer, // przesunięcie w dół na górze listy zamyka szufladę
                 apps = drawerApps,
@@ -1138,11 +1147,11 @@ private fun LauncherContent(
                         MenuAction(context.getString(R.string.ls_menu_uninstall)) { uninstall(app) },
                     )
                 },
-                foldersContent = {
+                foldersContent = { startId ->
                     FolderBrowser(
                         tree = folderTree,
                         allApps = installedApps,
-                        startFolderId = null,
+                        startFolderId = startId,
                         callbacks = folderCallbacks,
                         dragOut = drawerDrag,
                     )
@@ -1156,6 +1165,16 @@ private fun LauncherContent(
                 onOpenAppSettings = {
                     startActivitySafely(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_SETTINGS))
                 },
+                settings = drawerOverrides[drawerModeId] ?: drawerDefault,
+                onSettingsChange = { viewModel.setDrawerSettings(drawerModeId, it) },
+                launchCounts = launchCounts,
+                manualOrder = drawerOrders[drawerScope].orEmpty(),
+                onManualOrderChange = { viewModel.setDrawerOrder(drawerModeId, it) },
+                newApps = newApps,
+                onDismissNew = viewModel::dismissNew,
+                folderTree = folderTree,
+                onCreateFolder = { name -> folderCallbacks.onCreateFolder(null, name) },
+                onOpenDrawerSettings = drawerModeId?.let { id -> { settingsModeId = id } },
                 // Podczas przeciągania szuflada znika z oczu, ale zostaje w drzewie UI —
                 // inaczej ikona, która "trzyma" gest palca, przestałaby istnieć.
                 modifier = if (drawerHidden) Modifier.alpha(0f) else Modifier,
@@ -1315,6 +1334,9 @@ private fun LauncherContent(
             layout = modeLayouts[mode.id] ?: pl.rafal.contextlauncher.data.ModeLayout.DEFAULT,
             globalIconCells = globalIconCells,
             onLayoutChange = { viewModel.setModeLayout(mode, it) },
+            drawerOverride = drawerOverrides[mode.id],
+            drawerDefault = drawerDefault,
+            onDrawerOverrideChange = { viewModel.setDrawerOverride(mode.id, it) },
             appRulesSummary = restrictions.filter { it.modeId == mode.id }.let { list ->
                 val b = list.count { it.kind == AppRestrictionEntity.KIND_BLOCK }
                 val h = list.size - b

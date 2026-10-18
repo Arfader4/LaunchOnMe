@@ -164,6 +164,9 @@ fun ModeSettingsSheet(
     layout: ModeLayout = ModeLayout.DEFAULT,   // układ karty tego trybu
     globalIconCells: Int = 2,
     onLayoutChange: (ModeLayout) -> Unit = {},
+    drawerOverride: pl.rafal.contextlauncher.data.DrawerSettings? = null, // 1.7.0: własna szuflada tego trybu (null = ogólne)
+    drawerDefault: pl.rafal.contextlauncher.data.DrawerSettings = pl.rafal.contextlauncher.data.DrawerSettings.DEFAULT,
+    onDrawerOverrideChange: (pl.rafal.contextlauncher.data.DrawerSettings?) -> Unit = {},
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(
@@ -231,6 +234,9 @@ fun ModeSettingsSheet(
                     FilterChip(selected = layout.gap == gap, onClick = { onLayoutChange(layout.copy(gap = gap)) }, label = { Text(label) })
                 }
             }
+
+            // Szuflada aplikacji w tym trybie: widok, sortowanie, sekcje.
+            ModeDrawerSettingsSection(override = drawerOverride, global = drawerDefault, onOverrideChange = onDrawerOverrideChange)
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 6.dp))
 

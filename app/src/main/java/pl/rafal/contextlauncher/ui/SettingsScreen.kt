@@ -89,6 +89,7 @@ fun SettingsScreen(
     val labelScale by prefs.labelScale.flow.collectAsState()
     val showFolderLabels by prefs.showFolderLabels.flow.collectAsState()
     val folderAtBottom by prefs.folderAtBottom.flow.collectAsState()
+    val drawerDefault by viewModel.drawerDefault.collectAsState() // 1.7.0
     val widgetCorner by prefs.widgetCorner.flow.collectAsState()
     val wallpaperDim by prefs.wallpaperDim.flow.collectAsState()
     val widgetOpacity by prefs.widgetOpacity.flow.collectAsState()
@@ -310,6 +311,18 @@ fun SettingsScreen(
                     checked = folderAtBottom,
                     onChange = prefs.folderAtBottom::set,
                 )
+            }
+            // 1.7.0: szuflada aplikacji — ustawienia ogólne (OnMode może mieć własne w swoich ustawieniach).
+            item { Section(stringResource(R.string.dset_title)) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        stringResource(R.string.dset_global_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    DrawerSettingsSection(settings = drawerDefault, onChange = viewModel::setDrawerDefault)
+                }
             }
             item {
                 Toggle(

@@ -104,7 +104,10 @@ object Backup {
                     .put("autoSwitch", prefs.autoSwitch.value)
                     .put("uniformLook", prefs.uniformLook.value)
                     .put("showLabels", prefs.showLabels.value)
-                    .put("modeLayouts", prefs.modeLayouts.value), // odstępy i rozmiar ikon per tryb (klucze = id trybów)
+                    .put("modeLayouts", prefs.modeLayouts.value) // odstępy i rozmiar ikon per tryb (klucze = id trybów)
+                    .put("drawerDefault", prefs.drawerDefault.value) // 1.7.0: szuflada (ogólne + per OnMode)
+                    .put("drawerSettings", prefs.drawerSettings.value)
+                    .put("drawerOrders", prefs.drawerOrders.value),
             )
 
         // OnHand: notatki zawsze (to sam tekst), załączniki tylko w .zip.
@@ -378,6 +381,20 @@ object Backup {
             p.optString("modeLayouts").takeIf { it.isNotBlank() }?.let { text ->
                 val remapped = ModeLayout.parseAll(text).mapNotNull { (id, layout) -> modeIds[id]?.let { it to layout } }.toMap()
                 modeLayouts.set(ModeLayout.writeAll(remapped))
+            }
+            // 1.7.0: szuflada per OnMode — też po id trybów. Foldery dostają nowe id, więc ich miejsca
+            // w kolejności wypadają (wrócą na koniec listy); aplikacje zostają tam, gdzie były.
+            drawerDefault.set(p.optString("drawerDefault"))
+            p.optString("drawerSettings").takeIf { it.isNotBlank() }?.let { text ->
+                val remapped = DrawerSettings.parseAll(text).mapNotNull { (id, s) -> modeIds[id]?.let { it to s } }.toMap()
+                drawerSettings.set(DrawerSettings.writeAll(remapped))
+            }
+            p.optString("drawerOrders").takeIf { it.isNotBlank() }?.let { text ->
+                val remapped = DrawerOrder.parseAll(text).mapNotNull { (id, keys) ->
+                    val newId = if (id == DrawerOrder.GLOBAL) DrawerOrder.GLOBAL else modeIds[id]
+                    newId?.let { it to keys.filter { k -> k.startsWith(DrawerOrder.APP) } }
+                }.toMap()
+                drawerOrders.set(DrawerOrder.writeAll(remapped))
             }
         }
 

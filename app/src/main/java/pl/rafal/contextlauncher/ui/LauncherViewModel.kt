@@ -46,6 +46,9 @@ import pl.rafal.contextlauncher.data.CardFolderData
 import pl.rafal.contextlauncher.data.SHORTCUT_KEY
 import pl.rafal.contextlauncher.data.parseAppKey
 import pl.rafal.contextlauncher.data.ModeLayout
+import pl.rafal.contextlauncher.data.DrawerArrange
+import pl.rafal.contextlauncher.data.DrawerOrder
+import pl.rafal.contextlauncher.data.DrawerSettings
 import pl.rafal.contextlauncher.data.ModePlan
 import pl.rafal.contextlauncher.data.appItemFor
 import pl.rafal.contextlauncher.data.STACKED_PAGE
@@ -1240,6 +1243,76 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             else apps.filter { it.label.contains(needle, ignoreCase = true) }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    // --- Szuflada: ustawienia ogólne + własne per OnMode (1.7.0) ---
+
+    // Ustawienia ogólne (ekran Ustawienia) — obowiązują w każdym trybie bez własnych.
+    val drawerDefault: StateFlow<DrawerSettings> = appPrefs.drawerDefault.flow
+        .map { DrawerSettings.parse(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, DrawerSettings.parse(appPrefs.drawerDefault.value))
+
+    // Własne ustawienia szuflady (klucz = id trybu); brak wpisu = tryb idzie za ustawieniami ogólnymi.
+    val drawerOverrides: StateFlow<Map<Long, DrawerSettings>> = appPrefs.drawerSettings.flow
+        .map { DrawerSettings.parseAll(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, DrawerSettings.parseAll(appPrefs.drawerSettings.value))
+
+    // Własne kolejności: klucz = id trybu z własnymi ustawieniami albo DrawerOrder.GLOBAL.
+    // Zostają zapisane także po przełączeniu na A–Z / "najczęściej", więc powrót do "własnej" przywraca układ.
+    val drawerOrders: StateFlow<Map<Long, List<String>>> = appPrefs.drawerOrders.flow
+        .map { DrawerOrder.parseAll(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, DrawerOrder.parseAll(appPrefs.drawerOrders.value))
+
+    // Czyje ustawienia i kolejność obowiązują w trybie: jego własne albo ogólne.
+    private fun drawerScope(modeId: Long?): Long =
+        modeId?.takeIf { it in DrawerSettings.parseAll(appPrefs.drawerSettings.value) } ?: DrawerOrder.GLOBAL
+
+    // Szybka zmiana z szuflady: zmienia to, co w tym trybie obowiązuje (własne ustawienia trybu albo ogólne).
+    fun setDrawerSettings(modeId: Long?, settings: DrawerSettings) {
+        val scope = drawerScope(modeId)
+        if (scope == DrawerOrder.GLOBAL) setDrawerDefault(settings) else setDrawerOverride(scope, settings)
+    }
+
+    fun setDrawerDefault(settings: DrawerSettings) = appPrefs.drawerDefault.set(settings.toJson().toString())
+
+    // null = tryb wraca do ustawień ogólnych (jego zapisana kolejność zostaje na wypadek ponownego włączenia).
+    fun setDrawerOverride(modeId: Long, settings: DrawerSettings?) {
+        val all = DrawerSettings.parseAll(appPrefs.drawerSettings.value) // prosto z ustawień, jak przy układzie karty
+        if (settings != null && modeId !in all) {
+            // Włączenie własnych: kolejność startuje od ogólnej (jeśli tryb nie ma jeszcze swojej).
+            val orders = DrawerOrder.parseAll(appPrefs.drawerOrders.value)
+            val global = orders[DrawerOrder.GLOBAL]
+            if (modeId !in orders && global != null) appPrefs.drawerOrders.set(DrawerOrder.writeAll(orders + (modeId to global)))
+        }
+        appPrefs.drawerSettings.set(DrawerSettings.writeAll(if (settings == null) all - modeId else all + (modeId to settings)))
+    }
+
+    fun setDrawerOrder(modeId: Long?, arranged: List<String>) {
+        val scope = drawerScope(modeId)
+        val all = DrawerOrder.parseAll(appPrefs.drawerOrders.value)
+        val merged = DrawerArrange.mergeOrder(all[scope].orEmpty(), arranged)
+        appPrefs.drawerOrders.set(DrawerOrder.writeAll(all + (scope to merged)))
+    }
+
+    // Sekcja "Nowe": zainstalowane w ostatnich 7 dniach i jeszcze ani razu nie otwarte (w żadnym trybie).
+    val newApps: StateFlow<List<AppInfo>> =
+        combine(allApps, suggestionDao.observeLastLaunched(), appPrefs.drawerNewDismissed.flow, activeRestrictions) { apps, launches, dismissed, restricted ->
+            val last = launches.associate { "${android.content.ComponentName(it.packageName, it.className).flattenToString()}#${it.userSerial}" to it.lastLaunched }
+            val since = System.currentTimeMillis() - NEW_APP_WINDOW_MS
+            apps.asSequence()
+                .filter { it.installedAt > since && (last[it.key] ?: 0L) < it.installedAt }
+                .filterNot { it.key in dismissed || isHidden(it, restricted) }
+                .sortedByDescending { it.installedAt }
+                .take(COLUMNS * 2) // najwyżej dwa rzędy
+                .toList()
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun dismissNew(app: AppInfo) {
+        // Trzymamy tylko klucze aplikacji wciąż w oknie 7 dni (także tych już usuniętych z "Nowych") —
+        // lista nie rośnie w nieskończoność, a wcześniejsze usunięcia nie wracają.
+        val since = System.currentTimeMillis() - NEW_APP_WINDOW_MS
+        val stillNew = allApps.value.filter { it.installedAt > since }.map { it.key }.toSet()
+        appPrefs.drawerNewDismissed.set((appPrefs.drawerNewDismissed.value intersect stillNew) + app.key)
+    }
+
     // Lista aplikacji z ikonami jest kosztowna (setki bitmap), więc wczytujemy ją ponownie tylko wtedy,
     // gdy system zgłosi instalację/usunięcie/aktualizację (LauncherApps.Callback) — nie przy każdym powrocie.
     @Volatile private var appsDirty = true
@@ -2432,6 +2505,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         const val COLUMNS = 4 // kolumny w szufladzie aplikacji
+        const val NEW_APP_WINDOW_MS = 7L * 24 * 60 * 60 * 1000 // jak długo aplikacja jest "nowa" w szufladzie
         private const val MANUAL_GRACE_MS = 30 * 60_000L
     }
 }

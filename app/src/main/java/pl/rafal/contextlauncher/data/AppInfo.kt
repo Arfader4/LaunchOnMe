@@ -24,6 +24,7 @@ data class AppInfo(
     // Skrót aplikacji (np. "Nowy czat" z komunikatora). Wtedy to nie ekran startowy, tylko akcja wewnątrz aplikacji;
     // reszta launchera traktuje go jak ikonę (karta, foldery, przeciąganie), różni się tylko uruchamianie.
     val shortcutId: String? = null,
+    val installedAt: Long = 0L,   // 1.7.0: pierwsza instalacja (ms) — do sekcji "Nowe" w szufladzie
 ) {
     // Właściwość wyliczana, jak "public string PackageName => Component.PackageName;"
     val packageName: String get() = component.packageName
