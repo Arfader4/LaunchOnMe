@@ -49,6 +49,9 @@ import pl.rafal.contextlauncher.data.ModeLayout
 import pl.rafal.contextlauncher.data.DrawerArrange
 import pl.rafal.contextlauncher.data.DrawerOrder
 import pl.rafal.contextlauncher.data.DrawerSettings
+import pl.rafal.contextlauncher.data.DrawerSort
+import pl.rafal.contextlauncher.data.FolderSort
+import pl.rafal.contextlauncher.data.UsageSource
 import pl.rafal.contextlauncher.data.ModePlan
 import pl.rafal.contextlauncher.data.appItemFor
 import pl.rafal.contextlauncher.data.STACKED_PAGE
@@ -1292,6 +1295,63 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         appPrefs.drawerOrders.set(DrawerOrder.writeAll(all + (scope to merged)))
     }
 
+    // --- Sortowanie w folderach i źródło "najczęściej używane" (1.7.1) ---
+
+    val folderSorts: StateFlow<Map<Long, FolderSort>> = appPrefs.folderSorts.flow
+        .map { FolderSort.parseAll(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, FolderSort.parseAll(appPrefs.folderSorts.value))
+
+    // Zmiana sortowania nie kasuje własnej kolejności — wróci po ponownym wybraniu "własnej".
+    fun setFolderSort(folderId: Long, sort: DrawerSort) {
+        val all = FolderSort.parseAll(appPrefs.folderSorts.value)
+        val current = all[folderId] ?: FolderSort.DEFAULT
+        appPrefs.folderSorts.set(FolderSort.writeAll(all + (folderId to current.copy(sort = sort))))
+    }
+
+    fun setFolderOrder(folderId: Long, arranged: List<String>) {
+        val all = FolderSort.parseAll(appPrefs.folderSorts.value)
+        val current = all[folderId] ?: FolderSort.DEFAULT
+        val merged = DrawerArrange.mergeOrder(current.order, arranged)
+        appPrefs.folderSorts.set(FolderSort.writeAll(all + (folderId to current.copy(order = merged))))
+    }
+
+    // Dostęp do danych o użyciu nadaje się ręcznie (Ustawienia systemu → Dostęp do danych o użyciu) — sprawdzamy przez AppOps.
+    fun hasUsageAccess(): Boolean = runCatching {
+        val app = getApplication<android.app.Application>()
+        val ops = app.getSystemService(android.app.AppOpsManager::class.java)
+        ops.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), app.packageName) ==
+            android.app.AppOpsManager.MODE_ALLOWED
+    }.getOrDefault(false)
+
+    fun usageAccessIntent() = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
+
+    val usageSource: StateFlow<UsageSource> = appPrefs.usageSource.flow
+
+    fun setUsageSource(source: UsageSource) = appPrefs.usageSource.set(source)
+
+    // Czas używania z systemu z 30 dni, w minutach, po nazwie pakietu. Odświeżany przy każdym powrocie do launchera
+    // (refreshTick). Bez dostępu albo przy źródle "launcher" — pusto.
+    private val systemUsage: StateFlow<Map<String, Int>> =
+        combine(appPrefs.usageSource.flow, suggestionRefresh) { source, _ -> source }
+            .map { source ->
+                if (source != UsageSource.SYSTEM || !hasUsageAccess()) emptyMap()
+                else runCatching {
+                    val usm = getApplication<android.app.Application>().getSystemService(android.app.usage.UsageStatsManager::class.java)
+                    val end = System.currentTimeMillis()
+                    usm.queryAndAggregateUsageStats(end - USAGE_WINDOW_MS, end)
+                        .mapValues { (_, stats) -> (stats.totalTimeInForeground / 60_000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt() }
+                }.getOrDefault(emptyMap())
+            }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    // To, czym sortuje "najczęściej używane" (klucz = AppInfo.key): minuty z systemu, a gdy ich brak —
+    // własny licznik uruchomień w aktywnym OnMode (jak dotąd).
+    val usageScores: StateFlow<Map<String, Int>> =
+        combine(launchCounts, systemUsage, allApps) { counts, system, apps ->
+            if (system.isEmpty()) counts else apps.associate { it.key to (system[it.packageName] ?: 0) }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
     // Sekcja "Nowe": zainstalowane w ostatnich 7 dniach i jeszcze ani razu nie otwarte (w żadnym trybie).
     val newApps: StateFlow<List<AppInfo>> =
         combine(allApps, suggestionDao.observeLastLaunched(), appPrefs.drawerNewDismissed.flow, activeRestrictions) { apps, launches, dismissed, restricted ->
@@ -2505,6 +2565,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         const val COLUMNS = 4 // kolumny w szufladzie aplikacji
+        const val USAGE_WINDOW_MS = 30L * 24 * 60 * 60 * 1000 // okno danych o użyciu z systemu
         const val NEW_APP_WINDOW_MS = 7L * 24 * 60 * 60 * 1000 // jak długo aplikacja jest "nowa" w szufladzie
         private const val MANUAL_GRACE_MS = 30 * 60_000L
     }

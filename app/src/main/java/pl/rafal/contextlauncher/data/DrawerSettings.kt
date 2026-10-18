@@ -78,3 +78,35 @@ object DrawerOrder {
     fun writeAll(map: Map<Long, List<String>>): String =
         JSONObject().apply { map.forEach { (id, keys) -> put(id.toString(), JSONArray(keys)) } }.toString()
 }
+
+// 1.7.1: sortowanie wewnątrz folderu szuflady (jedno dla folderu, niezależne od OnMode).
+// Klucze w kolejności: "f:<id podfolderu>", "a:<AppInfo.key>" — klucz aplikacji przeżywa przeniesienie i kopię zapasową.
+data class FolderSort(val sort: DrawerSort = DrawerSort.ALPHA, val order: List<String> = emptyList()) {
+    fun toJson(): JSONObject = JSONObject().put("sort", sort.name).put("order", JSONArray(order))
+
+    companion object {
+        val DEFAULT = FolderSort()
+
+        fun parseAll(json: String): Map<Long, FolderSort> = runCatching {
+            val o = JSONObject(json)
+            o.keys().asSequence().mapNotNull { k ->
+                val id = k.toLongOrNull() ?: return@mapNotNull null
+                val v = o.optJSONObject(k) ?: return@mapNotNull null
+                val arr = v.optJSONArray("order")
+                id to FolderSort(
+                    sort = runCatching { DrawerSort.valueOf(v.optString("sort")) }.getOrDefault(DrawerSort.ALPHA),
+                    order = if (arr == null) emptyList() else List(arr.length()) { arr.getString(it) },
+                )
+            }.toMap()
+        }.getOrDefault(emptyMap())
+
+        fun writeAll(map: Map<Long, FolderSort>): String =
+            JSONObject().apply { map.forEach { (id, s) -> put(id.toString(), s.toJson()) } }.toString()
+    }
+}
+
+// Klucze "f:<stare id>" po przywróceniu kopii → nowe id folderów (folder, którego już nie ma, wypada).
+fun remapFolderKeys(keys: List<String>, folderIds: Map<Long, Long>): List<String> = keys.mapNotNull { k ->
+    if (!k.startsWith(DrawerOrder.FOLDER)) k
+    else k.removePrefix(DrawerOrder.FOLDER).toLongOrNull()?.let { folderIds[it] }?.let { DrawerOrder.FOLDER + it }
+}

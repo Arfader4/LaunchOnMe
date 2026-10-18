@@ -73,6 +73,11 @@ import androidx.compose.ui.window.DialogProperties
 import pl.rafal.contextlauncher.data.AppInfo
 import pl.rafal.contextlauncher.data.FolderApp
 import pl.rafal.contextlauncher.data.FolderTree
+import pl.rafal.contextlauncher.data.DrawerArrange
+import pl.rafal.contextlauncher.data.DrawerItem
+import pl.rafal.contextlauncher.data.DrawerOrder
+import pl.rafal.contextlauncher.data.DrawerSort
+import pl.rafal.contextlauncher.data.FolderSort
 import pl.rafal.contextlauncher.data.db.FolderEntity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -94,6 +99,11 @@ class FolderCallbacks(
     val sizeOnCard: (folderId: Long) -> Pair<Int, Int>? = { null },  // rozmiar widżetu na aktywnej karcie
     val modeName: String = "",
     val onCopyToCard: ((folderId: Long) -> Unit)? = null, // niezależna kopia na kartę (tylko dla tego trybu)
+    // 1.7.1: sortowanie wewnątrz folderu (A–Z / najczęściej / własna kolejność).
+    val sortOf: (folderId: Long) -> FolderSort = { FolderSort.DEFAULT },
+    val onSortChange: (folderId: Long, DrawerSort) -> Unit = { _, _ -> },
+    val onOrderChange: (folderId: Long, keys: List<String>) -> Unit = { _, _ -> },
+    val usesOf: (AppInfo) -> Int = { 0 }, // ile razy / jak długo używana (do "najczęściej")
 )
 
 // Przeglądarka folderów: ścieżka, akcje, podfoldery i aplikacje bieżącego folderu.
@@ -110,6 +120,8 @@ fun FolderBrowser(
 ) {
     var currentId by rememberSaveable(startFolderId) { mutableStateOf(startFolderId) }
     val current = tree.folder(currentId)
+    var arranging by remember(currentId) { mutableStateOf(false) } // układanie własnej kolejności w tym folderze
+    val folderSort = current?.let { callbacks.sortOf(it.id) } ?: FolderSort.DEFAULT
 
     // Okna dialogowe. Trzymają folder, którego dotyczą — bieżący (menu ⋮) albo kafelek (przytrzymanie).
     var newFolderOpen by remember { mutableStateOf(false) }
@@ -172,6 +184,12 @@ fun FolderBrowser(
             if (current != null) {
                 AssistChip(onClick = { pickAppsOpen = true }, label = { Text(stringResource(R.string.folder_add_apps_button)) })
                 Spacer(Modifier.weight(1f))
+                SortChip(
+                    sort = folderSort.sort,
+                    onSortChange = { callbacks.onSortChange(current.id, it) },
+                    onArrange = { arranging = true },
+                    compact = true,
+                )
                 OverflowMenu(menuFor(current))
             }
         }
@@ -185,8 +203,7 @@ fun FolderBrowser(
         }
         Spacer(Modifier.height(8.dp))
 
-        val subfolders = tree.subfolders(currentId)
-        val apps = current?.let { tree.apps(it.id) }.orEmpty()
+        val (subfolders, apps) = arrangeFolder(tree, currentId, folderSort, callbacks.usesOf)
 
         if (subfolders.isEmpty() && apps.isEmpty()) {
             Text(
@@ -201,7 +218,24 @@ fun FolderBrowser(
             )
         }
 
-        LazyVerticalGrid(
+        if (arranging && current != null) {
+            // Podfoldery zostają na górze folderu — układ ustala kolejność w obu grupach.
+            ReorderGrid<Any>(
+                initial = subfolders + apps.distinctBy { it.app.key },
+                key = { item -> folderItemKey(item) },
+                label = { item -> if (item is FolderEntity) item.name else (item as FolderApp).app.label },
+                hint = stringResource(R.string.drawer_folder_arrange_hint),
+                onDone = { keys ->
+                    callbacks.onOrderChange(current.id, keys)
+                    if (folderSort.sort != DrawerSort.MANUAL) callbacks.onSortChange(current.id, DrawerSort.MANUAL)
+                    arranging = false
+                },
+                onCancel = { arranging = false },
+            ) { item ->
+                if (item is FolderEntity) FolderArrangeTile(item, tree)
+                else AppTile(app = (item as FolderApp).app, onClick = {}, menu = emptyList(), enabled = false)
+            }
+        } else LazyVerticalGrid(
             columns = GridCells.Fixed(LauncherViewModel.COLUMNS),
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -335,6 +369,32 @@ fun FolderBrowser(
             onDismiss = { appToMove = null },
         )
     }
+}
+
+// Klucz pozycji folderu w kolejności (jak w szufladzie): "f:<id>" podfolderu, "a:<AppInfo.key>" aplikacji.
+private fun folderItemKey(item: Any): String = when (item) {
+    is FolderEntity -> DrawerOrder.FOLDER + item.id
+    is FolderApp -> DrawerOrder.APP + item.app.key
+    else -> item.toString()
+}
+
+// Zawartość folderu w wybranym porządku. W korzeniu (lista folderów) zostaje kolejność alfabetyczna z bazy.
+private fun arrangeFolder(
+    tree: FolderTree,
+    folderId: Long?,
+    sort: FolderSort,
+    uses: (AppInfo) -> Int,
+): Pair<List<FolderEntity>, List<FolderApp>> {
+    val subs = tree.subfolders(folderId)
+    val apps = folderId?.let { tree.apps(it) }.orEmpty()
+    if (folderId == null) return subs to apps
+    fun folderUses(id: Long): Int = tree.apps(id).sumOf { uses(it.app) } + tree.subfolders(id).sumOf { folderUses(it.id) }
+    val items = subs.map { DrawerItem(folderItemKey(it), it.name, isFolder = true, uses = folderUses(it.id)) } +
+        apps.map { DrawerItem(folderItemKey(it), it.app.label, isFolder = false, uses = uses(it.app)) }
+    val rank = DrawerArrange.arrange(items, sort.sort, foldersFirst = true, manualOrder = sort.order)
+        .withIndex().associate { (i, item) -> item.key to i }
+    // sortedBy jest stabilne (jak OrderBy w LINQ), więc ewentualne duplikaty zostają obok siebie.
+    return subs.sortedBy { rank[folderItemKey(it)] ?: Int.MAX_VALUE } to apps.sortedBy { rank[folderItemKey(it)] ?: Int.MAX_VALUE }
 }
 
 @Composable

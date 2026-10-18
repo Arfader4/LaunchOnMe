@@ -23,6 +23,14 @@ enum class AutoCountdown(@StringRes private val labelRes: Int) {
     val label: String get() = AppText.get(labelRes)
 }
 
+// 1.7.1: skąd sortowanie "najczęściej używane" bierze dane: własny licznik uruchomień (per OnMode)
+// albo czas użycia z systemu (UsageStatsManager, 30 dni; wymaga ręcznie nadanego dostępu).
+enum class UsageSource(@StringRes private val labelRes: Int) {
+    LAUNCHER(R.string.data_usage_launcher), SYSTEM(R.string.data_usage_system);
+
+    val label: String get() = AppText.get(labelRes)
+}
+
 // Ogólne ustawienia launchera (ekran Ustawienia). Każde ustawienie to StateFlow, więc UI odświeża się samo.
 // Jedna instancja na proces (singleton): kafelek, skróty i automat muszą widzieć te same wartości co ekran.
 // Wcześniej każdy tworzył własną kopię i np. launcher nie wiedział, że kafelek właśnie zmienił tryb.
@@ -105,6 +113,13 @@ class AppPrefs private constructor(context: Context) {
     val drawerDefault = Setting("drawer_default", "", { k, d -> getString(k, d) ?: d }, { k, v -> putString(k, v) })
     val drawerSettings = Setting("drawer_settings", "{}", { k, d -> getString(k, d) ?: d }, { k, v -> putString(k, v) })
     val drawerOrders = Setting("drawer_orders", "{}", { k, d -> getString(k, d) ?: d }, { k, v -> putString(k, v) })
+    val folderSorts = Setting("folder_sorts", "{}", { k, d -> getString(k, d) ?: d }, { k, v -> putString(k, v) }) // 1.7.1: FolderSort
+    val usageSource = Setting(
+        "usage_source",
+        UsageSource.LAUNCHER,
+        { k, d -> runCatching { UsageSource.valueOf(getString(k, d.name)!!) }.getOrDefault(d) },
+        { k, v -> putString(k, v.name) },
+    )
     // Aplikacje ręcznie usunięte z sekcji "Nowe" (AppInfo.key).
     val drawerNewDismissed = Setting(
         "drawer_new_dismissed",

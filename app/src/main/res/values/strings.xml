@@ -1203,4 +1203,12 @@
     <string name="dset_own_on">Different from Settings — changes apply only here</string>
     <string name="dset_own_off">Now as in Settings: %1$s</string>
     <string name="dset_global_hint">Used in every OnMode without its own drawer settings (set in the OnMode settings).</string>
+    <!-- 1.7.1 -->
+    <string name="data_usage_launcher">Launches in this OnMode</string>
+    <string name="data_usage_system">Usage time (system, 30 days)</string>
+    <string name="set_usage_source_title">“Most used” sorting counts</string>
+    <string name="set_usage_source_sub">Applies to the app drawer and folders</string>
+    <string name="set_usage_need_access">No usage access yet — until you grant it, launcher launches are used. Tap the option again to open system settings.</string>
+    <string name="set_perm_usage">Usage access (“Most used” from system)</string>
+    <string name="drawer_folder_arrange_hint">Touch and hold an icon, then drag it to a new spot. The order is saved in this folder (in every OnMode).</string>
 </resources>

@@ -1219,4 +1219,12 @@
     <string name="dset_own_on">Inna niż w Ustawieniach — zmiany działają tylko tutaj</string>
     <string name="dset_own_off">Teraz jak w Ustawieniach: %1$s</string>
     <string name="dset_global_hint">Obowiązują w każdym OnMode bez własnych ustawień szuflady (ustawiasz je w ustawieniach OnMode).</string>
+    <!-- 1.7.1 -->
+    <string name="data_usage_launcher">Uruchomienia w tym OnMode</string>
+    <string name="data_usage_system">Czas użycia (system, 30 dni)</string>
+    <string name="set_usage_source_title">Sortowanie „najczęściej używane” liczy</string>
+    <string name="set_usage_source_sub">Dotyczy szuflady aplikacji i folderów</string>
+    <string name="set_usage_need_access">Brak dostępu do danych o użyciu — do czasu nadania liczą się uruchomienia z launchera. Dotknij opcji ponownie, by otworzyć ustawienia systemu.</string>
+    <string name="set_perm_usage">Dostęp do danych o użyciu („najczęściej” z systemu)</string>
+    <string name="drawer_folder_arrange_hint">Przytrzymaj ikonę i przeciągnij ją w nowe miejsce. Kolejność zapisze się w tym folderze (we wszystkich OnModes).</string>
 </resources>

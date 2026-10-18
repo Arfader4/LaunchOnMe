@@ -29,6 +29,8 @@
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <!-- Ustawienia trybu: jasność, wygaszanie, autoobracanie (osobna zgoda "Modyfikowanie ustawień systemu"). -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <!-- 1.7.1: "najczęściej używane" z danych systemu (dostęp nadaje użytkownik w Ustawieniach → Dostęp do danych o użyciu) -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <!-- Odczyt, czy NFC jest włączone. -->
     <uses-permission android:name="android.permission.NFC" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />

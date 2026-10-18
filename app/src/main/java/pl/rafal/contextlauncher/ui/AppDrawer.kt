@@ -215,17 +215,18 @@ fun AppDrawer(
     ) {
         if (arranging) {
             // Układanie własnej kolejności: w zakładkach same aplikacje, w jednej liście — z folderami.
-            ArrangeGrid(
+            ReorderGrid(
                 initial = entries.filter { integrated || it is DrawerEntry.App },
-                folderTree = folderTree,
-                collator = collator,
+                key = { it.key },
+                label = { it.label },
+                hint = stringResource(R.string.drawer_arrange_hint),
                 onDone = { keys ->
                     onManualOrderChange(keys)
                     if (settings.sort != DrawerSort.MANUAL) onSettingsChange(settings.copy(sort = DrawerSort.MANUAL))
                     arranging = false
                 },
                 onCancel = { arranging = false },
-            )
+            ) { entry -> ArrangeTile(entry, folderTree) }
         } else {
             DrawerContent(
                 integrated = integrated,
@@ -418,7 +419,6 @@ private fun folderUses(tree: FolderTree, id: Long, counts: Map<String, Int>): In
     tree.apps(id).sumOf { counts[it.app.key] ?: 0 } + tree.subfolders(id).sumOf { folderUses(tree, it.id, counts) }
 
 // Przycisk sortowania w nagłówku szuflady: szybka zmiana (w tym OnMode albo ogólnie) + układanie + skrót do ustawień.
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SortMenu(
     settings: DrawerSettings,
@@ -427,30 +427,17 @@ private fun SortMenu(
     onNewFolder: (() -> Unit)?,
     onOpenDrawerSettings: (() -> Unit)?,
 ) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        AssistChip(onClick = { open = true }, label = { Text("⇅ " + sortShortLabel(settings.sort)) })
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DrawerSort.entries.forEach { sort ->
-                DropdownMenuItem(
-                    text = { Text(drawerSortLabel(sort)) },
-                    leadingIcon = { Text(if (sort == settings.sort) "✓" else " ") },
-                    onClick = {
-                        open = false
-                        onSettingsChange(settings.copy(sort = sort))
-                    },
-                )
-            }
-            HorizontalDivider()
-            DropdownMenuItem(text = { Text(stringResource(R.string.drawer_arrange)) }, onClick = { open = false; onArrange() })
-            if (onNewFolder != null) {
-                DropdownMenuItem(text = { Text(stringResource(R.string.folder_new_folder)) }, onClick = { open = false; onNewFolder() })
-            }
-            if (onOpenDrawerSettings != null) {
-                DropdownMenuItem(text = { Text(stringResource(R.string.drawer_settings)) }, onClick = { open = false; onOpenDrawerSettings() })
-            }
-        }
-    }
+    val newFolder = stringResource(R.string.folder_new_folder)
+    val drawerSettings = stringResource(R.string.drawer_settings)
+    SortChip(
+        sort = settings.sort,
+        onSortChange = { onSettingsChange(settings.copy(sort = it)) },
+        onArrange = onArrange,
+        extra = listOfNotNull(
+            onNewFolder?.let { MenuAction(newFolder, it) },
+            onOpenDrawerSettings?.let { MenuAction(drawerSettings, it) },
+        ),
+    )
 }
 
 @Composable
@@ -458,13 +445,6 @@ fun drawerSortLabel(sort: DrawerSort): String = when (sort) {
     DrawerSort.ALPHA -> stringResource(R.string.drawer_sort_alpha)
     DrawerSort.MOST_USED -> stringResource(R.string.drawer_sort_most_used)
     DrawerSort.MANUAL -> stringResource(R.string.drawer_sort_manual)
-}
-
-@Composable
-private fun sortShortLabel(sort: DrawerSort): String = when (sort) {
-    DrawerSort.ALPHA -> stringResource(R.string.drawer_sort_alpha_short)
-    DrawerSort.MOST_USED -> stringResource(R.string.drawer_sort_most_used_short)
-    DrawerSort.MANUAL -> stringResource(R.string.drawer_sort_manual_short)
 }
 
 @Composable
@@ -588,147 +568,27 @@ private fun AllAppsTab(
     }
 }
 
-// Układanie własnej kolejności: przytrzymaj ikonę i przeciągnij na nowe miejsce (pozostałe się rozstępują).
-// Zmiany trafiają do zapisu dopiero po "Gotowe"; "Anuluj" i Wstecz zostawiają poprzednią kolejność.
+// Kafelek w trybie układania: ikona bez menu i bez reakcji na dotyk (gest przejmuje siatka).
 @Composable
-private fun ArrangeGrid(
-    initial: List<DrawerEntry>,
-    folderTree: FolderTree,
-    collator: Collator,
-    onDone: (List<String>) -> Unit,
-    onCancel: () -> Unit,
-) {
-    var list by remember { mutableStateOf(initial) }
-    var dragKey by remember { mutableStateOf<String?>(null) }
-    var dragOffset by remember { mutableStateOf(Offset.Zero) }
-    var awaitIndex by remember { mutableStateOf(-1) } // po zamianie: czekamy, aż układ siatki ją pokaże
-    val gridState = rememberLazyGridState()
-    val scope = rememberCoroutineScope()
-    val haptics = LocalHapticFeedback.current
-    val edge = with(LocalDensity.current) { 64.dp.toPx() }
+private fun ArrangeTile(entry: DrawerEntry, folderTree: FolderTree) {
+    when (entry) {
+        is DrawerEntry.App -> AppTile(app = entry.app, onClick = {}, menu = emptyList(), enabled = false)
+        is DrawerEntry.Folder -> FolderArrangeTile(entry.folder, folderTree)
+    }
+}
 
-    BackHandler(onBack = onCancel)
-
-    Column {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        ) {
-            Text(
-                stringResource(R.string.drawer_arrange_title),
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            // Punkt wyjścia od nowa: A–Z (domyślna "własna" kolejność).
-            TextButton(onClick = { list = list.sortedWith(compareBy<DrawerEntry, Any>(collator) { it.label }) }) {
-                Text(stringResource(R.string.drawer_sort_alpha_short))
-            }
-            TextButton(onClick = onCancel) { Text(stringResource(R.string.common_cancel)) }
-            Button(onClick = { onDone(list.map { it.key }) }) { Text(stringResource(R.string.drawer_arrange_done)) }
-        }
+// Folder w trybie układania (szuflada i podfoldery w folderze): miniatura + nazwa, bez menu.
+@Composable
+fun FolderArrangeTile(folder: FolderEntity, folderTree: FolderTree) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+        FolderBadge(folder, folderTree.previewApps(folder.id), 52.dp)
         Text(
-            stringResource(R.string.drawer_arrange_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 8.dp),
+            folder.name,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp),
         )
-
-        LazyVerticalGrid(
-            state = gridState,
-            columns = GridCells.Fixed(LauncherViewModel.COLUMNS),
-            contentPadding = PaddingValues(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    fun LazyGridItemInfo.hit(p: Offset) =
-                        p.x >= offset.x && p.x < offset.x + size.width && p.y >= offset.y && p.y < offset.y + size.height
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { pos ->
-                            gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.hit(pos) }?.let {
-                                dragKey = it.key as? String
-                                dragOffset = Offset.Zero
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            }
-                        },
-                        onDrag = { change, amount ->
-                            val key = dragKey
-                            val info = gridState.layoutInfo
-                            val current = if (key == null) null else info.visibleItemsInfo.firstOrNull { it.key == key }
-                            if (key != null && current != null) {
-                                change.consume()
-                                dragOffset += amount
-                                val center = Offset(
-                                    current.offset.x + current.size.width / 2f,
-                                    current.offset.y + current.size.height / 2f,
-                                ) + dragOffset
-                                // Po zamianie stare położenie z układu jest nieaktualne do następnej klatki —
-                                // do tego czasu nie sprawdzamy kolejnej zamiany (inaczej ikony "migają" tam i z powrotem).
-                                if (awaitIndex >= 0 && current.index == awaitIndex) awaitIndex = -1
-                                // Środek przeciąganej ikony nad inną → zamiana miejsc (reszta przesuwa się o jedno).
-                                val target = if (awaitIndex >= 0) null
-                                else info.visibleItemsInfo.firstOrNull { it.key != key && it.hit(center) }
-                                val from = list.indexOfFirst { it.key == key }
-                                val to = if (target == null) -1 else list.indexOfFirst { it.key == target.key }
-                                if (target != null && from >= 0 && to >= 0) {
-                                    list = list.toMutableList().apply { add(to, removeAt(from)) }
-                                    awaitIndex = to
-                                    // Ikona "przeskoczyła" w układzie na miejsce celu — przesunięcie liczymy od nowego miejsca.
-                                    dragOffset += Offset(
-                                        (current.offset.x - target.offset.x).toFloat(),
-                                        (current.offset.y - target.offset.y).toFloat(),
-                                    )
-                                }
-                                // Przy krawędzi lista sama się przewija; ikona zostaje pod palcem.
-                                val y = change.position.y
-                                val step = when {
-                                    y < edge -> -24f
-                                    y > info.viewportSize.height - edge -> 24f
-                                    else -> 0f
-                                }
-                                if (step != 0f) scope.launch {
-                                    val used = gridState.scrollBy(step)
-                                    dragOffset += Offset(0f, used)
-                                }
-                            }
-                        },
-                        onDragEnd = { dragKey = null; dragOffset = Offset.Zero; awaitIndex = -1 },
-                        onDragCancel = { dragKey = null; dragOffset = Offset.Zero; awaitIndex = -1 },
-                    )
-                },
-        ) {
-            items(list, key = { it.key }) { entry ->
-                val dragging = entry.key == dragKey
-                Box(
-                    if (dragging) Modifier
-                        .zIndex(1f)
-                        .graphicsLayer { translationX = dragOffset.x; translationY = dragOffset.y }
-                        .scale(1.08f)
-                    else Modifier.animateItem(),
-                ) {
-                    when (entry) {
-                        is DrawerEntry.App -> AppTile(app = entry.app, onClick = {}, menu = emptyList(), enabled = false)
-                        is DrawerEntry.Folder -> Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            FolderBadge(entry.folder, folderTree.previewApps(entry.folder.id), 52.dp)
-                            Text(
-                                entry.folder.name,
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

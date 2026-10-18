@@ -90,6 +90,7 @@ fun SettingsScreen(
     val showFolderLabels by prefs.showFolderLabels.flow.collectAsState()
     val folderAtBottom by prefs.folderAtBottom.flow.collectAsState()
     val drawerDefault by viewModel.drawerDefault.collectAsState() // 1.7.0
+    val usageSource by viewModel.usageSource.collectAsState()    // 1.7.1
     val widgetCorner by prefs.widgetCorner.flow.collectAsState()
     val wallpaperDim by prefs.wallpaperDim.flow.collectAsState()
     val widgetOpacity by prefs.widgetOpacity.flow.collectAsState()
@@ -324,6 +325,25 @@ fun SettingsScreen(
                     DrawerSettingsSection(settings = drawerDefault, onChange = viewModel::setDrawerDefault)
                 }
             }
+            // 1.7.1: skąd "najczęściej używane" (w szufladzie i w folderach) bierze dane.
+            item {
+                val usageAccess = remember(refreshTick) { viewModel.hasUsageAccess() }
+                Choice(
+                    title = stringResource(R.string.set_usage_source_title),
+                    subtitle = if (usageSource == pl.rafal.contextlauncher.data.UsageSource.SYSTEM && !usageAccess)
+                        stringResource(R.string.set_usage_need_access) else stringResource(R.string.set_usage_source_sub),
+                    options = pl.rafal.contextlauncher.data.UsageSource.entries.toList(),
+                    selected = usageSource,
+                    labelOf = { it.label },
+                    onSelect = { source ->
+                        viewModel.setUsageSource(source)
+                        // Bez dostępu od razu prowadzimy do ekranu systemu, gdzie się go nadaje.
+                        if (source == pl.rafal.contextlauncher.data.UsageSource.SYSTEM && !viewModel.hasUsageAccess()) {
+                            open(viewModel.usageAccessIntent())
+                        }
+                    },
+                )
+            }
             item {
                 Toggle(
                     title = stringResource(R.string.set_dots_title),
@@ -399,6 +419,9 @@ fun SettingsScreen(
                     }
                     PermissionRow(stringResource(R.string.set_perm_dnd), status.dnd) { open(viewModel.dndAccessIntent()) }
                     PermissionRow(stringResource(R.string.set_perm_write_settings), status.writeSettings) { open(viewModel.writeSettingsIntent()) }
+                    PermissionRow(stringResource(R.string.set_perm_usage), remember(refreshTick) { viewModel.hasUsageAccess() }) {
+                        open(viewModel.usageAccessIntent())
+                    }
                     PermissionRow(stringResource(R.string.set_perm_notifications), status.notificationDots) {
                         open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     }

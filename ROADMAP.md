@@ -20,7 +20,8 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.6.2 | Runda 18.10, paczka 2a: czas oczekiwania automatu (0–60 s) i odliczanie (brak / pasek / kółko) | 1 |
 | 1.6.3 | Runda 18.10, paczka 2b: OnModes — wbudowane tryby „… On Mode”, tytuły OnModes | 1 |
 | 1.7.0 | Szuflada aplikacji: dwa widoki, sortowanie (A–Z / najczęściej / własna), sekcja „Nowe”, ustawienia per OnMode | 1 |
-Razem od V1: 43 paczki. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
+| 1.7.1 | Szuflada: sortowanie i własna kolejność w folderach, „najczęściej używane” z danych systemu | 1 |
+Razem od V1: 44 paczki. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).
@@ -359,10 +360,14 @@ Stan wyjściowy: 1.6.0 = gałęzie `feature/stickonme-perf`, `feature/onhand`, `
       jego aplikacji), własna kolejność — menu ⇅ → „Ułóż ręcznie…”: przytrzymaj i przeciągnij, „Gotowe” zapisuje.
       Kolejność zostaje zapamiętana po przełączeniu na inne sortowanie; nowe aplikacje dopisują się na końcu (A–Z).
       Logika czysta i z testami: `data/DrawerArrange.kt` + `DrawerArrangeTest`.
-- [ ] „Najczęściej używane” z danych systemowych (UsageStatsManager, dostęp nadawany ręcznie) — na razie tylko własny licznik.
+- [x] 1.7.1: „Najczęściej używane” z danych systemu — Ustawienia → „Sortowanie »najczęściej używane« liczy”: uruchomienia
+      w tym OnMode (licznik launchera) albo czas użycia z 30 dni (UsageStatsManager, `PACKAGE_USAGE_STATS`, dostęp
+      nadawany ręcznie; bez niego zostaje licznik). `LauncherViewModel.usageScores`; wiersz w „Uprawnieniach”.
 - [x] 1.7.0: sekcja „Nowe”: zainstalowane w ostatnich 7 dniach i jeszcze nieotwarte (w żadnym trybie); znika po
       otwarciu albo z menu „Usuń z »Nowych«” (`LauncherViewModel.newApps`, `AppInfo.installedAt`).
-- [ ] Folder: układ ręczny, w edycji opcja „Sortuj”.
+- [x] 1.7.1: folder w szufladzie: ⇅ w pasku akcji folderu — A–Z / najczęściej / własna kolejność („Ułóż ręcznie…”,
+      podfoldery zostają na górze). Jedno ustawienie na folder (`FolderSort`, prefs `folder_sorts`), w kopii zapasowej
+      z przepięciem id folderów. Siatka układania wspólna dla szuflady i folderów: `ui/ReorderGrid.kt` (`ReorderGrid`, `SortChip`).
 - [x] 1.7.0: ustawienia ogólne (Ustawienia → Szuflada aplikacji) + opcjonalnie własne w OnMode (arkusz trybu →
       „Własna szuflada w tym OnMode”; własna kolejność też per tryb). Zmiana trybu przy otwartej szufladzie przestawia
       ją dopiero po zamknięciu. Rząd „Często w …” można wyłączyć (chowa się sam przy sortowaniu „najczęściej”).

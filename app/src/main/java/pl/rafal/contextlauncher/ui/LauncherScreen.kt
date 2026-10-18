@@ -254,6 +254,8 @@ private fun LauncherContent(
     val drawerOverrides by viewModel.drawerOverrides.collectAsState()
     val drawerOrders by viewModel.drawerOrders.collectAsState()
     val newApps by viewModel.newApps.collectAsState()
+    val folderSorts by viewModel.folderSorts.collectAsState()   // 1.7.1
+    val usageScores by viewModel.usageScores.collectAsState()   // "najczęściej": system albo licznik launchera
     val blockedLaunch by viewModel.blockedLaunch.collectAsState()
     val restrictions by viewModel.restrictions.collectAsState()
     val glance by viewModel.glance.collectAsState()
@@ -522,6 +524,10 @@ private fun LauncherContent(
             viewModel.copyDrawerFolderToCard(folderId)
             Toast.makeText(context, context.getString(R.string.ls_toast_folder_copied, activeMode?.name.orEmpty()), Toast.LENGTH_SHORT).show()
         },
+        sortOf = { folderId -> folderSorts[folderId] ?: pl.rafal.contextlauncher.data.FolderSort.DEFAULT },
+        onSortChange = viewModel::setFolderSort,
+        onOrderChange = viewModel::setFolderOrder,
+        usesOf = { app -> usageScores[app.key] ?: 0 },
     )
 
     // Home naciśnięty na launcherze: zamknij wszystko i wróć do karty.
@@ -1167,7 +1173,7 @@ private fun LauncherContent(
                 },
                 settings = drawerOverrides[drawerModeId] ?: drawerDefault,
                 onSettingsChange = { viewModel.setDrawerSettings(drawerModeId, it) },
-                launchCounts = launchCounts,
+                launchCounts = usageScores,
                 manualOrder = drawerOrders[drawerScope].orEmpty(),
                 onManualOrderChange = { viewModel.setDrawerOrder(drawerModeId, it) },
                 newApps = newApps,
@@ -1817,7 +1823,7 @@ private fun LauncherContent(
             CardFolderDialog(
                 root = data,
                 lookup = { appsByKey[it] },
-                launchCounts = launchCounts,
+                launchCounts = usageScores, // 1.7.1: folder na karcie też liczy wg źródła z Ustawień
                 allApps = installedApps,
                 modes = modes,
                 currentModeId = activeMode?.id,

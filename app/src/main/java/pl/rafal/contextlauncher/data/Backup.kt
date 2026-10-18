@@ -107,7 +107,9 @@ object Backup {
                     .put("modeLayouts", prefs.modeLayouts.value) // odstępy i rozmiar ikon per tryb (klucze = id trybów)
                     .put("drawerDefault", prefs.drawerDefault.value) // 1.7.0: szuflada (ogólne + per OnMode)
                     .put("drawerSettings", prefs.drawerSettings.value)
-                    .put("drawerOrders", prefs.drawerOrders.value),
+                    .put("drawerOrders", prefs.drawerOrders.value)
+                    .put("folderSorts", prefs.folderSorts.value) // 1.7.1
+                    .put("usageSource", prefs.usageSource.value.name),
             )
 
         // OnHand: notatki zawsze (to sam tekst), załączniki tylko w .zip.
@@ -237,6 +239,7 @@ object Backup {
         var newHomeId: Long? = null
         // Nowe id nadaje baza, więc budujemy mapy "stare id → nowe id" (jak przy imporcie z kluczami IDENTITY).
         val modeIds = mutableMapOf<Long, Long>()
+        val folderIds = mutableMapOf<Long, Long>() // 1.7.1: poza transakcją — potrzebne też przy ustawieniach szuflady
 
         db.withTransaction {
             db.modeDao().deleteAll()   // kaskadowo: karty, OnHand, reguły, statystyki
@@ -247,7 +250,6 @@ object Backup {
             }
 
             // Foldery wstawiamy "od korzenia w dół", bo podfolder potrzebuje już istniejącego rodzica.
-            val folderIds = mutableMapOf<Long, Long>()
             var pending = json.getJSONArray("folders").objects()
             while (pending.isNotEmpty()) {
                 val ready = pending.filter { o -> o.optLongOrNull("parentId")?.let { it in folderIds } ?: true }
@@ -382,8 +384,7 @@ object Backup {
                 val remapped = ModeLayout.parseAll(text).mapNotNull { (id, layout) -> modeIds[id]?.let { it to layout } }.toMap()
                 modeLayouts.set(ModeLayout.writeAll(remapped))
             }
-            // 1.7.0: szuflada per OnMode — też po id trybów. Foldery dostają nowe id, więc ich miejsca
-            // w kolejności wypadają (wrócą na koniec listy); aplikacje zostają tam, gdzie były.
+            // 1.7.0: szuflada per OnMode — też po id trybów; foldery w kolejności → nowe id folderów (1.7.1).
             drawerDefault.set(p.optString("drawerDefault"))
             p.optString("drawerSettings").takeIf { it.isNotBlank() }?.let { text ->
                 val remapped = DrawerSettings.parseAll(text).mapNotNull { (id, s) -> modeIds[id]?.let { it to s } }.toMap()
@@ -392,10 +393,17 @@ object Backup {
             p.optString("drawerOrders").takeIf { it.isNotBlank() }?.let { text ->
                 val remapped = DrawerOrder.parseAll(text).mapNotNull { (id, keys) ->
                     val newId = if (id == DrawerOrder.GLOBAL) DrawerOrder.GLOBAL else modeIds[id]
-                    newId?.let { it to keys.filter { k -> k.startsWith(DrawerOrder.APP) } }
+                    newId?.let { it to remapFolderKeys(keys, folderIds) }
                 }.toMap()
                 drawerOrders.set(DrawerOrder.writeAll(remapped))
             }
+            p.optString("folderSorts").takeIf { it.isNotBlank() }?.let { text ->
+                val remapped = FolderSort.parseAll(text).mapNotNull { (id, fs) ->
+                    folderIds[id]?.let { it to fs.copy(order = remapFolderKeys(fs.order, folderIds)) }
+                }.toMap()
+                folderSorts.set(FolderSort.writeAll(remapped))
+            }
+            runCatching { UsageSource.valueOf(p.optString("usageSource")) }.getOrNull()?.let { usageSource.set(it) }
         }
 
         if (zipped) {
