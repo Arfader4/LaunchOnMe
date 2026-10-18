@@ -3,6 +3,7 @@ package pl.rafal.contextlauncher.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +54,7 @@ import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.PinnedItemEntity
 import pl.rafal.contextlauncher.data.db.PinnedItemEntity.Companion.KIND_FILE
 import pl.rafal.contextlauncher.data.db.PinnedItemEntity.Companion.KIND_LINK
+import pl.rafal.contextlauncher.data.db.PinnedItemEntity.Companion.KIND_ONHAND
 
 // Arkusz z pełną listą: dodawanie, otwieranie, archiwum.
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,7 +64,8 @@ fun HandySheet(
     items: List<PinnedItemEntity>,
     onAddFile: () -> Unit,
     onAddLink: () -> Unit,
-    onAddNote: () -> Unit,
+    onAddNote: () -> Unit,      // notatka z OnHand: wybór istniejącej albo nowa (lista OnHand w trybie wyboru)
+    onOpenOnHand: () -> Unit,   // cała aplikacja OnHand
     onOpen: (PinnedItemEntity) -> Unit,
     onArchive: (PinnedItemEntity) -> Unit,
     onRestore: (PinnedItemEntity) -> Unit,
@@ -89,10 +92,15 @@ fun HandySheet(
                 )
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Przewijany w poziomie: cztery chipy nie zawsze mieszczą się w szerokości telefonu.
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                ) {
                     AssistChip(onClick = onAddFile, label = { Text(stringResource(R.string.handy_add_file)) })
                     AssistChip(onClick = onAddLink, label = { Text(stringResource(R.string.handy_add_link)) })
-                    AssistChip(onClick = onAddNote, label = { Text(stringResource(R.string.handy_add_note)) })
+                    AssistChip(onClick = onAddNote, label = { Text(stringResource(R.string.handy_add_onhand)) })
+                    AssistChip(onClick = onOpenOnHand, label = { Text(stringResource(R.string.handy_open_onhand)) })
                 }
             }
             if (active.isEmpty()) {
@@ -192,13 +200,14 @@ private fun PinnedRow(
     }
 }
 
-// Kolorowy kwadrat z literą rodzaju: P = plik, L = link, N = notatka.
+// Kolorowy kwadrat z literą rodzaju: P = plik, L = link, N = notatka (pomarańczowa = notatka z OnHand).
 @Composable
 fun KindBadge(item: PinnedItemEntity, size: Int = 40) {
     // Kolor rodzaju + jego półprzezroczysta wersja jako tło: czytelne w jasnym i ciemnym motywie.
     val (letter, fg) = when (item.kind) {
         KIND_FILE -> stringResource(R.string.handy_badge_file) to MaterialTheme.colorScheme.primary
         KIND_LINK -> stringResource(R.string.handy_badge_link) to Color(0xFF5B8DEF)
+        KIND_ONHAND -> stringResource(R.string.handy_badge_note) to Color(0xFFFF8A3D) // kolor OnHand (bursztyn → koral)
         else -> stringResource(R.string.handy_badge_note) to Color(0xFF3FA07A)
     }
     val bg = fg.copy(alpha = 0.18f)

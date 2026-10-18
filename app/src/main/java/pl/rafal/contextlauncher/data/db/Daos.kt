@@ -105,6 +105,31 @@ interface PinnedItemDao {
 
     @Query("DELETE FROM pinned_items WHERE id = :id")
     suspend fun delete(id: Long)
+
+    // --- Odnośniki do notatek OnHand (kind = 'ONHAND', uri = id notatki) ---
+
+    @Query("SELECT * FROM pinned_items WHERE kind = :kind")
+    suspend fun getByKind(kind: String): List<PinnedItemEntity>
+
+    @Query("SELECT modeId FROM pinned_items WHERE kind = 'ONHAND' AND uri = :noteId AND archivedAt IS NULL")
+    suspend fun modesWithOnHand(noteId: String): List<Long>
+
+    @Query("SELECT COUNT(*) FROM pinned_items WHERE kind = 'ONHAND' AND uri = :noteId AND modeId = :modeId")
+    suspend fun countOnHand(noteId: String, modeId: Long): Int
+
+    // Przypięcie, które leżało w archiwum, wraca jako aktywne (zamiast drugiego wiersza).
+    @Query("UPDATE pinned_items SET archivedAt = NULL WHERE kind = 'ONHAND' AND uri = :noteId AND modeId = :modeId")
+    suspend fun restoreOnHand(noteId: String, modeId: Long)
+
+    @Query("DELETE FROM pinned_items WHERE kind = 'ONHAND' AND uri = :noteId AND modeId = :modeId")
+    suspend fun deleteOnHand(noteId: String, modeId: Long)
+
+    @Query("DELETE FROM pinned_items WHERE kind = 'ONHAND' AND uri IN (:noteIds)")
+    suspend fun deleteOnHandNotes(noteIds: List<String>)
+
+    // Migracja starej notatki: ten sam wiersz (tryb, kolejność, archiwum) staje się odnośnikiem do OnHand.
+    @Query("UPDATE pinned_items SET kind = 'ONHAND', uri = :noteId, text = NULL WHERE id = :id")
+    suspend fun convertToOnHand(id: Long, noteId: String)
 }
 
 @Dao

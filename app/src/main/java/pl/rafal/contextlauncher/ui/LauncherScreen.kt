@@ -414,6 +414,10 @@ private fun LauncherContent(
     }
 
     // Systemowy wybór pliku; wynik (adres pliku albo null) trafia do lambdy.
+    // OnHand w trybie wyboru: wybrana (albo właśnie utworzona) notatka → odnośnik na karcie aktywnego trybu.
+    val pickOnHand = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        pl.rafal.onhand.OnHand.resultNoteId(result.data)?.let { viewModel.pinOnHand(it) }
+    }
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.pinFile(uri)
     }
@@ -457,7 +461,12 @@ private fun LauncherContent(
 
     fun openPinned(item: PinnedItemEntity) {
         if (item.kind == PinnedItemEntity.KIND_NOTE) {
-            editedNote = item
+            editedNote = item // stara notatka (zanim migracja przy starcie przeniesie ją do OnHand)
+            return
+        }
+        // Notatka z OnHand, której już nie ma: tylko komunikat (odnośnik da się usunąć z menu ⋮).
+        if (item.kind == PinnedItemEntity.KIND_ONHAND && item.mimeType == pl.rafal.contextlauncher.data.PinnedRepository.ONHAND_MISSING) {
+            Toast.makeText(context, context.getString(R.string.handy_onhand_missing), Toast.LENGTH_SHORT).show()
             return
         }
         val intent = viewModel.openIntent(item) ?: return
@@ -1471,7 +1480,9 @@ private fun LauncherContent(
             items = pinnedItems,
             onAddFile = { pickFile.launch(arrayOf("*/*")) },
             onAddLink = { linkDialogOpen = true },
-            onAddNote = { newNoteOpen = true },
+            // Notatka z OnHand: lista OnHand w trybie wyboru (z "+ Nowa notatka"); wynik → odnośnik na karcie.
+            onAddNote = { runCatching { pickOnHand.launch(pl.rafal.onhand.OnHand.pickIntent(context)) } },
+            onOpenOnHand = { startActivitySafely(pl.rafal.onhand.OnHand.appIntent(context)) },
             onOpen = ::openPinned, // referencja do lokalnej funkcji
             onArchive = viewModel::archivePinned,
             onRestore = viewModel::restorePinned,

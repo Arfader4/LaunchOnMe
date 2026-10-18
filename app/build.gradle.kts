@@ -17,9 +17,9 @@ android {
         minSdk = 29
         targetSdk = 36
         // Wersja: X.Y.Z — Y = runda zmian (duży temat), Z = poprawka (hotfix). Historia: ROADMAP.md, "Wersje".
-        // versionCode musi rosnąć przy każdej wersji: X·10000 + Y·100 + Z (1.2.1 → 10201).
-        versionCode = 10500
-        versionName = "1.5.0"
+        // versionCode musi rosnąć przy każdej wersji: X·10000 + Y·100 + Z (1.6.0 → 10600).
+        versionCode = 10600
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -45,6 +45,8 @@ dependencies {
     implementation(project(":studio"))
     // OnThemes (motywy): model motywów + aplikacja z własną ikoną; launcher tylko czyta z niej kolory.
     implementation(project(":themes"))
+    // OnHand (notatki): własna ikona w szufladzie i własna baza, ta sama instalacja.
+    implementation(project(":onhand"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

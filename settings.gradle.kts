@@ -27,3 +27,5 @@ include(":app")
 include(":studio") // StickOnMe — studio naklejek (osobny moduł, w pakiecie z launcherem)
 include(":themes") // OnThemes — aplikacja motywów (osobny moduł, w pakiecie z launcherem)
  
+ 
+include(":onhand") // OnHand — notatki (osobny moduł, w pakiecie z launcherem)

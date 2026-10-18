@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Patterns
 import androidx.core.content.FileProvider
+import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -13,10 +14,12 @@ import pl.rafal.contextlauncher.AppText
 import pl.rafal.contextlauncher.R
 import pl.rafal.contextlauncher.data.db.LauncherDatabase
 import pl.rafal.contextlauncher.data.db.PinnedItemEntity
+import pl.rafal.onhand.OnHand
 import java.io.File
 import java.util.UUID
 
-// OnHand: przypinanie plików, linków i notatek do trybu.
+// OnHand na karcie trybu: przypinanie plików, linków i notatek (notatki mieszkają w aplikacji OnHand,
+// tu jest tylko odnośnik; usunięcie odnośnika nie usuwa notatki).
 // Pliki kopiujemy do prywatnej pamięci aplikacji, bo dostęp do cudzego pliku z "Udostępnij"
 // jest tylko chwilowy. Kopia działa po restarcie telefonu i po usunięciu oryginału.
 class PinnedRepository(private val context: Context) {
@@ -62,15 +65,34 @@ class PinnedRepository(private val context: Context) {
         )
     }
 
-    suspend fun pinNote(modeId: Long, title: String, text: String): Long =
-        dao.insert(
-            PinnedItemEntity(
-                modeId = modeId,
-                kind = PinnedItemEntity.KIND_NOTE,
-                title = title.ifBlank { text.lineSequence().first().take(40) },
-                text = text,
-            ),
-        )
+    // Nowa notatka (z okna notatki albo z "Udostępnij → Przypnij do trybu") powstaje w OnHand,
+    // a na karcie trybu ląduje do niej odnośnik.
+    suspend fun pinNote(modeId: Long, title: String, text: String): Long {
+        val noteId = OnHand.repository(context).create(title.trim(), text)
+        val shown = title.ifBlank { text.lineSequence().first().take(40) }
+        return pinOnHand(modeId, noteId, shown)
+    }
+
+    // Odnośnik do notatki OnHand. Ta sama notatka w tym samym trybie tylko raz (z archiwum wraca na kartę).
+    // Sprawdzenie i wstawienie w jednej transakcji (jak w SQL Server: SELECT + INSERT w BEGIN TRAN).
+    suspend fun pinOnHand(modeId: Long, noteId: Long, title: String): Long {
+        val key = noteId.toString()
+        return LauncherDatabase.get(context).withTransaction {
+            if (dao.countOnHand(key, modeId) > 0) {
+                dao.restoreOnHand(key, modeId)
+                -1L
+            } else {
+                dao.insert(
+                    PinnedItemEntity(
+                        modeId = modeId,
+                        kind = PinnedItemEntity.KIND_ONHAND,
+                        title = title,
+                        uri = key,
+                    ),
+                )
+            }
+        }
+    }
 
     suspend fun updateNote(item: PinnedItemEntity, title: String, text: String) =
         dao.updateNote(item.id, title.ifBlank { text.lineSequence().first().take(40) }, text)
@@ -95,6 +117,8 @@ class PinnedRepository(private val context: Context) {
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         PinnedItemEntity.KIND_LINK -> Intent(Intent.ACTION_VIEW, Uri.parse(item.uri))
+        // Notatka otwiera się w OnHand (we własnym zadaniu, z ikoną OnHand w "ostatnich aplikacjach").
+        PinnedItemEntity.KIND_ONHAND -> item.uri?.toLongOrNull()?.let { OnHand.openIntent(context, it) }
         else -> null
     }
 
@@ -104,6 +128,9 @@ class PinnedRepository(private val context: Context) {
             ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
 
     companion object {
+        // Znacznik w mimeType odnośnika ONHAND, którego notatki nie ma już w OnHand (ustawia go LauncherViewModel).
+        const val ONHAND_MISSING = "x-onhand/missing"
+
         // Czy tekst to sam adres WWW (wtedy przypinamy jako link, a nie notatkę)?
         fun isUrl(text: String): Boolean {
             val trimmed = text.trim()

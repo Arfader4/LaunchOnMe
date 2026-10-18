@@ -57,3 +57,6 @@ push robi właściciel.
   ekrany `OnThemesActivity.kt` + `Screens.kt` + `Components.kt` + `LauncherPreview.kt`. Launcher tylko czyta
   (`ContextLauncherTheme` ustawia `LocalThemeSpec`, `ModeBadge` rysuje wg stylu), tryby widzi moduł przez
   `OnThemesHost` ↔ `data/OnThemesBridge.kt`. Teksty: `OnThemesText`.
+- OnHand (moduł `:onhand`, pakiet `pl.rafal.onhand`, baza `onhand.db`): `OnHandActivity` + `NoteScreens.kt` (lista, edytor),
+  `OnHandShareActivity` (cel „Udostępnij”), `NoteExport.kt`, `OnHandBackup.kt`; launcher łączy się przez
+  `OnHandHost` ↔ `data/OnHandBridge.kt` (odnośniki `ONHAND` w `pinned_items`, uri = id notatki).

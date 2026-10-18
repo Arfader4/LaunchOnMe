@@ -1171,4 +1171,9 @@
     <string name="look_colors_theme">Z motywu</string>
     <string name="look_colors_all">Wszystkie kolory</string>
     <string name="msug_more_in_onthemes">🎭 Więcej w OnThemes (podgląd, Luxury, własne)…</string>
+    <!-- 1.4 OnHand On4: odnośniki do notatek z aplikacji OnHand -->
+    <string name="handy_add_onhand">+ Notatka z OnHand</string>
+    <string name="handy_open_onhand">Otwórz OnHand ↗</string>
+    <string name="handy_onhand_missing">Usunięta w OnHand</string>
+    <string name="handy_onhand_untitled">Notatka bez tytułu</string>
 </resources>
