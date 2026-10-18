@@ -22,7 +22,8 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.7.0 | Szuflada aplikacji: dwa widoki, sortowanie (A–Z / najczęściej / własna), sekcja „Nowe”, ustawienia per OnMode | 1 |
 | 1.7.1 | Szuflada: sortowanie i własna kolejność w folderach, „najczęściej używane” z danych systemu | 1 |
 | 1.8.0 | StickOnMe: dopasowanie obrazu w kształcie — przesuwanie, powiększanie i obrót pod maską kształtu | 1 |
-Razem od V1: 45 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
+| 1.8.1 | StickOnMe: czytelny tryb ciemny — pełna paleta ról (przyciski, zaznaczone chipy, obramowania) | 1 |
+Razem od V1: 46 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).

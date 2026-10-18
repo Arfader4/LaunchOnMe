@@ -117,16 +117,36 @@ import java.io.File
 import kotlin.math.roundToInt
 
 // Kolory StickOnMe: ciemne tło jak w LaunchOnMe, akcent z tęczowego logo.
+// Pełny zestaw ról kolorów — brakujące role brały domyślne fioletowo-szare wartości Material3, przez co przyciski,
+// zaznaczone chipy i obramowania zlewały się z tekstem i tłem. Teraz każda rola ma wyraźny kontrast:
+// przyciski tekstowe = jasny fiolet, zaznaczone chipy = turkus, obramowania chipów widoczne, tła neutralne (bez fioletu).
 private val StudioColors = darkColorScheme(
-    primary = Color(0xFF9B5CF6),
-    onPrimary = Color.White,
+    primary = Color(0xFFB794FF),            // przyciski tekstowe, suwaki, "Zapisz" — wyraźnie inne niż biały tekst
+    onPrimary = Color(0xFF1C0B3A),
+    primaryContainer = Color(0xFF4A2A8A),
+    onPrimaryContainer = Color(0xFFEDE2FF),
     secondary = Color(0xFF2FD9B4),
+    onSecondary = Color(0xFF00382C),
+    secondaryContainer = Color(0xFF0E5A4A), // tło zaznaczonego chipa (narzędzie, kształt, ramka…)
+    onSecondaryContainer = Color(0xFFB4FBEA),
+    tertiary = Color(0xFFFFB86B),
+    onTertiary = Color(0xFF3A2200),
     background = Color(0xFF101214),
+    onBackground = Color(0xFFECEEF0),
     surface = Color(0xFF1B1E22),
-    surfaceVariant = Color(0xFF262A30),
     onSurface = Color(0xFFECEEF0),
-    onSurfaceVariant = Color(0xFFA9B0B8),
-    outline = Color(0xFF3A4048),
+    surfaceVariant = Color(0xFF262A30),
+    onSurfaceVariant = Color(0xFFB8C0C8),   // opisy i etykiety suwaków
+    surfaceTint = Color(0xFFB794FF),
+    surfaceContainerLowest = Color(0xFF0B0C0E),
+    surfaceContainerLow = Color(0xFF16191C),
+    surfaceContainer = Color(0xFF1B1E22),
+    surfaceContainerHigh = Color(0xFF23272C),
+    surfaceContainerHighest = Color(0xFF2E333A), // tło okien dialogowych, nieaktywna część suwaka
+    outline = Color(0xFF6E7884),            // obramowanie niezaznaczonych chipów — wcześniej prawie niewidoczne
+    outlineVariant = Color(0xFF3A4048),
+    error = Color(0xFFFF8A80),
+    onError = Color(0xFF3A0905),
 )
 
 // Znacznik ekranu biblioteki w AnimatedContent (pozostałe ekrany to po prostu otwarta tablica albo edytor).

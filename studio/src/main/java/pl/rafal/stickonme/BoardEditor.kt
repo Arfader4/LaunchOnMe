@@ -781,7 +781,7 @@ private fun Swatches(colors: List<Long>, selected: Long?, onPick: (Long) -> Unit
                     .size(30.dp)
                     .clip(CircleShape)
                     .background(Color(c))
-                    .border(if (c == selected) 3.dp else 1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                    .border(if (c == selected) 3.dp else 1.dp, if (c == selected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline, CircleShape)
                     .clickable { onPick(c) },
             )
         }
@@ -920,7 +920,7 @@ private fun BackgroundDialog(board: Board, onChange: (Board) -> Unit, onPhoto: (
                                 .size(44.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(a), Color(b))))
-                                .border(if (sel) 3.dp else 1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
+                                .border(if (sel) 3.dp else 1.dp, if (sel) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
                                 .clickable { onChange(board.copy(bgType = Board.BG_GRADIENT, bgColor = a, bgColor2 = b)) },
                         )
                     }
