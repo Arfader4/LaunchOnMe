@@ -62,12 +62,14 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -176,6 +178,9 @@ class StudioActivity : ComponentActivity() {
         )
         setContent {
             MaterialTheme(colorScheme = StudioColors) {
+              // Bez Surface/Scaffold domyślny kolor tekstu (LocalContentColor) to CZARNY — stąd niewidoczne
+              // tytuły i nazwy kart na ciemnym tle. Ustawiamy go raz dla całego studia (jak Foreground w stylu WPF).
+              CompositionLocalProvider(LocalContentColor provides StudioColors.onBackground) {
                 StudioApp(
                     pickMode = pickMode,
                     wallpaperMode = wallpaperMode,
@@ -189,6 +194,7 @@ class StudioActivity : ComponentActivity() {
                         finish()
                     },
                 )
+              }
             }
         }
     }
@@ -595,8 +601,12 @@ private const val PREVIEW_WORK_SIDE = 800 // podgląd "Wykończenia" liczony na 
 // Maska ML Kit przygotowana w całości w tle (model, przeliczenie pewności, skalowanie). null = nie wyszło.
 // Na wątku UI zostaje tylko szybka podmiana: editor.applyMask(...).
 private suspend fun autoMaskFor(editor: CutoutEditor): android.graphics.Bitmap? = try {
-    withContext(Dispatchers.Default) {
-        autoMask(editor.photo)?.let { (values, w, h) -> editor.prepareMask(values, w, h) }
+    // Limit czasu: ML Kit przy pierwszym użyciu pobiera model — bez sieci potrafi czekać bez końca,
+    // a wtedy edytor był zablokowany (przycisk „Zapisz” wyłączony). Po 20 s zostaje całe zdjęcie.
+    kotlinx.coroutines.withTimeoutOrNull(20_000L) {
+        withContext(Dispatchers.Default) {
+            autoMask(editor.photo)?.let { (values, w, h) -> editor.prepareMask(values, w, h) }
+        }
     }
 } catch (e: kotlin.coroutines.cancellation.CancellationException) {
     throw e // anulowanie (wyjście z edytora) przechodzi dalej — jak OperationCanceledException w C#
@@ -615,10 +625,13 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var tab by remember { mutableIntStateOf(0) } // 0 = wycinanie, 1 = obrót i rozmiar
-    var tool by remember { mutableStateOf(Tool.ADD) }
+    var tool by remember { mutableStateOf(Tool.ERASE) } // start od całego zdjęcia → najpierw zwykle się usuwa
     var brush by remember { mutableFloatStateOf(36f) } // średnica pędzla w dp ekranu
     var busy by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf<String?>(null) }
+    // Po „Wytnij obiekt” pytamy, czy zostawić wynik (pasek z ✓ / „Cofnij”).
+    var autoProposal by remember(editor) { mutableStateOf(false) }
+    var autoAt by remember(editor) { mutableIntStateOf(-1) } // wersja maski tuż po wycięciu — kolejna zmiana chowa pasek
     // Zakładka "Wykończenie" pokazuje GOTOWĄ naklejkę (krawędź, kształt, ramka, obrót) — liczoną w tle
     // chwilę po ostatniej zmianie; kolejna zmiana anuluje poprzednie liczenie (ensureActive w pętlach).
     // Dwa etapy: (1) wycięcie + krawędź → cutPreview (wolniejsze, tylko po zmianie maski / krawędzi),
@@ -667,25 +680,15 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
     // Zamknięcie edytora: kopie "Cofnij" od razu do zwolnienia (zdjęcie i maskę może jeszcze rysować animacja wyjścia).
     DisposableEffect(editor) { onDispose { editor.releaseUndo() } }
 
-    // Na start: automatyczne wycięcie obiektu (ML Kit). Brak obiektu → zostaje całe zdjęcie, poprawiasz pędzlem.
-    LaunchedEffect(editor) {
-        if (editor.fromSticker) { // poprawka gotowej naklejki — maska już jest (z jej przezroczystości)
-            busy = false
-            return@LaunchedEffect
-        }
-        val prepared = autoMaskFor(editor)
-        if (prepared != null) editor.applyMask(prepared)
-        else message = context.getString(R.string.som_editor_auto_failed)
-        busy = false
-    }
+    // Na start NIE wycinamy automatycznie — zaczynamy od całego zdjęcia (maska pełna), a „Wytnij obiekt”
+    // (ML Kit) to jedna z opcji na pasku narzędzi. Poprawka gotowej naklejki: maska z jej przezroczystości.
+    LaunchedEffect(editor) { busy = false }
 
     Column(Modifier.fillMaxSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
+        // Górny pasek: tylko Anuluj i Zapisz — przy większej czcionce systemowej zakładki wypychały
+        // „Zapisz” poza ekran. Zakładki są teraz w osobnym wierszu pod spodem.
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
             TextButton(onClick = onCancel) { Text(stringResource(R.string.som_cancel)) }
-            Spacer(Modifier.weight(1f))
-            FilterChip(selected = tab == 0, onClick = { tab = 0 }, label = { Text(stringResource(R.string.som_editor_tab_cutout)) })
-            Spacer(Modifier.width(6.dp))
-            FilterChip(selected = tab == 1, onClick = { tab = 1 }, label = { Text(stringResource(R.string.som_editor_tab_finish)) })
             Spacer(Modifier.weight(1f))
             Button(
                 enabled = !busy,
@@ -708,6 +711,37 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                     }
                 },
             ) { Text(stringResource(R.string.som_save)) }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+        ) {
+            FilterChip(selected = tab == 0, onClick = { tab = 0 }, label = { Text(stringResource(R.string.som_editor_tab_cutout)) })
+            FilterChip(selected = tab == 1, onClick = { tab = 1 }, label = { Text(stringResource(R.string.som_editor_tab_finish)) })
+        }
+
+        // Po „Wytnij obiekt”: zostaw (✓) albo cofnij do stanu sprzed wycięcia.
+        if (autoProposal && editor.version == autoAt && !busy && tab == 0) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+            ) {
+                Text(
+                    stringResource(R.string.som_editor_auto_done),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { editor.undoLast(); autoProposal = false }) { // wraca do maski sprzed wycięcia
+                    Text(stringResource(R.string.som_editor_undo), color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+                Button(onClick = { autoProposal = false }) { Text(stringResource(R.string.som_editor_auto_keep)) }
+            }
         }
 
         Box(
@@ -744,9 +778,16 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                     TextButton(enabled = !busy && editor.canUndo, onClick = { editor.undoLast() }) { Text(stringResource(R.string.som_editor_undo)) }
                     TextButton(enabled = !busy, onClick = {
                         busy = true
+                        message = null
                         scope.launch {
                             val prepared = autoMaskFor(editor)
-                            if (prepared != null) editor.applyMask(prepared)
+                            if (prepared != null) {
+                                editor.applyMask(prepared) // z kopią do „Cofnij”
+                                autoAt = editor.version
+                                autoProposal = true
+                            } else {
+                                message = context.getString(R.string.som_editor_auto_failed)
+                            }
                             busy = false
                         }
                     }) { Text(stringResource(R.string.som_editor_auto)) }

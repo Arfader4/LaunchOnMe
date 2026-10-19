@@ -79,7 +79,7 @@
     <string name="som_editor_tab_finish">Wykończenie</string>
     <string name="som_editor_empty">Naklejka jest pusta — dodaj coś pędzlem (albo za mało pamięci).</string>
     <string name="som_editor_undo">↶ Cofnij</string>
-    <string name="som_editor_auto">Auto</string>
+    <string name="som_editor_auto">Wytnij obiekt</string>
     <string name="som_editor_whole_photo">Całe zdjęcie</string>
     <string name="som_editor_crop_hint">Przeciągnij palcem ramkę — wszystko poza nią zniknie (↶ Cofnij przywraca). Dwa palce = przybliż i przesuń.</string>
     <string name="som_editor_brush">Pędzel: %1$d dp · dwa palce = przybliż i przesuń</string>
@@ -158,4 +158,6 @@
     <string name="som_editor_fit_hint">Jeden palec przesuwa obraz, dwa palce go powiększają i obracają. Kształt stoi w miejscu.</string>
     <string name="som_editor_fit_zoom">Powiększenie w kształcie: %1$d%%</string>
     <string name="som_editor_fit_rotation">Obrót w kształcie: %1$d°</string>
+    <string name="som_editor_auto_done">Wycięto obiekt automatycznie. Zostawić?</string>
+    <string name="som_editor_auto_keep">✓ Zostaw</string>
 </resources>

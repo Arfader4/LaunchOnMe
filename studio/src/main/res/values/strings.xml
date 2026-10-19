@@ -79,7 +79,7 @@
     <string name="som_editor_tab_finish">Finish</string>
     <string name="som_editor_empty">The sticker is empty — add something with the brush (or not enough memory).</string>
     <string name="som_editor_undo">↶ Undo</string>
-    <string name="som_editor_auto">Auto</string>
+    <string name="som_editor_auto">Cut out subject</string>
     <string name="som_editor_whole_photo">Whole photo</string>
     <string name="som_editor_crop_hint">Drag a frame with your finger — everything outside it disappears (↶ Undo brings it back). Two fingers = zoom and pan.</string>
     <string name="som_editor_brush">Brush: %1$d dp · two fingers = zoom and pan</string>
@@ -158,4 +158,6 @@
     <string name="som_editor_fit_hint">One finger moves the image, two fingers zoom and rotate it. The shape stays put.</string>
     <string name="som_editor_fit_zoom">Zoom in shape: %1$d%%</string>
     <string name="som_editor_fit_rotation">Rotation in shape: %1$d°</string>
+    <string name="som_editor_auto_done">Subject cut out automatically. Keep it?</string>
+    <string name="som_editor_auto_keep">✓ Keep</string>
 </resources>

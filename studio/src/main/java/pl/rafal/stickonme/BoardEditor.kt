@@ -468,10 +468,11 @@ private fun ToolButton(label: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest) // jaśniejsze niż tło paska — widać kształt
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
-    ) { Text(label, style = MaterialTheme.typography.labelLarge) }
+    ) { Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface) }
 }
 
 // Płótno: tablica dopasowana do ekranu z marginesem (widać, co wystaje poza krawędź).
