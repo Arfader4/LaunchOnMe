@@ -1,6 +1,7 @@
 package pl.rafal.contextlauncher.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -41,6 +42,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +56,8 @@ import pl.rafal.contextlauncher.data.DismissDuration
 import pl.rafal.onthemes.ThemeMode
 import androidx.compose.ui.res.stringResource
 import pl.rafal.contextlauncher.R
+import pl.rafal.contextlauncher.data.StickOnMeBridge
+import kotlinx.coroutines.launch
 
 // Ekran Ustawień: pełnoekranowa nakładka z sekcjami. Korzysta bezpośrednio z ViewModelu,
 // bo to "centrum sterowania" całą aplikacją, a nie komponent do wielokrotnego użytku.
@@ -455,6 +459,7 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.set_import_sub),
                 ) { importFile.launch(arrayOf("application/zip", "application/json", "*/*")) }
             }
+            item { StickOnMeMigration() } // widoczne tylko, gdy w launcherze zostały naklejki / tablice sprzed 1.9.0
             item {
                 Toggle(
                     title = stringResource(R.string.set_shortcuts_title),
@@ -608,6 +613,43 @@ private fun <T> Choice(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
             options.forEach { option ->
                 FilterChip(selected = option == selected, onClick = { onSelect(option) }, label = { Text(labelOf(option)) })
+            }
+        }
+    }
+}
+
+// Do 1.8 StickOnMe było częścią launchera, więc jego naklejki i tablice zostały w pamięci launchera.
+// Jedno dotknięcie: paczka .zip → StickOnMe (osobna aplikacja) rozpakowuje u siebie → tu usuwamy starą kopię.
+@Composable
+private fun StickOnMeMigration() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var legacy by remember { mutableStateOf(StickOnMeBridge.hasLegacyLibrary(context)) }
+    var working by remember { mutableStateOf(false) }
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        working = false
+        if (result.resultCode == Activity.RESULT_OK) scope.launch {
+            StickOnMeBridge.clearLegacyLibrary(context)
+            legacy = false
+        }
+    }
+    if (legacy) {
+        val installed = remember(working) { StickOnMeBridge.isInstalled(context) }
+        Action(
+            title = stringResource(R.string.set_stickonme_move_title),
+            subtitle = stringResource(if (installed) R.string.set_stickonme_move_sub else R.string.set_stickonme_missing_sub),
+        ) {
+            if (!StickOnMeBridge.isInstalled(context)) {
+                Toast.makeText(context, context.getString(R.string.set_stickonme_missing_sub), Toast.LENGTH_LONG).show()
+            } else if (!working) {
+                working = true
+                scope.launch {
+                    val started = runCatching { importer.launch(StickOnMeBridge.migrationIntent(context)) }.isSuccess
+                    if (!started) {
+                        working = false
+                        Toast.makeText(context, context.getString(R.string.set_stickonme_move_failed), Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
     }

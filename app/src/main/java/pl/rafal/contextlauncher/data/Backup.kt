@@ -417,17 +417,8 @@ object Backup {
                 }
                 WallpaperStore(context).replaceAll(entries)
             }
-            // Tablice StickOnMe: ścieżki zdjęć i naklejek w ich plikach JSON wskazywały na stary telefon.
-            File(root, "stickers/boards").listFiles { f -> f.extension == "json" }?.forEach { file ->
-                runCatching {
-                    val board = pl.rafal.stickonme.Board.of(file.readText()) ?: return@runCatching
-                    val fixed = board.copy(
-                        bgImage = board.bgImage?.let(::local),
-                        layers = board.layers.map { l -> l.copy(path = l.path?.let(::local)) },
-                    )
-                    if (fixed != board) file.writeText(fixed.toJson())
-                }
-            }
+            // Tablice StickOnMe ze starej kopii (sprzed 1.9.0) trafiają do stickers/boards launchera — ścieżki w nich
+            // poprawi StickOnMe przy przeniesieniu biblioteki (Ustawienia → „Przenieś do StickOnMe”).
         }
 
         // Stara kopia mogła przynieść notatki w bazie launchera (rodzaj NOTE) — przenosimy je do OnHand.

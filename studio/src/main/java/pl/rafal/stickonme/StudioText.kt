@@ -5,7 +5,7 @@ import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 
 // Teksty StickOnMe spoza Compose (etykiety ramek i kształtów, komunikaty). Inicjowane przez klasę aplikacji
-// launchera (moduł :studio nie ma własnej), a na wszelki wypadek także przez StudioActivity.
+// StickOnMeApp (moduł :stickonme), a na wszelki wypadek także przez StudioActivity.
 object StudioText {
     private var app: Context? = null
 

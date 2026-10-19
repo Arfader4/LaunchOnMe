@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import pl.rafal.contextlauncher.data.CustomWidgetKind
 import pl.rafal.contextlauncher.data.PinnedRepository
+import pl.rafal.contextlauncher.data.StickOnMeBridge
 import pl.rafal.contextlauncher.data.StickerStore
 import pl.rafal.contextlauncher.data.placeCustomWidget
 import pl.rafal.contextlauncher.data.db.LauncherDatabase
@@ -36,11 +37,11 @@ class ShareActivity : ComponentActivity() {
         val name = pendingModeName.orEmpty()
         pendingModeId = null
         pendingTemp = null
-        val path = pl.rafal.stickonme.StickOnMe.resultPath(result.data)
+        val uri = StickOnMeBridge.resultUri(result.data) // link content:// od StickOnMe (osobnej aplikacji)
         lifecycleScope.launch {
             temp?.let(StickerStore::delete) // kopia robocza już niepotrzebna (wynik jest w bibliotece StickOnMe)
-            if (modeId != null && path != null) {
-                val ok = runCatching { addSticker(modeId, Uri.fromFile(java.io.File(path))) }.isSuccess
+            if (modeId != null && uri != null) {
+                val ok = runCatching { addSticker(modeId, uri) }.isSuccess
                 Toast.makeText(
                     this@ShareActivity,
                     if (ok) getString(R.string.act_share_sticker_added, name) else getString(R.string.act_share_sticker_failed),
@@ -83,7 +84,20 @@ class ShareActivity : ComponentActivity() {
                     content = content,
                     modesFlow = modes,
                     onPin = { mode, title, asSticker ->
-                        if (asSticker && content is SharedContent.File) {
+                        if (asSticker && content is SharedContent.File && !StickOnMeBridge.isInstalled(this@ShareActivity)) {
+                            // Bez StickOnMe: obrazek od razu jako naklejka (bez wycinania).
+                            if (pendingModeId == null) lifecycleScope.launch {
+                                pendingModeId = mode.id
+                                val ok = runCatching { addSticker(mode.id, content.uri) }.isSuccess
+                                pendingModeId = null
+                                Toast.makeText(
+                                    this@ShareActivity,
+                                    if (ok) getString(R.string.act_share_sticker_added, mode.name) else getString(R.string.act_share_sticker_failed),
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                if (ok) finish()
+                            }
+                        } else if (asSticker && content is SharedContent.File) {
                             // Kopia obrazka (link z innej aplikacji może wygasnąć) → edytor StickOnMe → wynik na kartę.
                             // Znacznik "w toku" od razu (przed kopiowaniem): podwójne dotknięcie nie uruchomi edytora dwa razy.
                             if (pendingModeId == null) lifecycleScope.launch {
@@ -95,7 +109,7 @@ class ShareActivity : ComponentActivity() {
                                 } else {
                                     pendingModeName = mode.name
                                     pendingTemp = temp
-                                    studio.launch(pl.rafal.stickonme.StickOnMe.cutoutIntent(this@ShareActivity, temp))
+                                    studio.launch(StickOnMeBridge.cutoutIntent(this@ShareActivity, temp))
                                 }
                             }
                         } else lifecycleScope.launch { // lifecycleScope: korutyna żyje tak długo jak ta aktywność.

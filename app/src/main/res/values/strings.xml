@@ -1211,4 +1211,8 @@
     <string name="set_usage_need_access">No usage access yet — until you grant it, launcher launches are used. Tap the option again to open system settings.</string>
     <string name="set_perm_usage">Usage access (“Most used” from system)</string>
     <string name="drawer_folder_arrange_hint">Touch and hold an icon, then drag it to a new spot. The order is saved in this folder (in every OnMode).</string>
+    <string name="set_stickonme_move_title">Move stickers and boards to StickOnMe</string>
+    <string name="set_stickonme_move_sub">StickOnMe is now a separate app. Your library is still in the launcher — move it with one tap.</string>
+    <string name="set_stickonme_missing_sub">Install the StickOnMe app first — then you can move your stickers and boards here.</string>
+    <string name="set_stickonme_move_failed">Could not prepare the library for moving.</string>
 </resources>

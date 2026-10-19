@@ -160,4 +160,6 @@
     <string name="som_editor_fit_rotation">Rotation in shape: %1$d°</string>
     <string name="som_editor_auto_done">Subject cut out automatically. Keep it?</string>
     <string name="som_editor_auto_keep">✓ Keep</string>
+    <string name="som_import_done">Moved from LaunchOnMe: %1$d stickers, %2$d boards.</string>
+    <string name="som_import_failed">Could not move the library from LaunchOnMe.</string>
 </resources>

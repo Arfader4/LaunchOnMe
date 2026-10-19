@@ -95,6 +95,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONObject
 import pl.rafal.contextlauncher.data.AppInfo
+import pl.rafal.contextlauncher.data.StickOnMeBridge
 import pl.rafal.contextlauncher.data.CardApp
 import pl.rafal.contextlauncher.data.CardWidget
 import pl.rafal.contextlauncher.data.CardCustomWidget
@@ -355,21 +356,25 @@ private fun LauncherContent(
     }
 
     // Systemowy wybór zdjęć (bez uprawnień do całej galerii) — na naklejki.
-    // StickOnMe: wybór gotowej naklejki albo zrobienie nowej — wraca ścieżka pliku z biblioteki studia.
+    // StickOnMe (osobna aplikacja): wybór gotowej naklejki albo zrobienie nowej — wraca link content:// do pliku.
     val pickFromStudio = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        pl.rafal.stickonme.StickOnMe.resultPath(result.data)?.let { path ->
-            viewModel.addSticker(android.net.Uri.fromFile(java.io.File(path)))
-        }
+        StickOnMeBridge.resultUri(result.data)?.let { uri -> viewModel.addSticker(uri) }
+    }
+    // Bez StickOnMe: naklejka prosto ze zdjęcia z galerii (bez wycinania).
+    val pickStickerPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) viewModel.addSticker(uri)
     }
     var stickerToEdit by remember { mutableStateOf<CardCustomWidget?>(null) }
+    // StickOnMe to osobna aplikacja — sprawdzamy przy otwarciu okna naklejki / ustawień trybu (mogła dojść albo zniknąć).
+    val stickOnMeInstalled = remember(stickerToEdit, settingsModeId) { StickOnMeBridge.isInstalled(context) }
     // "Edytuj w StickOnMe": pamiętamy, którą naklejkę poprawiamy (okno naklejki zamyka się na czas edycji).
     // Samo id (rememberSaveable przeżyje nawet zamknięcie procesu launchera w czasie edycji w studiu).
     var stickerInStudio by rememberSaveable { mutableStateOf<Long?>(null) }
     val editInStudio = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val target = stickerInStudio
         stickerInStudio = null
-        val path = pl.rafal.stickonme.StickOnMe.resultPath(result.data)
-        if (target != null && path != null) viewModel.replaceStickerFile(target, android.net.Uri.fromFile(java.io.File(path)))
+        val uri = StickOnMeBridge.resultUri(result.data)
+        if (target != null && uri != null) viewModel.replaceStickerFile(target, uri)
     }
     // Widżety Odliczanie i Lista: który jest właśnie edytowany (id elementu karty).
     var countdownToEdit by remember { mutableStateOf<Long?>(null) }
@@ -385,11 +390,11 @@ private fun LauncherContent(
         if (uri != null && modeId != null) viewModel.setWallpaper(modeId, uri)
         wallpaperFor = null
     }
-    // Tapeta z tablicy StickOnMe: studio oddaje ścieżkę gotowego obrazu, dalej jak przy zdjęciu (kopia + "Dopasuj").
+    // Tapeta z tablicy StickOnMe: studio oddaje link do gotowego obrazu, dalej jak przy zdjęciu (kopia + "Dopasuj").
     val boardWallpaper = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val modeId = wallpaperFor
-        val path = pl.rafal.stickonme.StickOnMe.resultPath(result.data)
-        if (path != null && modeId != null) viewModel.setWallpaper(modeId, android.net.Uri.fromFile(java.io.File(path)))
+        val uri = StickOnMeBridge.resultUri(result.data)
+        if (uri != null && modeId != null) viewModel.setWallpaper(modeId, uri)
         wallpaperFor = null
     }
     var checklistAddTo by remember { mutableStateOf<Long?>(null) }
@@ -1311,9 +1316,11 @@ private fun LauncherContent(
                 wallpaperFor = mode.id
                 pickWallpaper.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             },
-            onBoardWallpaper = {
-                wallpaperFor = mode.id
-                boardWallpaper.launch(pl.rafal.stickonme.StickOnMe.wallpaperIntent(context))
+            onBoardWallpaper = if (!stickOnMeInstalled) null else {
+                {
+                    wallpaperFor = mode.id
+                    boardWallpaper.launch(StickOnMeBridge.wallpaperIntent())
+                }
             },
             onClearWallpaper = { viewModel.clearWallpaper(mode.id) },
             onCropWallpaper = { viewModel.openWallpaperCrop(mode.id) },
@@ -1619,14 +1626,14 @@ private fun LauncherContent(
             onRestore = { viewModel.restoreStickerOriginal(current) },
             legacyLook = current.config.optString("shape").let { it.isNotBlank() && it != "NONE" } ||
                 current.config.optString("frame").let { it.isNotBlank() && it != "NONE" },
-            onEditInStudio = current.config.optString("file").takeIf { it.isNotBlank() }?.let { file ->
+            onEditInStudio = current.config.optString("file").takeIf { it.isNotBlank() && stickOnMeInstalled }?.let { file ->
                 {
                     stickerInStudio = current.item.id
                     stickerToEdit = null
                     // Dawny kształt / ramka z karty (nazwy enumów) → te same w edytorze StickOnMe.
                     val shape = current.config.optString("shape").takeIf { it.isNotBlank() && it != "NONE" }?.lowercase()
                     val frame = current.config.optString("frame").takeIf { it.isNotBlank() && it != "NONE" }?.lowercase()
-                    editInStudio.launch(pl.rafal.stickonme.StickOnMe.editIntent(context, file, shape, frame))
+                    editInStudio.launch(StickOnMeBridge.editIntent(context, file, shape, frame))
                 }
             },
         )
@@ -1888,7 +1895,10 @@ private fun LauncherContent(
                     // Nowa lista i odliczanie od razu z sensownym stanem początkowym.
                     CustomWidgetKind.CHECKLIST -> viewModel.addCustomWidget(kind, Checklist.of(context.getString(R.string.ls_default_list_name)))
                     CustomWidgetKind.COUNTDOWN -> viewModel.addCustomWidget(kind, Countdown.of(""))
-                    CustomWidgetKind.STICKER -> pickFromStudio.launch(pl.rafal.stickonme.StickOnMe.pickIntent(context)) // wybór albo nowa w StickOnMe
+                    // Wybór albo nowa w StickOnMe; bez StickOnMe — zwykłe zdjęcie z galerii.
+                    CustomWidgetKind.STICKER ->
+                        if (StickOnMeBridge.isInstalled(context)) pickFromStudio.launch(StickOnMeBridge.pickIntent())
+                        else pickStickerPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     else -> viewModel.addCustomWidget(kind)
                 }
             },

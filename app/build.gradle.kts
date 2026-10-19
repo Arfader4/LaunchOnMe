@@ -17,9 +17,9 @@ android {
         minSdk = 29
         targetSdk = 36
         // Wersja: X.Y.Z — Y = runda zmian (duży temat), Z = poprawka (hotfix). Historia: ROADMAP.md, "Wersje".
-        // versionCode musi rosnąć przy każdej wersji: X·10000 + Y·100 + Z (1.8.2 → 10802).
-        versionCode = 10802
-        versionName = "1.8.2"
+        // versionCode musi rosnąć przy każdej wersji: X·10000 + Y·100 + Z (1.9.0 → 10900).
+        versionCode = 10900
+        versionName = "1.9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -41,8 +41,7 @@ android {
 }
 
 dependencies {
-    // StickOnMe (studio naklejek): własna ikona w szufladzie, ale ta sama instalacja i wspólne pliki naklejek.
-    implementation(project(":studio"))
+    // StickOnMe od 1.9.0 to osobna aplikacja (moduł :stickonme) — launcher woła ją intencjami (data/StickOnMeBridge.kt).
     // OnThemes (motywy): model motywów + aplikacja z własną ikoną; launcher tylko czyta z niej kolory.
     implementation(project(":themes"))
     // OnHand (notatki): własna ikona w szufladzie i własna baza, ta sama instalacja.

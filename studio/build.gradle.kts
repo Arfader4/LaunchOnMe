@@ -1,5 +1,5 @@
-// StickOnMe — studio naklejek. Biblioteka Androida (nie osobna aplikacja): trafia do tego samego APK co launcher,
-// ale ma własną aktywność z ikoną w szufladzie. Dzięki osobnemu modułowi da się ją kiedyś wydzielić do osobnej aplikacji.
+// StickOnMe — studio naklejek. Biblioteka Androida z całym kodem studia; aplikację (własny APK) robi z niej
+// moduł :stickonme. Launcher od 1.9.0 NIE zależy od tego modułu — rozmawia ze StickOnMe intencjami (StickOnMeBridge).
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
@@ -34,6 +34,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    // Automatyczne wycinanie obiektu (ta sama biblioteka co w launcherze — w APK jest raz).
+    // Automatyczne wycinanie obiektu.
     implementation(libs.mlkit.subject.segmentation)
 }

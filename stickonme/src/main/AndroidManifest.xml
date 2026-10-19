@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aktywności, FileProvider i ML Kit dochodzą z manifestu biblioteki :studio (scalanie manifestów). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:name=".StickOnMeApp"
+        android:allowBackup="true"
+        android:label="@string/stickonme_name"
+        android:icon="@mipmap/ic_stickonme"
+        android:roundIcon="@mipmap/ic_stickonme"
+        android:theme="@style/Theme.StickOnMe"
+        android:supportsRtl="true" />
+
+</manifest>

@@ -12,8 +12,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 
-// Biblioteka gotowych naklejek StickOnMe: pliki PNG w prywatnej pamięci aplikacji.
-// Launcher i studio to jedna instalacja, więc launcher czyta ten sam folder (bez udostępniania plików między aplikacjami).
+// Biblioteka gotowych naklejek StickOnMe: pliki PNG w prywatnej pamięci aplikacji StickOnMe.
+// Inne aplikacje dostają naklejkę tylko jako link content:// (StickOnMe.resultIntent / share).
 object StickerLibrary {
     private fun folder(context: Context) = File(context.filesDir, "stickers/library").apply { mkdirs() }
 
@@ -173,31 +173,27 @@ object StickerLibrary {
     }
 }
 
-// Jak launcher prosi studio o naklejkę: "wybierz albo zrób nową i oddaj ścieżkę" (jak okno wyboru pliku).
+// Kontrakt StickOnMe ↔ inne aplikacje (dziś: LaunchOnMe). StickOnMe jest osobną aplikacją (pakiet PACKAGE),
+// więc pliki wymieniamy linkami content:// z jednorazowym prawem odczytu (FLAG_GRANT_READ_URI_PERMISSION),
+// a nie ścieżkami — inna aplikacja nie widzi naszego filesDir (jak dwa procesy z osobnymi dyskami w .NET).
+// Launcher NIE zależy od tego modułu: ma własną kopię tych stałych (data/StickOnMeBridge.kt) — zmieniaj obie naraz.
 object StickOnMe {
-    const val EXTRA_PICK = "pl.rafal.stickonme.PICK"
-    const val EXTRA_PATH = "pl.rafal.stickonme.PATH"
+    const val PACKAGE = "pl.rafal.stickonme"
+    const val EXTRA_PICK = "pl.rafal.stickonme.PICK"           // tryb wyboru: wynik (naklejka) wraca do wywołującego
+    const val EXTRA_EDIT = "pl.rafal.stickonme.EDIT"           // Boolean: intent.data = gotowa naklejka do poprawki
+    // (bez EXTRA_EDIT intent.data = zdjęcie do wycięcia, np. z „Udostępnij” w launcherze)
+    const val EXTRA_SHAPE = "pl.rafal.stickonme.SHAPE"         // początkowy kształt (StickerShapes.id)
+    const val EXTRA_FRAME = "pl.rafal.stickonme.FRAME"         // początkowa ramka (Layer.FRAME_*)
+    const val EXTRA_WALLPAPER = "pl.rafal.stickonme.WALLPAPER" // wybór tablicy na tapetę trybu (wynik: obraz JPEG)
+    // Jednorazowe przeniesienie biblioteki z launchera (dawniej wspólna instalacja): intent.data = .zip.
+    const val ACTION_IMPORT = "pl.rafal.stickonme.action.IMPORT_LIBRARY"
 
-    const val EXTRA_EDIT = "pl.rafal.stickonme.EDIT"
-    const val EXTRA_PHOTO = "pl.rafal.stickonme.PHOTO"   // zdjęcie do wycięcia (np. z "Udostępnij")
-    const val EXTRA_SHAPE = "pl.rafal.stickonme.SHAPE"   // początkowy kształt (StickerShapes.id)
-    const val EXTRA_FRAME = "pl.rafal.stickonme.FRAME"   // początkowa ramka (Layer.FRAME_*)
-    const val EXTRA_WALLPAPER = "pl.rafal.stickonme.WALLPAPER" // wybór tablicy na tapetę trybu
-
-    fun pickIntent(context: Context): Intent = Intent(context, StudioActivity::class.java).putExtra(EXTRA_PICK, true)
-
-    // Poprawka naklejki, która już leży na karcie (plik launchera): edytor startuje z nią, wynik wraca jak przy wyborze.
-    // shape / frame: dawne ustawienia z karty launchera — edytor startuje z nimi, żeby naklejka wyglądała tak samo.
-    fun editIntent(context: Context, path: String, shape: String? = null, frame: String? = null): Intent =
-        pickIntent(context).putExtra(EXTRA_EDIT, path).putExtra(EXTRA_SHAPE, shape).putExtra(EXTRA_FRAME, frame)
-
-    // Tapeta trybu z tablicy: studio otwiera "Tablice", a wynik (EXTRA_PATH) to gotowy obraz PNG tablicy.
-    fun wallpaperIntent(context: Context): Intent = pickIntent(context).putExtra(EXTRA_WALLPAPER, true)
-
-    // Obrazek z zewnątrz (plik w pamięci launchera): wycinanie od zera, albo poprawka, jeśli już jest przezroczysty.
-    fun cutoutIntent(context: Context, path: String): Intent = pickIntent(context).putExtra(EXTRA_PHOTO, path)
-
-    fun resultPath(data: Intent?): String? = data?.getStringExtra(EXTRA_PATH)
+    // Wynik dla wywołującej aplikacji: link do pliku (biblioteka albo obraz tapety w cache) + prawo odczytu.
+    fun resultIntent(context: Context, file: File): Intent {
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.stickonme", file)
+        val type = if (file.extension.equals("png", ignoreCase = true)) "image/png" else "image/jpeg"
+        return Intent().setDataAndType(uri, type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
 
     fun library(context: Context): List<File> = StickerLibrary.list(context)
 }

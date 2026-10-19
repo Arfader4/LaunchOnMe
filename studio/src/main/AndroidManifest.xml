@@ -7,8 +7,8 @@
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="subject_segment" />
 
-        <!-- StickOnMe: własna ikona i nazwa w szufladzie (osobne zadanie w "ostatnich aplikacjach"),
-             ale to ta sama instalacja co LaunchOnMe. -->
+        <!-- StickOnMe: główna aktywność osobnej aplikacji (moduł :stickonme). LaunchOnMe otwiera ją jawną intencją
+             (pakiet pl.rafal.stickonme) do wyboru / poprawki naklejki i tapety z tablicy — stąd exported. -->
         <activity
             android:name=".StudioActivity"
             android:exported="true"
@@ -26,6 +26,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Jednorazowe przeniesienie biblioteki z launchera (sprawdza, że woła LaunchOnMe). -->
+        <activity
+            android:name=".LibraryImportActivity"
+            android:exported="true"
+            android:theme="@style/Theme.StickOnMe"
+            android:excludeFromRecents="true" />
 
         <!-- Udostępnianie naklejek (WhatsApp, Messenger…): tymczasowy link content:// do pliku z biblioteki. -->
         <provider

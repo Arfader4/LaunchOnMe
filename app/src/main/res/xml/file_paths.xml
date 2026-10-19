@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Foldery, które FileProvider może udostępniać innym aplikacjom (tylko kopie z OnHand). -->
+<!-- Foldery, które FileProvider może udostępniać innym aplikacjom: kopie z OnHand, naklejki z kart
+     (do poprawki w StickOnMe — osobnej aplikacji) i paczka przenoszonej biblioteki StickOnMe. -->
 <paths>
     <files-path name="pinned" path="pinned/" />
+    <files-path name="stickers" path="stickers/" />
+    <cache-path name="stickonme" path="stickonme/" />
 </paths>

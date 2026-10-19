@@ -142,7 +142,7 @@ fun ModeSettingsSheet(
     wallpaperSet: Boolean,
     wallpaperOnLock: Boolean,
     onPickWallpaper: () -> Unit,
-    onBoardWallpaper: () -> Unit,   // tapeta z tablicy StickOnMe (kolaż, własna grafika)
+    onBoardWallpaper: (() -> Unit)?, // tapeta z tablicy StickOnMe (kolaż, własna grafika); null = StickOnMe nie zainstalowane
     onClearWallpaper: () -> Unit,
     onCropWallpaper: () -> Unit,
     onWallpaperLockChange: (Boolean) -> Unit,
@@ -317,7 +317,7 @@ fun ModeSettingsSheet(
             Text(stringResource(R.string.msug_wallpaper), style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                 AssistChip(onClick = onPickWallpaper, label = { Text(if (wallpaperSet) stringResource(R.string.msug_wallpaper_change) else stringResource(R.string.msug_wallpaper_pick)) })
-                AssistChip(onClick = onBoardWallpaper, label = { Text(stringResource(R.string.msug_wallpaper_board)) })
+                if (onBoardWallpaper != null) AssistChip(onClick = onBoardWallpaper, label = { Text(stringResource(R.string.msug_wallpaper_board)) })
                 if (wallpaperSet) AssistChip(onClick = onCropWallpaper, label = { Text(stringResource(R.string.msug_wallpaper_crop)) })
                 if (wallpaperSet) AssistChip(onClick = onClearWallpaper, label = { Text(stringResource(R.string.common_delete)) })
             }

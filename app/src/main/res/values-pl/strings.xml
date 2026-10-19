@@ -1227,4 +1227,8 @@
     <string name="set_usage_need_access">Brak dostępu do danych o użyciu — do czasu nadania liczą się uruchomienia z launchera. Dotknij opcji ponownie, by otworzyć ustawienia systemu.</string>
     <string name="set_perm_usage">Dostęp do danych o użyciu („najczęściej” z systemu)</string>
     <string name="drawer_folder_arrange_hint">Przytrzymaj ikonę i przeciągnij ją w nowe miejsce. Kolejność zapisze się w tym folderze (we wszystkich OnModes).</string>
+    <string name="set_stickonme_move_title">Przenieś naklejki i tablice do StickOnMe</string>
+    <string name="set_stickonme_move_sub">StickOnMe jest teraz osobną aplikacją. Twoja biblioteka jest jeszcze w launcherze — przenieś ją jednym dotknięciem.</string>
+    <string name="set_stickonme_missing_sub">Najpierw zainstaluj aplikację StickOnMe — potem przeniesiesz tu swoje naklejki i tablice.</string>
+    <string name="set_stickonme_move_failed">Nie udało się przygotować biblioteki do przeniesienia.</string>
 </resources>

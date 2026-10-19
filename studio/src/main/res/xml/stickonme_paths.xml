@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- StickOnMe udostępnia innym aplikacjom tylko gotowe naklejki z biblioteki (nic więcej z pamięci aplikacji). -->
+<!-- StickOnMe udostępnia innym aplikacjom tylko gotowe naklejki z biblioteki i obraz tapety z tablicy
+     (cache/out/) — nic więcej z pamięci aplikacji. -->
 <paths>
     <files-path name="library" path="stickers/library/" />
+    <cache-path name="out" path="out/" />
 </paths>

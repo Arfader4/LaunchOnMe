@@ -24,7 +24,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "LaunchOnMe"
 include(":app")
-include(":studio") // StickOnMe — studio naklejek (osobny moduł, w pakiecie z launcherem)
+include(":studio") // StickOnMe — kod studia naklejek (biblioteka)
+include(":stickonme") // StickOnMe — osobna aplikacja (własny APK) zbudowana z :studio
 include(":themes") // OnThemes — aplikacja motywów (osobny moduł, w pakiecie z launcherem)
  
  

@@ -1,8 +1,11 @@
 # LaunchOnMe — wskazówki dla Claude (i każdego, kto przejmuje pracę)
 
 Projekt: launcher na Androida z trybami (LaunchOnMe, pakiet `pl.rafal.contextlauncher`, folder `ContextLauncher`)
-+ studio naklejek **StickOnMe** jako moduł biblioteki `:studio` (pakiet `pl.rafal.stickonme`) w tym samym APK,
-z własną ikoną w szufladzie. Projekt do nauki i portfolio. Plan prac i historia: `ROADMAP.md`.
++ studio naklejek **StickOnMe** — od 1.9.0 OSOBNA aplikacja: kod w bibliotece `:studio` (pakiet `pl.rafal.stickonme`),
+APK z modułu `:stickonme` (applicationId `pl.rafal.stickonme`, własna numeracja od 1.0.0). Launcher nie zależy od `:studio` —
+woła StickOnMe jawnymi intencjami i wymienia pliki linkami content:// (`data/StickOnMeBridge.kt` ↔ obiekt `StickOnMe`
+w `StickerLibrary.kt`; stałe muszą się zgadzać). OnThemes i OnHand są nadal w APK launchera.
+Projekt do nauki i portfolio. Plan prac i historia: `ROADMAP.md`.
 
 ## Jak pracujemy
 - Rozmawiamy po polsku. Komentarze w kodzie po polsku, z porównaniami do C#/.NET (autor zna .NET, uczy się Kotlina).
@@ -50,7 +53,8 @@ push robi właściciel.
 ## Ważne miejsca w kodzie
 - `ui/LauncherScreen.kt` (ekran główny, okna), `ui/LauncherViewModel.kt` (logika), `ui/CardGridView.kt` (siatka karty,
   przeciąganie), `ui/ModeSwitcher.kt` + `ui/ModeArc.kt` (klawisz ON, lista i łuk trybów), `data/Backup.kt` (kopia .zip/.json).
-- StickOnMe: `StudioActivity.kt` (biblioteka, edytor wycinania), `BoardEditor.kt` + `BoardRenderer.kt` (tablice).
+- StickOnMe: `StudioActivity.kt` (biblioteka, edytor wycinania), `BoardEditor.kt` + `BoardRenderer.kt` (tablice),
+  `LibraryImportActivity.kt` (jednorazowe przeniesienie biblioteki z launchera). Wersję StickOnMe podbijaj w `stickonme/build.gradle.kts`.
 - OnThemes (moduł `:themes`, pakiet `pl.rafal.onthemes`): cały model motywów — `ThemeModel.kt` (`ThemeSpec`, `Roles`,
   `LocalThemeSpec`), `Themes.kt` (katalog + aliasy starych nazw), `Luxury.kt`, `CustomThemes.kt`, `ThemeStore.kt`
   (prefs `appearance`), `Badges.kt` (wygląd znaczka trybu wg stylu motywu), `SystemColors.kt`, `PaletteWallpaper.kt`;

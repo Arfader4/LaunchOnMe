@@ -156,7 +156,7 @@ private object LibraryScreenKey
 private object DirectLoadingKey
 
 // Studio naklejek. Otwarte z szuflady: biblioteka + edytor. Otwarte z launchera (EXTRA_PICK):
-// wybór gotowej naklejki albo nowa — a wynik (ścieżka pliku) wraca do launchera.
+// wybór gotowej naklejki albo nowa — a wynik (link content:// do pliku) wraca do launchera.
 class StudioActivity : ComponentActivity() {
     // System prosi o oddanie pamięci (aplikacja w tle albo telefonowi brakuje RAM) — miniatury można wczytać ponownie.
     override fun onTrimMemory(level: Int) {
@@ -170,9 +170,12 @@ class StudioActivity : ComponentActivity() {
         enableEdgeToEdge()
         val pickMode = intent.getBooleanExtra(StickOnMe.EXTRA_PICK, false)
         val wallpaperMode = intent.getBooleanExtra(StickOnMe.EXTRA_WALLPAPER, false)
+        // Obraz od launchera przychodzi jako link content:// w intent.data (z prawem odczytu na czas tej aktywności).
+        // Z szuflady intent.data jest puste — wtedy zwykła biblioteka. Tylko w trybie wyboru (EXTRA_PICK).
+        val startUri = if (pickMode) intent.data else null
         val start = StudioStart(
-            editPath = intent.getStringExtra(StickOnMe.EXTRA_EDIT),
-            photoPath = intent.getStringExtra(StickOnMe.EXTRA_PHOTO),
+            uri = startUri,
+            edit = intent.getBooleanExtra(StickOnMe.EXTRA_EDIT, false),
             shape = intent.getStringExtra(StickOnMe.EXTRA_SHAPE),
             frame = intent.getStringExtra(StickOnMe.EXTRA_FRAME),
         )
@@ -186,7 +189,9 @@ class StudioActivity : ComponentActivity() {
                     wallpaperMode = wallpaperMode,
                     start = start,
                     onPicked = { file ->
-                        setResult(Activity.RESULT_OK, Intent().putExtra(StickOnMe.EXTRA_PATH, file.absolutePath))
+                        // Wynik jako link content:// — launcher to inna aplikacja i nie przeczyta naszej ścieżki.
+                        val result = runCatching { StickOnMe.resultIntent(this, file) }.getOrNull()
+                        setResult(if (result != null) Activity.RESULT_OK else Activity.RESULT_CANCELED, result)
                         finish()
                     },
                     onExit = {
@@ -201,8 +206,9 @@ class StudioActivity : ComponentActivity() {
 }
 
 // Z czym studio startuje, gdy otwiera je launcher: poprawka naklejki z karty albo zdjęcie do wycięcia.
-private data class StudioStart(val editPath: String?, val photoPath: String?, val shape: String?, val frame: String?) {
-    val direct get() = editPath != null || photoPath != null
+// uri = obraz od launchera; edit = true → gotowa naklejka do poprawki, false → zdjęcie do wycięcia.
+private data class StudioStart(val uri: android.net.Uri?, val edit: Boolean, val shape: String?, val frame: String?) {
+    val direct get() = uri != null
 }
 
 @Composable
@@ -222,15 +228,15 @@ private fun StudioApp(pickMode: Boolean, wallpaperMode: Boolean, start: StudioSt
     var refresh by remember { mutableIntStateOf(0) } // zmiana = biblioteka czytana od nowa
     // Z launchera: "Edytuj w StickOnMe" (gotowa naklejka) albo "Udostępnij → naklejka" (zdjęcie) — od razu edytor.
     LaunchedEffect(start) {
-        val path = start.editPath ?: start.photoPath
-        if (path != null) {
-            val image = StickerLibrary.decodeFile(path)
+        val uri = start.uri
+        if (uri != null) {
+            val image = StickerLibrary.decode(context, uri)
             if (image == null) {
                 onExit()
             } else {
                 // Przygotowanie maski z przezroczystości to pętla po pikselach — poza wątkiem UI.
                 editing = withContext(Dispatchers.Default) {
-                    val ready = start.editPath != null || StickerLibrary.hasTransparency(image)
+                    val ready = start.edit || StickerLibrary.hasTransparency(image)
                     CutoutEditor(image, fromSticker = ready).apply {
                         start.shape?.let { shape = StickerShapes.of(it).id }
                         start.frame?.let { f -> if (Layer.FRAMES.any { it.first == f }) frame = f }
@@ -328,7 +334,8 @@ private fun StudioApp(pickMode: Boolean, wallpaperMode: Boolean, start: StudioSt
                                 }
                                 image.recycle() // dwie bitmapy tapety naraz to kilkadziesiąt MB — zwalniamy od razu
                                 try {
-                                    File(context.cacheDir, "board_wallpaper.jpg").also { f ->
+                                    // cache/out/ — jedyny folder cache udostępniany przez FileProvider (stickonme_paths.xml).
+                                    File(File(context.cacheDir, "out").apply { mkdirs() }, "board_wallpaper.jpg").also { f ->
                                         f.outputStream().use { opaque.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it) }
                                     }
                                 } finally {
