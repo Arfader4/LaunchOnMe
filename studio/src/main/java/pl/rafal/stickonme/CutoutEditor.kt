@@ -302,7 +302,25 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
             }
             pixels[i] = (a * 255f).roundToInt() shl 24
         }
-        return Bitmap.createBitmap(w, h, Bitmap.Config.ALPHA_8).apply { setPixels(pixels, 0, w, 0, 0, w, h) }
+        // ARGB_8888, nie ALPHA_8: czytamy ją potem przez getPixels (pewne na każdym telefonie).
+        return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply { setPixels(pixels, 0, w, 0, 0, w, h) }
+    }
+
+    // Maska przeskalowana do w×h (najbliższy sąsiad — tylko podgląd), jako ARGB_8888 (liczy się kanał alfa).
+    private fun scaledMask(w: Int, h: Int): Bitmap {
+        val mw = mask.width
+        val mh = mask.height
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val src = IntArray(mw)
+        val row = IntArray(w)
+        val xs = IntArray(w) { x -> ((x + 0.5f) * mw / w).toInt().coerceIn(0, mw - 1) }
+        for (y in 0 until h) {
+            val sy = ((y + 0.5f) * mh / h).toInt().coerceIn(0, mh - 1)
+            mask.getPixels(src, 0, mw, 0, sy, mw, 1)
+            for (x in 0 until w) row[x] = src[xs[x]] and 0xFF000000.toInt()
+            out.setPixels(row, 0, w, 0, y, w, 1)
+        }
+        return out
     }
 
     // Średnia z okna 2r+1 w jednym kierunku (suma krocząca — O(n) niezależnie od promienia).
@@ -345,16 +363,29 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         val longest = maxOf(photo.width, photo.height)
         val factor = if (workSide != null && longest > workSide) workSide.toFloat() / longest else 1f
         val src = if (factor < 1f) scaled(photo, factor) else photo
-        val msk = if (factor < 1f) scaled(mask, factor) else mask
+        val w = src.width
+        val h = src.height
+        val msk = if (factor < 1f) scaledMask(w, h) else mask
         try {
-            val cut = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
             val finished = finishedMask(msk, factor, check)
-            Canvas(cut).apply {
-                drawBitmap(src, 0f, 0f, null)
-                drawBitmap(finished ?: msk, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
+            val m = finished ?: msk
+            // Nakładanie maski PIKSEL PO PIKSELU (wiersz po wierszu, mało pamięci): alfa wyniku = alfa zdjęcia × alfa maski.
+            // Wcześniej było rysowanie maski ALPHA_8 w trybie DST_IN — na niektórych telefonach nie działało
+            // (maska na ekranie dobra, a naklejka zapisywała się z całym tłem). getPixels na masce działa wszędzie.
+            val cut = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val color = IntArray(w)
+            val alpha = IntArray(w)
+            for (y in 0 until h) {
+                if (y % 64 == 0) check()
+                src.getPixels(color, 0, w, 0, y, w, 1)
+                m.getPixels(alpha, 0, w, 0, y, w, 1)
+                for (x in 0 until w) {
+                    val a = ((color[x] ushr 24) * (alpha[x] ushr 24) + 127) / 255
+                    color[x] = (a shl 24) or (color[x] and 0x00FFFFFF)
+                }
+                cut.setPixels(color, 0, w, 0, y, w, 1)
             }
             finished?.recycle()
-            check()
             return cut
         } finally {
             if (src !== photo) src.recycle()
@@ -413,7 +444,7 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
     private fun applyShape(source: Bitmap, kind: StickerShapes.Shape): Bitmap {
         val path = StickerShapes.path(kind.id, source.width.toFloat(), source.height.toFloat()) ?: return source
         val out = source.copy(Bitmap.Config.ARGB_8888, true)
-        val shapeMask = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ALPHA_8)
+        val shapeMask = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888) // ARGB: DST_IN pewne wszędzie
         Canvas(shapeMask).drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK })
         Canvas(out).drawBitmap(shapeMask, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
         shapeMask.recycle()
