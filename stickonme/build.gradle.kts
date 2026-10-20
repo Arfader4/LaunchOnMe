@@ -1,9 +1,10 @@
 // StickOnMe — osobna aplikacja (własny APK i własna instalacja, pakiet pl.rafal.stickonme).
 // Cały kod studia mieszka w module biblioteki :studio; ten moduł tylko go „opakowuje” w aplikację
 // (jak projekt .exe w .NET, który odwołuje się do biblioteki .dll z całą logiką).
+// Bez wtyczki Compose: ten moduł nie ma kodu Compose (tylko klasa aplikacji), a wtyczka bez biblioteki
+// compose-runtime na ścieżce kompilacji kończy się błędem „Compose Compiler requires the Compose Runtime”.
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -34,9 +35,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-    }
-    buildFeatures {
-        compose = true
     }
 }
 
