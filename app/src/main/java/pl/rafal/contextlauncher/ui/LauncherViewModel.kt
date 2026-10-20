@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flatMapLatest
@@ -2179,6 +2180,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _autoNotice = MutableStateFlow<AutoSwitchNotice?>(null)
     val autoNotice: StateFlow<AutoSwitchNotice?> = _autoNotice.asStateFlow()
 
+    // 1.9.1: informacja „Włączono …” to nie pytanie — znika sama po chwili (✕ = Cofnij działa, dopóki jest widoczna).
+    // collectLatest: każda nowa informacja anuluje odliczanie poprzedniej (jak CancellationToken przy nowym zadaniu).
+    init {
+        viewModelScope.launch {
+            _autoNotice.collectLatest { notice ->
+                if (notice != null) {
+                    delay(NOTICE_VISIBLE_MS)
+                    if (_autoNotice.value == notice) _autoNotice.value = null
+                }
+            }
+        }
+    }
+
     fun keepAutoSwitch() {
         _autoNotice.value = null
     }
@@ -2216,6 +2230,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         autoRecheck?.cancel()
         _autoStatus.value = null
         if (suggestion == null || !appPrefs.autoSwitch.value) {
+            autoCandidate = null
+            return
+        }
+        // 1.9.1: nowa sugestia przejmuje pasek — informacja o poprzednim przełączeniu nie może jej zasłaniać.
+        _autoNotice.value?.let { notice -> if (notice.suggestionKey != suggestion.key) _autoNotice.value = null }
+        // 1.9.1: automat sam tylko WŁĄCZA tryby, których reguły pasują. Zakończenie trybu (powrót do Start /
+        // poprzedniego) zostaje propozycją ✓ / ✕ — dawniej automat sam wracał do Start, gdy reguła przestała pasować.
+        if (suggestion is Suggestion.EndMode) {
             autoCandidate = null
             return
         }
@@ -2568,6 +2590,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         const val USAGE_WINDOW_MS = 30L * 24 * 60 * 60 * 1000 // okno danych o użyciu z systemu
         const val NEW_APP_WINDOW_MS = 7L * 24 * 60 * 60 * 1000 // jak długo aplikacja jest "nowa" w szufladzie
         private const val MANUAL_GRACE_MS = 30 * 60_000L
+        private const val NOTICE_VISIBLE_MS = 15_000L // jak długo widać „Włączono …” po automatycznej zmianie
     }
 }
 
