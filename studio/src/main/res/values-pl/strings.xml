@@ -162,4 +162,26 @@
     <string name="som_editor_auto_keep">✓ Zostaw</string>
     <string name="som_import_done">Przeniesiono z LaunchOnMe: naklejki %1$d, tablice %2$d.</string>
     <string name="som_import_failed">Nie udało się przenieść biblioteki z LaunchOnMe.</string>
+    <string name="som_undo_cd">Cofnij</string>
+    <string name="som_redo_cd">Ponów</string>
+    <string name="som_compare_cd">Przytrzymaj, aby zobaczyć oryginał</string>
+    <string name="som_object_hint">Wytnie główny obiekt ze zdjęcia. Potem możesz go poprawić pędzlem.</string>
+    <string name="som_brush_size">Pędzel</string>
+    <string name="som_brush_size_cd">Rozmiar pędzla %1$d z 4</string>
+    <string name="som_crop_rect">Prostokąt</string>
+    <string name="som_edge_smooth">Wygładzenie krawędzi</string>
+    <string name="som_edge_shrink">Zwężenie krawędzi</string>
+    <string name="som_level_none">Brak</string>
+    <string name="som_level_light">Lekkie</string>
+    <string name="som_level_strong">Mocne</string>
+    <string name="som_px">%1$d px</string>
+    <string name="som_rotate_straight">Prosto</string>
+    <string name="som_rail_object">Obiekt</string>
+    <string name="som_rail_brush">Pędzel</string>
+    <string name="som_rail_crop">Kadr</string>
+    <string name="som_rail_edge">Krawędź</string>
+    <string name="som_rail_shape">Kształt</string>
+    <string name="som_rail_frame">Ramka</string>
+    <string name="som_rail_rotate">Obrót</string>
+    <string name="som_rail_size">Rozmiar</string>
 </resources>

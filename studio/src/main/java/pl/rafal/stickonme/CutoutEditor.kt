@@ -85,6 +85,10 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
     private val undo = ArrayDeque<Bitmap>()
     private var undoCount by mutableIntStateOf(0) // stan Compose: przycisk "Cofnij" wie, kiedy się włączyć
     val canUndo get() = undoCount > 0
+    // „Ponów”: kroki zdjęte przez Cofnij. Każda nowa zmiana maski czyści tę listę (jak Ctrl+Y w edytorach).
+    private val redo = ArrayDeque<Bitmap>()
+    private var redoCount by mutableIntStateOf(0)
+    val canRedo get() = redoCount > 0
 
     private val canvas = Canvas(mask)
     private val add = Paint().apply {
@@ -101,15 +105,36 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         undo.addLast(mask.copy(Bitmap.Config.ALPHA_8, false))
         while (undo.size > 12) undo.removeFirst().recycle() // najstarszy krok — nigdzie nie rysowany
         undoCount = undo.size
+        clearRedo() // nowa zmiana = stara „przyszłość” przepada
     }
 
     fun undoLast() {
         val previous = undo.removeLastOrNull() ?: return
         undoCount = undo.size
+        redo.addLast(mask.copy(Bitmap.Config.ALPHA_8, false))
+        redoCount = redo.size
+        restore(previous)
+    }
+
+    fun redoLast() {
+        val next = redo.removeLastOrNull() ?: return
+        redoCount = redo.size
+        undo.addLast(mask.copy(Bitmap.Config.ALPHA_8, false))
+        undoCount = undo.size
+        restore(next)
+    }
+
+    private fun restore(state: Bitmap) {
         canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-        canvas.drawBitmap(previous, 0f, 0f, null)
-        previous.recycle()
+        canvas.drawBitmap(state, 0f, 0f, null)
+        state.recycle()
         version++
+    }
+
+    private fun clearRedo() {
+        redo.forEach { it.recycle() }
+        redo.clear()
+        redoCount = 0
     }
 
     // Pociągnięcie pędzla w pikselach zdjęcia (width = średnica pędzla w pikselach zdjęcia).
@@ -147,6 +172,7 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         undo.forEach { it.recycle() }
         undo.clear()
         undoCount = 0
+        clearRedo()
     }
 
     // Całe zdjęcie (bez wycinania) albo wyczyszczenie maski.

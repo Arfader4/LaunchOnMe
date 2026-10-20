@@ -21,8 +21,8 @@ android {
         minSdk = 29
         targetSdk = 36
         // Własna numeracja StickOnMe (od wydzielenia z LaunchOnMe 1.9.0): X·10000 + Y·100 + Z.
-        versionCode = 10000
-        versionName = "1.0.0"
+        versionCode = 10100
+        versionName = "1.1.0"
     }
 
     buildTypes {

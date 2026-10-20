@@ -62,6 +62,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -631,9 +637,17 @@ private enum class Tool(@StringRes val labelRes: Int) {
 private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (File) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var tab by remember { mutableIntStateOf(0) } // 0 = wycinanie, 1 = obrót i rozmiar
-    var tool by remember { mutableStateOf(Tool.ERASE) } // start od całego zdjęcia → najpierw zwykle się usuwa
-    var brush by remember { mutableFloatStateOf(36f) } // średnica pędzla w dp ekranu
+    // Sekcja z dolnego paska narzędzi. Sekcje wycinania pokazują maskę, sekcje wykończenia — gotową naklejkę.
+    var section by remember { mutableStateOf(EditSection.BRUSH) }
+    val tab = if (section.finish) 1 else 0 // 0 = maska (wycinanie), 1 = gotowa naklejka (wykończenie)
+    var brushMode by remember { mutableStateOf(Tool.ERASE) } // start od całego zdjęcia → najpierw zwykle się usuwa
+    var cropOval by remember { mutableStateOf(false) }
+    val tool = when (section) {
+        EditSection.BRUSH -> brushMode
+        EditSection.CROP -> if (cropOval) Tool.OVAL else Tool.CROP
+        else -> Tool.MOVE // pozostałe sekcje: palec tylko przesuwa widok
+    }
+    var brush by remember { mutableFloatStateOf(BRUSH_SIZES[1]) } // średnica pędzla w dp ekranu
     var busy by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf<String?>(null) }
     // Po „Wytnij obiekt” pytamy, czy zostawić wynik (pasek z ✓ / „Cofnij”).
@@ -691,72 +705,67 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
     // (ML Kit) to jedna z opcji na pasku narzędzi. Poprawka gotowej naklejki: maska z jej przezroczystości.
     LaunchedEffect(editor) { busy = false }
 
-    Column(Modifier.fillMaxSize()) {
-        // Górny pasek: tylko Anuluj i Zapisz — przy większej czcionce systemowej zakładki wypychały
-        // „Zapisz” poza ekran. Zakładki są teraz w osobnym wierszu pod spodem.
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-            TextButton(onClick = onCancel) { Text(stringResource(R.string.som_cancel)) }
-            Spacer(Modifier.weight(1f))
-            Button(
-                enabled = !busy,
-                onClick = {
-                    busy = true
-                    scope.launch {
-                        try {
-                            // Gest jest wyłączony (busy), więc maska się nie zmienia w trakcie liczenia.
-                            val sticker = runCatching { withContext(Dispatchers.Default) { editor.render() } }.getOrNull()
-                            if (sticker == null) {
-                                message = context.getString(R.string.som_editor_empty)
-                            } else {
-                                val file = StickerLibrary.save(context, sticker)
-                                sticker.recycle() // już w pliku PNG
-                                onSaved(file)
-                            }
-                        } finally {
-                            busy = false
-                        }
-                    }
-                },
-            ) { Text(stringResource(R.string.som_save)) }
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-        ) {
-            FilterChip(selected = tab == 0, onClick = { tab = 0 }, label = { Text(stringResource(R.string.som_editor_tab_cutout)) })
-            FilterChip(selected = tab == 1, onClick = { tab = 1 }, label = { Text(stringResource(R.string.som_editor_tab_finish)) })
-        }
-
-        // Po „Wytnij obiekt”: zostaw (✓) albo cofnij do stanu sprzed wycięcia.
-        if (autoProposal && editor.version == autoAt && !busy && tab == 0) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
-                    .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
-            ) {
-                Text(
-                    stringResource(R.string.som_editor_auto_done),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = { editor.undoLast(); autoProposal = false }) { // wraca do maski sprzed wycięcia
-                    Text(stringResource(R.string.som_editor_undo), color = MaterialTheme.colorScheme.onSecondaryContainer)
+    // Zapis naklejki („✓ Gotowe”).
+    val save: () -> Unit = {
+        busy = true
+        scope.launch {
+            try {
+                // Gest jest wyłączony (busy), więc maska się nie zmienia w trakcie liczenia.
+                val sticker = runCatching { withContext(Dispatchers.Default) { editor.render() } }.getOrNull()
+                if (sticker == null) {
+                    message = context.getString(R.string.som_editor_empty)
+                } else {
+                    val file = StickerLibrary.save(context, sticker)
+                    sticker.recycle() // już w pliku PNG
+                    onSaved(file)
                 }
-                Button(onClick = { autoProposal = false }) { Text(stringResource(R.string.som_editor_auto_keep)) }
+            } finally {
+                busy = false
             }
         }
+    }
+    // „Wytnij obiekt” (ML Kit) — tylko na żądanie, z kopią do „Cofnij”.
+    val runAuto: () -> Unit = {
+        busy = true
+        message = null
+        scope.launch {
+            val prepared = autoMaskFor(editor)
+            if (prepared != null) {
+                editor.applyMask(prepared)
+                autoAt = editor.version
+                autoProposal = true
+            } else {
+                message = context.getString(R.string.som_editor_auto_failed)
+            }
+            busy = false
+        }
+    }
+    val original = remember(editor) { editor.photo.asImageBitmap() }
+    var comparing by remember { mutableStateOf(false) } // przytrzymany przycisk porównania = widać oryginał
+    val compareCd = stringResource(R.string.som_compare_cd)
 
+    Column(Modifier.fillMaxSize()) {
+        // Górny pasek (makieta): ✕ | Cofnij · Ponów | ✓ Gotowe. Wszystko inne jest na dole, przy kciuku.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            StudioIconButton(StudioIcons.Close, stringResource(R.string.som_cancel), outlined = true, onClick = onCancel)
+            Spacer(Modifier.weight(1f))
+            // W trakcie wycinania / zapisu maska nie może się zmieniać (czyta ją wątek w tle).
+            StudioIconButton(StudioIcons.Undo, stringResource(R.string.som_undo_cd), enabled = !busy && editor.canUndo) { editor.undoLast() }
+            StudioIconButton(StudioIcons.Redo, stringResource(R.string.som_redo_cd), enabled = !busy && editor.canRedo) { editor.redoLast() }
+            Spacer(Modifier.weight(1f))
+            StudioPrimaryButton(stringResource(R.string.som_done), enabled = !busy, onClick = save)
+        }
+
+        // Płótno na prawie cały ekran.
         Box(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(8.dp)
-                .clip(RoundedCornerShape(16.dp)),
+                .padding(horizontal = 12.dp)
+                .clip(RoundedCornerShape(20.dp)),
         ) {
             if (tab == 0) {
                 MaskCanvas(editor, tool = tool, brushDp = brush, rotation = 0f, enabled = !busy)
@@ -764,120 +773,253 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                 val cut = cutPreview
                 if (fitMode && cut != null) ShapeFitCanvas(editor, cut) else ResultPreview(resultPreview, editor.rotation)
             }
+            if (comparing) {
+                Image(
+                    original,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+                )
+            }
             if (busy || (tab == 1 && previewing && (if (fitMode) cutPreview == null else resultPreview == null))) CircularProgressIndicator(Modifier.align(Alignment.Center))
-        }
 
-        message?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
-        }
-
-        Column(
-            Modifier
-                .heightIn(max = 320.dp) // wiele ustawień → przewijane, podgląd zostaje duży
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (tab == 0) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    Tool.entries.forEach { t -> FilterChip(selected = tool == t, onClick = { tool = t }, label = { Text(stringResource(t.labelRes)) }) }
-                    // W trakcie wycinania / zapisu maska nie może się zmieniać (czyta ją wątek w tle).
-                    TextButton(enabled = !busy && editor.canUndo, onClick = { editor.undoLast() }) { Text(stringResource(R.string.som_editor_undo)) }
-                    TextButton(enabled = !busy, onClick = {
-                        busy = true
-                        message = null
-                        scope.launch {
-                            val prepared = autoMaskFor(editor)
-                            if (prepared != null) {
-                                editor.applyMask(prepared) // z kopią do „Cofnij”
-                                autoAt = editor.version
-                                autoProposal = true
-                            } else {
-                                message = context.getString(R.string.som_editor_auto_failed)
-                            }
-                            busy = false
-                        }
-                    }) { Text(stringResource(R.string.som_editor_auto)) }
-                    TextButton(enabled = !busy, onClick = { editor.fill(true) }) { Text(stringResource(R.string.som_editor_whole_photo)) }
-                }
-                if (tool.crops) {
+            // Po „Wytnij obiekt”: zostaw (✓) albo cofnij do stanu sprzed wycięcia.
+            if (autoProposal && editor.version == autoAt && !busy && tab == 0) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .padding(10.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                ) {
                     Text(
-                        stringResource(R.string.som_editor_crop_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    Text(stringResource(R.string.som_editor_brush, brush.roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Slider(value = brush, onValueChange = { brush = it }, valueRange = 8f..96f)
-                }
-            } else {
-                Text(stringResource(R.string.som_editor_rotation, editor.rotation.roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { editor.rotation = ((editor.rotation - 90f + 540f) % 360f) - 180f }) { Text("↺ 90°") }
-                    Slider(
-                        value = editor.rotation,
-                        onValueChange = { editor.rotation = it },
-                        valueRange = -180f..180f,
+                        stringResource(R.string.som_editor_auto_done),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { editor.rotation = ((editor.rotation + 90f + 540f) % 360f) - 180f }) { Text("↻ 90°") }
-                }
-                Text(stringResource(R.string.som_editor_edge_smooth, editor.edgeSmooth.roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Slider(value = editor.edgeSmooth, onValueChange = { editor.edgeSmooth = it }, valueRange = 0f..12f)
-                Text(stringResource(R.string.som_editor_edge_shrink, editor.edgeShrink.roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Slider(value = editor.edgeShrink, onValueChange = { editor.edgeShrink = it }, valueRange = 0f..8f)
-                Text(stringResource(R.string.som_editor_shape), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    StickerShapes.all.forEach { s -> FilterChip(selected = editor.shape == s.id, onClick = { editor.shape = s.id }, label = { Text(s.label) }) }
-                }
-                if (editor.shape != StickerShapes.NONE) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(selected = fitting, onClick = { fitting = !fitting }, label = { Text(stringResource(R.string.som_editor_fit)) })
-                        TextButton(enabled = editor.shapeFitChanged, onClick = { editor.resetShapeFit() }) { Text(stringResource(R.string.som_editor_fit_reset)) }
+                    TextButton(onClick = { editor.undoLast(); autoProposal = false }) {
+                        Text(stringResource(R.string.som_editor_undo), color = MaterialTheme.colorScheme.onSecondaryContainer)
                     }
-                    if (fitMode) {
-                        Text(stringResource(R.string.som_editor_fit_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(stringResource(R.string.som_editor_fit_zoom, (editor.shapeZoom * 100).roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Slider(value = editor.shapeZoom, onValueChange = { editor.shapeZoom = it }, valueRange = SHAPE_ZOOM_MIN..SHAPE_ZOOM_MAX)
-                        Text(stringResource(R.string.som_editor_fit_rotation, editor.shapeRotation.roundToInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(onClick = { editor.shapeRotation = normalizedDegrees(editor.shapeRotation - 90f) }) { Text("↺ 90°") }
-                            Slider(
-                                value = editor.shapeRotation,
-                                onValueChange = { editor.shapeRotation = it },
-                                valueRange = -180f..180f,
-                                modifier = Modifier.weight(1f),
-                            )
-                            TextButton(onClick = { editor.shapeRotation = normalizedDegrees(editor.shapeRotation + 90f) }) { Text("↻ 90°") }
+                    StudioPrimaryButton(stringResource(R.string.som_editor_auto_keep), icon = null) { autoProposal = false }
+                }
+            }
+
+            message?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 12.dp, end = 68.dp, bottom = 12.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xE60E0F12))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+
+            // Porównanie z oryginałem: przytrzymaj (jak w edytorach zdjęć w telefonie).
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(12.dp)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xE60E0F12))
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                    .semantics { contentDescription = compareCd }
+                    .pointerInput(editor) {
+                        detectTapGestures(onPress = {
+                            comparing = true
+                            tryAwaitRelease()
+                            comparing = false
+                        })
+                    },
+            ) {
+                Icon(StudioIcons.Compare, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
+        }
+
+        // Opcje wybranej sekcji — bez suwaków: pigułki i kropki do dotknięcia.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 210.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            when (section) {
+                EditSection.OBJECT -> {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        StudioPrimaryButton(stringResource(R.string.som_editor_auto), enabled = !busy, icon = StudioIcons.Subject, onClick = runAuto)
+                        StudioChip(stringResource(R.string.som_editor_whole_photo), selected = false) { if (!busy) editor.fill(true) }
+                    }
+                    Text(stringResource(R.string.som_object_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                EditSection.BRUSH -> {
+                    StudioSegmented(
+                        options = listOf(
+                            Tool.ADD to stringResource(R.string.som_add),
+                            Tool.ERASE to stringResource(R.string.som_editor_tool_erase),
+                            Tool.MOVE to stringResource(R.string.som_editor_tool_move),
+                        ),
+                        selected = brushMode,
+                        onSelect = { brushMode = it },
+                    )
+                    if (brushMode != Tool.MOVE) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            StudioLabel(stringResource(R.string.som_brush_size))
+                            BRUSH_SIZES.forEachIndexed { i, size ->
+                                BrushDot(index = i, selected = brush == size) { brush = size }
+                            }
                         }
                     }
                 }
-                Text(stringResource(R.string.som_editor_frame), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    Layer.FRAMES.forEach { (key, label) -> FilterChip(selected = editor.frame == key, onClick = { editor.frame = key }, label = { Text(label) }) }
+                EditSection.CROP -> {
+                    StudioSegmented(
+                        options = listOf(false to stringResource(R.string.som_crop_rect), true to stringResource(R.string.som_editor_tool_oval)),
+                        selected = cropOval,
+                        onSelect = { cropOval = it },
+                    )
+                    Text(stringResource(R.string.som_editor_crop_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (Layer.hasColor(editor.frame)) {
+                EditSection.EDGE -> {
+                    StudioLabel(stringResource(R.string.som_edge_smooth))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        FrameColors.forEach { c ->
-                            Box(
-                                Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(c))
-                                    .border(if (editor.frameColor == c) 3.dp else 1.dp, if (editor.frameColor == c) MaterialTheme.colorScheme.secondary else Color(0x55FFFFFF), CircleShape)
-                                    .clickable { editor.frameColor = c },
-                            )
+                        listOf(0f to R.string.som_level_none, 3f to R.string.som_level_light, 8f to R.string.som_level_strong).forEach { (value, label) ->
+                            StudioChip(stringResource(label), editor.edgeSmooth == value) { editor.edgeSmooth = value }
+                        }
+                    }
+                    StudioLabel(stringResource(R.string.som_edge_shrink))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        StudioChip(stringResource(R.string.som_level_none), editor.edgeShrink == 0f) { editor.edgeShrink = 0f }
+                        listOf(1f, 3f, 6f).forEach { value ->
+                            StudioChip(stringResource(R.string.som_px, value.roundToInt()), editor.edgeShrink == value) { editor.edgeShrink = value }
                         }
                     }
                 }
-                Text(stringResource(R.string.som_editor_size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(512 to R.string.som_editor_size_small, 768 to R.string.som_editor_size_medium, 1024 to R.string.som_editor_size_large).forEach { (side, label) ->
-                        FilterChip(selected = editor.outputSide == side, onClick = { editor.outputSide = side }, label = { Text(stringResource(R.string.som_editor_size_chip, stringResource(label), side)) })
+                EditSection.SHAPE -> {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        StickerShapes.all.forEach { s -> StudioChip(s.label, editor.shape == s.id) { editor.shape = s.id } }
+                    }
+                    if (editor.shape != StickerShapes.NONE) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            StudioChip(stringResource(R.string.som_editor_fit), fitting) { fitting = !fitting }
+                            if (editor.shapeFitChanged) StudioChip(stringResource(R.string.som_editor_fit_reset), false) { editor.resetShapeFit() }
+                        }
+                        if (fitMode) {
+                            Text(stringResource(R.string.som_editor_fit_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                EditSection.FRAME -> {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        Layer.FRAMES.forEach { (key, label) -> StudioChip(label, editor.frame == key) { editor.frame = key } }
+                    }
+                    if (Layer.hasColor(editor.frame)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                            FrameColors.forEach { c ->
+                                Box(
+                                    Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(c))
+                                        .border(if (editor.frameColor == c) 3.dp else 1.dp, if (editor.frameColor == c) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline, CircleShape)
+                                        .clickable { editor.frameColor = c },
+                                )
+                            }
+                        }
+                    }
+                }
+                EditSection.ROTATE -> {
+                    Text(
+                        stringResource(R.string.som_editor_rotation, editor.rotation.roundToInt()),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        StudioChip("↺ 90°", false) { editor.rotation = normalizedDegrees(editor.rotation - 90f) }
+                        StudioChip("−5°", false) { editor.rotation = normalizedDegrees(editor.rotation - 5f) }
+                        StudioChip(stringResource(R.string.som_rotate_straight), editor.rotation == 0f) { editor.rotation = 0f }
+                        StudioChip("+5°", false) { editor.rotation = normalizedDegrees(editor.rotation + 5f) }
+                        StudioChip("↻ 90°", false) { editor.rotation = normalizedDegrees(editor.rotation + 90f) }
+                    }
+                }
+                EditSection.SIZE -> {
+                    StudioLabel(stringResource(R.string.som_editor_size))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        listOf(512 to R.string.som_editor_size_small, 768 to R.string.som_editor_size_medium, 1024 to R.string.som_editor_size_large).forEach { (side, label) ->
+                            StudioChip(stringResource(R.string.som_editor_size_chip, stringResource(label), side), editor.outputSide == side) { editor.outputSide = side }
+                        }
                     }
                 }
             }
         }
+
+        // Dolny pasek narzędzi (przewijany): ikona + podpis.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 12.dp),
+        ) {
+            EditSection.entries.forEach { s ->
+                StudioRailItem(s.icon, stringResource(s.labelRes), section == s) { section = s }
+            }
+        }
+    }
+}
+
+// Sekcje edytora naklejki (dolny pasek). finish = pokazuje gotową naklejkę zamiast maski.
+private enum class EditSection(@StringRes val labelRes: Int, val finish: Boolean) {
+    OBJECT(R.string.som_rail_object, false),
+    BRUSH(R.string.som_rail_brush, false),
+    CROP(R.string.som_rail_crop, false),
+    EDGE(R.string.som_rail_edge, true),
+    SHAPE(R.string.som_rail_shape, true),
+    FRAME(R.string.som_rail_frame, true),
+    ROTATE(R.string.som_rail_rotate, true),
+    SIZE(R.string.som_rail_size, true);
+
+    val icon: ImageVector
+        get() = when (this) {
+            OBJECT -> StudioIcons.Subject
+            BRUSH -> StudioIcons.Brush
+            CROP -> StudioIcons.Crop
+            EDGE -> StudioIcons.Edge
+            SHAPE -> StudioIcons.Shape
+            FRAME -> StudioIcons.Frame
+            ROTATE -> StudioIcons.Rotate
+            SIZE -> StudioIcons.Resize
+        }
+}
+
+// Rozmiary pędzla (średnica w dp ekranu) — cztery kropki zamiast suwaka.
+private val BRUSH_SIZES = listOf(14f, 28f, 48f, 80f)
+
+@Composable
+private fun BrushDot(index: Int, selected: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val desc = stringResource(R.string.som_brush_size_cd, index + 1)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(colors.surface)
+            .border(if (selected) 2.dp else 1.dp, if (selected) colors.primary else colors.outline, CircleShape)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = desc },
+    ) {
+        Box(Modifier.size((6 + index * 6).dp).clip(CircleShape).background(colors.onSurface))
     }
 }
 

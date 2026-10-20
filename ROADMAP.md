@@ -25,7 +25,8 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.8.1 | StickOnMe: czytelny tryb ciemny — pełna paleta ról (przyciski, zaznaczone chipy, obramowania) | 1 |
 | 1.8.2 | StickOnMe: biały tekst domyślnie (LocalContentColor), „Zapisz” zawsze widoczny, auto-wycięcie tylko na żądanie („Wytnij obiekt” + ✓ / Cofnij), limit 20 s ML Kit | 1 |
 | 1.9.0 | StickOnMe wydzielone do osobnej aplikacji (moduł `:stickonme`, StickOnMe 1.0.0); launcher woła je intencjami, przeniesienie biblioteki w Ustawieniach | 1 |
-Razem od V1: 48 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
+| SOM 1.1.0 | StickOnMe: nowy edytor naklejki wg makiety (pasek narzędzi z ikonami, bez suwaków, ✓ Gotowe, Ponów, porównanie z oryginałem) | 1 |
+Razem od V1: 49 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).
