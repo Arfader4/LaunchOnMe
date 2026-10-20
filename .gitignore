@@ -19,6 +19,9 @@ local.properties
 *.keystore
 keystore.properties
 /app/release
+/stickonme/release
+*.apk
+*.aab
 
 # Pamięć podręczna kompilatora Kotlina
 .kotlin/
