@@ -217,4 +217,12 @@
     <string name="som_ctx_back">To back</string>
     <string name="som_ctx_duplicate">Duplicate</string>
     <string name="som_ctx_delete">Delete</string>
+    <string name="som_text_align_cd">Text alignment</string>
+    <string name="som_text_look_cd">Style: plain, background, outline</string>
+    <string name="som_text_bold_cd">Bold</string>
+    <string name="som_text_italic_cd">Italic</string>
+    <string name="som_text_underline_cd">Underline</string>
+    <string name="som_text_shadow_cd">Shadow</string>
+    <string name="som_text_size_cd">Text size — drag up or down</string>
+    <string name="som_text_placeholder">Type something…</string>
 </resources>

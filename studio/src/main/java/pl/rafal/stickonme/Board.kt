@@ -36,6 +36,7 @@ data class Layer(
     val underline: Float = 0f,        // grubość podkreślenia w px (0 = bez)
     val shadow: Boolean = false,
     val highlight: Long? = null,      // kolor "zakreślacza" pod tekstem (null = bez)
+    val align: String = ALIGN_CENTER, // wyrównanie linii tekstu: left / center / right
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("kind", kind).put("x", x.toDouble()).put("y", y.toDouble())
@@ -46,10 +47,14 @@ data class Layer(
         .put("outlineColor", outlineColor).put("outlineWidth", outlineWidth.toDouble())
         .put("underline", underline.toDouble()).put("shadow", shadow)
         .putOpt("highlight", highlight)
+        .put("align", align)
 
     companion object {
         const val KIND_IMAGE = "image"
         const val KIND_TEXT = "text"
+        const val ALIGN_LEFT = "left"
+        const val ALIGN_CENTER = "center"
+        const val ALIGN_RIGHT = "right"
 
         const val FRAME_NONE = "none"
         const val FRAME_OUTLINE = "outline"   // biały (albo kolorowy) kontur jak na prawdziwej naklejce
@@ -92,6 +97,7 @@ data class Layer(
             underline = o.optDouble("underline", 0.0).toFloat(),
             shadow = o.optBoolean("shadow", false),
             highlight = if (o.has("highlight") && !o.isNull("highlight")) o.getLong("highlight") else null,
+            align = o.optString("align", ALIGN_CENTER),
         )
     }
 }

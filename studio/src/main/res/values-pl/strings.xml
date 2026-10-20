@@ -217,4 +217,12 @@
     <string name="som_ctx_back">Na spód</string>
     <string name="som_ctx_duplicate">Duplikuj</string>
     <string name="som_ctx_delete">Usuń</string>
+    <string name="som_text_align_cd">Wyrównanie tekstu</string>
+    <string name="som_text_look_cd">Styl: zwykły, tło pod tekstem, obrys</string>
+    <string name="som_text_bold_cd">Pogrubienie</string>
+    <string name="som_text_italic_cd">Kursywa</string>
+    <string name="som_text_underline_cd">Podkreślenie</string>
+    <string name="som_text_shadow_cd">Cień</string>
+    <string name="som_text_size_cd">Rozmiar tekstu — przeciągnij w górę lub w dół</string>
+    <string name="som_text_placeholder">Napisz coś…</string>
 </resources>

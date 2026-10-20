@@ -153,9 +153,15 @@ class BoardRenderer(
         color = layer.color.toInt()
     }
 
-    private fun textLayout(text: CharSequence, paint: TextPaint, width: Int): StaticLayout =
+    private fun textLayout(text: CharSequence, paint: TextPaint, width: Int, align: String): StaticLayout =
         StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
-            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+            .setAlignment(
+                when (align) {
+                    Layer.ALIGN_LEFT -> Layout.Alignment.ALIGN_NORMAL
+                    Layer.ALIGN_RIGHT -> Layout.Alignment.ALIGN_OPPOSITE
+                    else -> Layout.Alignment.ALIGN_CENTER
+                },
+            )
             .setIncludePad(true)
             .build()
 
@@ -166,7 +172,7 @@ class BoardRenderer(
     // Klucz = tylko to, co zmienia wygląd liter (bez położenia, skali i obrotu) — przesuwanie tekstu nie składa go od nowa.
     private data class TextKey(
         val text: String, val font: String, val bold: Boolean, val italic: Boolean, val color: Long, val size: Float,
-        val outlineColor: Long, val outlineWidth: Float, val shadow: Boolean,
+        val outlineColor: Long, val outlineWidth: Float, val shadow: Boolean, val align: String,
     )
 
     // Pamięć podręczna bloków tekstu — tylko dla podglądu (wątek UI). Rysowanie w tle (eksport, miniatura) składa tekst
@@ -189,19 +195,19 @@ class BoardRenderer(
                 color = layer.outlineColor.toInt()
                 if (layer.shadow) setShadowLayer(shadowRadius, 0f, shadowDy, 0x99000000.toInt())
             }
-            textLayout(text, strokePaint, width)
+            textLayout(text, strokePaint, width, layer.align)
         } else {
             if (layer.shadow) paint.setShadowLayer(shadowRadius, 0f, shadowDy, 0x99000000.toInt())
             null
         }
-        return TextBlock(textLayout(text, paint, width), stroke)
+        return TextBlock(textLayout(text, paint, width, layer.align), stroke)
     }
 
     private fun textBlock(layer: Layer, blocking: Boolean): TextBlock {
         if (blocking) return buildTextBlock(layer)
         val key = TextKey(
             layer.text, layer.font, layer.bold, layer.italic, layer.color, layer.size,
-            layer.outlineColor, layer.outlineWidth, layer.shadow,
+            layer.outlineColor, layer.outlineWidth, layer.shadow, layer.align,
         )
         val cached = textCache.get(key)
         if (cached != null) return cached

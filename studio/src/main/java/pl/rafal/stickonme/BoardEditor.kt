@@ -122,6 +122,10 @@ private val EmojiSet = listOf(
     "🌿", "🍀", "🍕", "☕", "🍰", "🎉", "🎁", "🎈", "📚", "🎧", "🎮", "⚽", "🚗", "✈️", "🏠", "📍",
 )
 
+// Dla edytora tekstu (TextEditor.kt) — te same kolory i czcionki co na tablicy.
+internal val BoardPalette: List<Long> get() = Palette
+internal val BoardFonts: List<Pair<String, Int>> get() = Fonts
+
 private enum class BoardDialog { NONE, STICKER, TEXT, EMOJI, EXPORT }
 
 // Panele na dole ekranu (zamiast okien): zmiany widać od razu na tablicy, ✓ Zastosuj / ✕ Anuluj jak w edytorze naklejki.
@@ -313,7 +317,8 @@ fun BoardEditorScreen(
         if (selectedId == id) selectedId = null
     }
 
-    Column(Modifier.fillMaxSize().backPreview(backProgress)) {
+    Box(Modifier.fillMaxSize().backPreview(backProgress)) {
+    Column(Modifier.fillMaxSize()) {
         // Górny pasek (makieta): ‹ | nazwa + rozmiar | Cofnij · Ponów | Zapisz / Na tapetę.
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -435,7 +440,7 @@ fun BoardEditorScreen(
                 }
                 StudioRailItem(StudioIcons.Text, stringResource(R.string.som_rail_text), selected = false) {
                     val (cx, cy) = center()
-                    textDraft = Layer(kind = Layer.KIND_TEXT, x = cx, y = cy, text = "", size = board.width * 0.09f, color = 0xFFFFFFFF, outlineWidth = board.width * 0.004f)
+                    textDraft = Layer(kind = Layer.KIND_TEXT, x = cx, y = cy, text = "", size = board.width * 0.09f, color = 0xFFFFFFFF, shadow = true) // jak w Instagramie: biały z lekkim cieniem
                     dialog = BoardDialog.TEXT
                 }
                 StudioRailItem(StudioIcons.Emoji, stringResource(R.string.som_rail_emoji), selected = false) { dialog = BoardDialog.EMOJI }
@@ -485,6 +490,27 @@ fun BoardEditorScreen(
         }
     }
 
+    // Tekst: pełnoekranowy edytor nad tablicą (Instagram), nie okno.
+    val draft = textDraft
+    if (dialog == BoardDialog.TEXT && draft != null) {
+        TextEditorOverlay(
+            initial = draft,
+            base = initial.width * 0.09f, // ta sama „normalna” wielkość co nowy tekst (bez czytania tablicy w kompozycji)
+            onDone = { layer ->
+                dialog = BoardDialog.NONE
+                textDraft = null
+                val exists = board.layers.any { it.id == layer.id }
+                when {
+                    layer.text.isNotBlank() && exists -> change(board.updateLayer(layer.id) { layer })
+                    layer.text.isNotBlank() -> addLayer(layer)
+                    exists -> deleteLayer(layer.id) // wyczyszczony tekst = usunięcie warstwy
+                }
+            },
+            onCancel = { dialog = BoardDialog.NONE; textDraft = null },
+        )
+    }
+    }
+
     // --- Okna ---
     when (dialog) {
         BoardDialog.STICKER -> StickerPickDialog(
@@ -501,19 +527,7 @@ fun BoardEditorScreen(
             },
             onDismiss = { dialog = BoardDialog.NONE },
         )
-        BoardDialog.TEXT -> textDraft?.let { draft ->
-            TextStyleDialog(
-                initial = draft,
-                onDone = { layer ->
-                    dialog = BoardDialog.NONE
-                    textDraft = null
-                    if (layer.text.isNotBlank()) {
-                        if (board.layers.any { it.id == layer.id }) change(board.updateLayer(layer.id) { layer }) else addLayer(layer)
-                    }
-                },
-                onDismiss = { dialog = BoardDialog.NONE; textDraft = null },
-            )
-        }
+        BoardDialog.TEXT -> Unit // edytor tekstu jest wyżej (nakładka w Box)
         BoardDialog.EMOJI -> EmojiDialog(
             onEmoji = { emoji ->
                 dialog = BoardDialog.NONE
@@ -987,50 +1001,6 @@ private fun Swatches(colors: List<Long>, selected: Long?, onPick: (Long) -> Unit
             )
         }
     }
-}
-
-// Tekst i jego styl: czcionka, kolor, wielkość, pogrubienie/kursywa, obrys, podkreślenie (grubość), cień, zakreślacz.
-@Composable
-private fun TextStyleDialog(initial: Layer, onDone: (Layer) -> Unit, onDismiss: () -> Unit) {
-    var layer by remember { mutableStateOf(initial) }
-    val base = initial.size // skala suwaków względem wielkości startowej
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text(stringResource(R.string.som_board_text_title)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = layer.text, onValueChange = { layer = layer.copy(text = it) }, label = { Text(stringResource(R.string.som_board_text_label)) })
-                Text(stringResource(R.string.som_board_font), style = MaterialTheme.typography.labelLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    Fonts.forEach { (family, label) ->
-                        FilterChip(selected = layer.font == family, onClick = { layer = layer.copy(font = family) }, label = { Text(stringResource(label)) })
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = layer.bold, onClick = { layer = layer.copy(bold = !layer.bold) }, label = { Text("B", fontWeight = FontWeight.Bold) })
-                    FilterChip(selected = layer.italic, onClick = { layer = layer.copy(italic = !layer.italic) }, label = { Text("I") })
-                }
-                Text(stringResource(R.string.som_board_color), style = MaterialTheme.typography.labelLarge)
-                Swatches(Palette, layer.color, { layer = layer.copy(color = it) })
-                Text(stringResource(R.string.som_board_size), style = MaterialTheme.typography.labelLarge)
-                Slider(value = layer.size, onValueChange = { layer = layer.copy(size = it) }, valueRange = base * 0.3f..base * 3f)
-                Text(stringResource(R.string.som_board_outline), style = MaterialTheme.typography.labelLarge)
-                Slider(value = layer.outlineWidth, onValueChange = { layer = layer.copy(outlineWidth = it) }, valueRange = 0f..base * 0.15f)
-                Swatches(Palette, layer.outlineColor, { layer = layer.copy(outlineColor = it) })
-                Text(stringResource(R.string.som_board_underline), style = MaterialTheme.typography.labelLarge)
-                Slider(value = layer.underline, onValueChange = { layer = layer.copy(underline = it) }, valueRange = 0f..base * 0.2f)
-                Text(stringResource(R.string.som_board_highlight), style = MaterialTheme.typography.labelLarge)
-                Swatches(Palette.map { (it and 0x00FFFFFFL) or 0xCC000000L }, layer.highlight, { layer = layer.copy(highlight = it) }, allowNone = true, onNone = { layer = layer.copy(highlight = null) })
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.som_board_shadow), modifier = Modifier.weight(1f))
-                    Switch(checked = layer.shadow, onCheckedChange = { layer = layer.copy(shadow = it) })
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { onDone(layer) }) { Text(stringResource(R.string.som_done)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_cancel)) } },
-    )
 }
 
 // Emoji z listy albo z klawiatury — to pole przyjmuje też naklejki, GIF-y i Emoji Kitchen z Gboard / klawiatury Samsunga.
