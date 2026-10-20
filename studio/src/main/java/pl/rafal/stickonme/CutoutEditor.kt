@@ -50,36 +50,84 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
     var shape by mutableStateOf(StickerShapes.NONE)
     var frame by mutableStateOf(Layer.FRAME_NONE)
     var frameColor by mutableStateOf(0xFFFFFFFFL)
-    // Dopasowanie obrazu WEWNĄTRZ kształtu (kształt stoi, obraz pod nim się rusza) — jak RenderTransform w WPF.
-    // Przesunięcie jako ułamek boku ramki kształtu (niezależne od rozdzielczości: podgląd 800 px = zapis pełny),
-    // powiększenie 1 = dotychczasowe wypełnienie, obrót w stopniach (zgodnie z zegarem). Wartości domyślne = stare zachowanie.
-    var shapeOffsetX by mutableFloatStateOf(0f)
-    var shapeOffsetY by mutableFloatStateOf(0f)
-    var shapeZoom by mutableFloatStateOf(1f)
-    var shapeRotation by mutableFloatStateOf(0f)
-    val shapeFitChanged get() = shapeOffsetX != 0f || shapeOffsetY != 0f || shapeZoom != 1f || shapeRotation != 0f
+    // Kadr (jak w zwykłym edytorze zdjęć): prostokąt w ułamkach zdjęcia 0..1, NIEdestrukcyjny — maska się nie zmienia,
+    // a kadr można przesuwać i zmieniać do końca edycji. Kształt (serce, koło…) wypełnia cały kadr.
+    // aspect = zablokowane proporcje kadru w PIKSELACH (szer./wys.), null = dowolne.
+    var crop by mutableStateOf(CropBox.FULL)
+    var aspect by mutableStateOf<Float?>(null)
+    val photoAspect: Float get() = photo.width.toFloat() / photo.height
 
-    fun resetShapeFit() {
-        shapeOffsetX = 0f
-        shapeOffsetY = 0f
-        shapeZoom = 1f
-        shapeRotation = 0f
+    // Kształt z wyboru: kształty „kwadratowe” (koło, serce, gwiazda…) od razu ustawiają kadr 1:1 — inaczej by się rozciągały.
+    fun chooseShape(id: String) {
+        shape = id
+        if (StickerShapes.of(id).square) changeAspect(1f)
     }
 
-    // Ramka kształtu dla wyciętego obrazu w×h: kwadratowe kształty — kwadrat o boku krótszego boku, reszta — w×h.
-    // null = brak kształtu. Tej samej funkcji używa podgląd na żywo (Compose) i zapis, więc wyglądają identycznie.
-    fun shapeBox(w: Int, h: Int): android.util.Size? {
-        val kind = StickerShapes.of(shape)
-        if (kind.id == StickerShapes.NONE) return null
-        return if (kind.square) minOf(w, h).let { android.util.Size(it, it) } else android.util.Size(w, h)
+    // Nowe proporcje: największy prostokąt o tych proporcjach mieszczący się w obecnym kadrze, na jego środku.
+    fun changeAspect(value: Float?) {
+        aspect = value
+        if (value == null) return
+        val c = crop
+        val n = value / photoAspect // proporcje w ułamkach zdjęcia
+        var w = c.width
+        var h = c.height
+        if (w / h > n) w = h * n else h = w / n
+        val cx = (c.left + c.right) / 2f
+        val cy = (c.top + c.bottom) / 2f
+        crop = CropBox(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f).clamped()
     }
 
-    // Macierz: środek obrazu → (0,0) → powiększenie → obrót → środek ramki + przesunięcie.
-    fun shapeMatrix(w: Int, h: Int, boxW: Int, boxH: Int) = Matrix().apply {
-        postTranslate(-w / 2f, -h / 2f)
-        postScale(shapeZoom, shapeZoom)
-        postRotate(shapeRotation)
-        postTranslate(boxW / 2f + shapeOffsetX * boxW, boxH / 2f + shapeOffsetY * boxH)
+    fun resetCrop() {
+        crop = CropBox.FULL
+        aspect = null
+        shape = StickerShapes.NONE
+    }
+
+    // --- Kroki edycji (jak w edytorach w telefonie): wejście w narzędzie → zmiany → ✓ zatwierdź albo ✕ anuluj. ---
+    // Ustawienia wyniku w jednym obiekcie — do przywrócenia po ✕ (jak memento).
+    private data class Settings(
+        val edgeSmooth: Float, val edgeShrink: Float, val shape: String, val frame: String, val frameColor: Long,
+        val rotation: Float, val outputSide: Int, val crop: CropBox, val aspect: Float?,
+    )
+
+    private var stepMask: Bitmap? = null
+    private var stepVersion = 0
+    private var stepSettings: Settings? = null
+
+    fun beginStep() {
+        releaseUndo() // Cofnij / Ponów działa w obrębie jednego narzędzia
+        stepMask?.recycle()
+        stepMask = mask.copy(Bitmap.Config.ALPHA_8, false)
+        stepVersion = version
+        stepSettings = Settings(edgeSmooth, edgeShrink, shape, frame, frameColor, rotation, outputSide, crop, aspect)
+    }
+
+    fun cancelStep() {
+        val saved = stepMask
+        stepMask = null
+        if (saved != null) {
+            if (version != stepVersion) restore(saved) else saved.recycle()
+        }
+        stepSettings?.let { st ->
+            edgeSmooth = st.edgeSmooth
+            edgeShrink = st.edgeShrink
+            shape = st.shape
+            frame = st.frame
+            frameColor = st.frameColor
+            rotation = st.rotation
+            outputSide = st.outputSide
+            crop = st.crop
+            aspect = st.aspect
+        }
+        stepSettings = null
+        releaseUndo()
+    }
+
+    fun commitStep() {
+        stepMask?.recycle()
+        stepMask = null
+        stepSettings = null
+        releaseUndo()
     }
 
     private val undo = ArrayDeque<Bitmap>()
@@ -149,7 +197,9 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
     // Ciężka część (pętla po pikselach, skalowanie) — W TLE (Dispatchers.Default). Nie rusza bieżącej maski.
     fun prepareMask(confidence: FloatArray, width: Int, height: Int): Bitmap {
         val small = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val pixels = IntArray(width * height) { i -> (confidence[i].coerceIn(0f, 1f) * 255).roundToInt() shl 24 }
+        // Próg pewności: poniżej 0,3 = tło (0), powyżej 0,7 = obiekt (255), pomiędzy — miękkie przejście.
+        // Bez progu tło miało kilka % krycia: niewidoczne, ale naklejka zostawała prostokątem całego zdjęcia.
+        val pixels = IntArray(width * height) { i -> (((confidence[i] - 0.3f) / 0.4f).coerceIn(0f, 1f) * 255).roundToInt() shl 24 }
         small.setPixels(pixels, 0, width, 0, 0, width, height)
         val full = Bitmap.createBitmap(mask.width, mask.height, Bitmap.Config.ALPHA_8)
         Canvas(full).drawBitmap(small, null, android.graphics.Rect(0, 0, mask.width, mask.height), Paint(Paint.FILTER_BITMAP_FLAG))
@@ -173,6 +223,13 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         undo.clear()
         undoCount = 0
         clearRedo()
+    }
+
+    // Zamknięcie edytora: wszystkie kopie robocze do zwolnienia.
+    fun release() {
+        releaseUndo()
+        stepMask?.recycle()
+        stepMask = null
     }
 
     // Całe zdjęcie (bez wycinania) albo wyczyszczenie maski.
@@ -245,24 +302,22 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         return out
     }
 
-    // Gotowa naklejka = cutout() (wycięcie + przycięcie) → finish() (kształt, ramka, skala, obrót).
+    // Gotowa naklejka = cutout() (zdjęcie × maska) → finish() (kadr, kształt, przycięcie, ramka, skala, obrót).
     // check() = punkt przerwania (podgląd w tle). workSide: podgląd liczony na kopii o dłuższym boku najwyżej
-    // workSide px; null = pełna jakość (zapis).
+    // workSide px; null = pełna jakość (zapis). null = nic nie zostało.
     fun render(rotate: Boolean = true, workSide: Int? = null, check: () -> Unit = {}): Bitmap? {
-        val cut = cutout(workSide, check) ?: return null
-        var result: Bitmap? = null
+        val cut = cutout(workSide, check)
         try {
-            result = finish(cut, rotate, check)
-            return result
+            return finish(cut, rotate, check)
         } finally {
-            if (result !== cut) cut.recycle()
+            cut.recycle() // finish zawsze tworzy nową bitmapę
         }
     }
 
-    // Zdjęcie × maska (z wykończoną krawędzią), przycięte do widocznej części. null = nic nie zostało.
+    // Zdjęcie × maska (z wykończoną krawędzią) w PEŁNYM kadrze zdjęcia — bez przycinania, bo kadr liczy się
+    // w ułamkach całego zdjęcia (ekran kadrowania pokazuje właśnie ten obraz).
     // Wygładzenie i zwężenie krawędzi skalują się razem z kopią roboczą, więc podgląd wygląda tak samo jak zapis.
-    // Pośrednie bitmapy są zwalniane od razu (recycle) — przy kilku MB każda GC nie nadąża za suwakiem.
-    fun cutout(workSide: Int? = null, check: () -> Unit = {}): Bitmap? {
+    fun cutout(workSide: Int? = null, check: () -> Unit = {}): Bitmap {
         val longest = maxOf(photo.width, photo.height)
         val factor = if (workSide != null && longest > workSide) workSide.toFloat() / longest else 1f
         val src = if (factor < 1f) scaled(photo, factor) else photo
@@ -276,30 +331,40 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
             }
             finished?.recycle()
             check()
-            val bounds = visibleBounds(cut)
-            if (bounds == null) {
-                cut.recycle()
-                return null
-            }
-            val trimmed = Bitmap.createBitmap(cut, bounds.left, bounds.top, bounds.width(), bounds.height())
-            if (trimmed !== cut) cut.recycle()
-            return trimmed
+            return cut
         } finally {
             if (src !== photo) src.recycle()
             if (msk !== mask) msk.recycle()
         }
     }
 
-    // Kształt (z dopasowaniem obrazu) → ramka → skala do outputSide → obrót. Wejścia "cut" NIE zwalnia
-    // (podgląd trzyma je dalej i liczy z niego kolejne wersje); może je zwrócić bez zmian.
-    fun finish(cut: Bitmap, rotate: Boolean = true, check: () -> Unit = {}): Bitmap {
+    // Kadr → kształt → przycięcie do widocznych pikseli → ramka → skala do outputSide → obrót.
+    // Wejścia "cut" NIE zwalnia (podgląd trzyma je dalej); zawsze zwraca NOWĄ bitmapę albo null (nic nie zostało).
+    fun finish(cut: Bitmap, rotate: Boolean = true, check: () -> Unit = {}): Bitmap? {
         var b = cut
         fun next(new: Bitmap) { // poprzedni krok do zwolnienia — chyba że to wejście albo ten sam obiekt
             if (new !== b && b !== cut) b.recycle()
             b = new
         }
+        val c = crop
+        if (c != CropBox.FULL) {
+            val x = (c.left * cut.width).roundToInt().coerceIn(0, cut.width - 1)
+            val y = (c.top * cut.height).roundToInt().coerceIn(0, cut.height - 1)
+            val w = (c.width * cut.width).roundToInt().coerceIn(1, cut.width - x)
+            val h = (c.height * cut.height).roundToInt().coerceIn(1, cut.height - y)
+            next(Bitmap.createBitmap(cut, x, y, w, h))
+        }
         val kind = StickerShapes.of(shape)
         if (kind.id != StickerShapes.NONE) next(applyShape(b, kind))
+        check()
+        val bounds = visibleBounds(b)
+        if (bounds == null) {
+            if (b !== cut) b.recycle()
+            return null
+        }
+        if (bounds.width() != b.width || bounds.height() != b.height) {
+            next(Bitmap.createBitmap(b, bounds.left, bounds.top, bounds.width(), bounds.height()))
+        }
         if (frame != Layer.FRAME_NONE) next(BoardRenderer().frameSticker(b, frame, frameColor))
         check()
         val scale = outputSide.toFloat() / maxOf(b.width, b.height)
@@ -309,7 +374,8 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         }
         // createBitmap z macierzą sam powiększa płótno o obrócone rogi (tło przezroczyste).
         next(Bitmap.createBitmap(b, 0, 0, b.width, b.height, matrix, true))
-        return b
+        // Gdyby createBitmap oddał wejście (skala 1, bez obrotu) — kopia, żeby wynik był zawsze nowy.
+        return if (b === cut) cut.copy(Bitmap.Config.ARGB_8888, false) else b
     }
 
     private fun scaled(source: Bitmap, factor: Float): Bitmap = Bitmap.createScaledBitmap(
@@ -319,20 +385,13 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         true,
     )
 
-    // Kształt: obraz rysowany macierzą dopasowania (przesunięcie / powiększenie / obrót) na płótno o rozmiarze ramki,
-    // potem maska ze ścieżki kształtu w trybie DST_IN. Maska jest osobną bitmapą na CAŁE płótno — DST_IN działa wtedy
-    // wszędzie (rysowanie samego obrazu z SRC_IN zostawiłoby czarny kształt tam, gdzie obraz po obrocie nie sięga).
-    // Wejścia nie zwalnia.
+    // Kształt wypełnia cały (wykadrowany) obraz: maska ze ścieżki kształtu w trybie DST_IN. Wejścia nie zwalnia.
     private fun applyShape(source: Bitmap, kind: StickerShapes.Shape): Bitmap {
-        val box = shapeBox(source.width, source.height) ?: return source
-        val path = StickerShapes.path(kind.id, box.width.toFloat(), box.height.toFloat()) ?: return source
-        val out = Bitmap.createBitmap(box.width, box.height, Bitmap.Config.ARGB_8888)
-        val shapeMask = Bitmap.createBitmap(box.width, box.height, Bitmap.Config.ALPHA_8)
+        val path = StickerShapes.path(kind.id, source.width.toFloat(), source.height.toFloat()) ?: return source
+        val out = source.copy(Bitmap.Config.ARGB_8888, true)
+        val shapeMask = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ALPHA_8)
         Canvas(shapeMask).drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK })
-        Canvas(out).apply {
-            drawBitmap(source, shapeMatrix(source.width, source.height, box.width, box.height), Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
-            drawBitmap(shapeMask, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
-        }
+        Canvas(out).drawBitmap(shapeMask, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
         shapeMask.recycle()
         return out
     }
@@ -409,5 +468,25 @@ suspend fun autoMask(photo: Bitmap): Triple<FloatArray, Int, Int>? = withContext
                 cont.resumeWithException(e)
             }
         cont.invokeOnCancellation { runCatching { segmenter.close() } }
+    }
+}
+
+// Kadr w ułamkach zdjęcia (0..1), niezmienny (jak struct/record w C#) — nowa wartość = nowy obiekt, więc Compose widzi zmianę.
+data class CropBox(val left: Float, val top: Float, val right: Float, val bottom: Float) {
+    val width get() = right - left
+    val height get() = bottom - top
+
+    // Przesunięty z powrotem do środka zdjęcia, gdyby wystawał (rozmiar bez zmian, o ile się mieści).
+    fun clamped(): CropBox {
+        val w = width.coerceIn(MIN, 1f)
+        val h = height.coerceIn(MIN, 1f)
+        val l = left.coerceIn(0f, 1f - w)
+        val t = top.coerceIn(0f, 1f - h)
+        return CropBox(l, t, l + w, t + h)
+    }
+
+    companion object {
+        val FULL = CropBox(0f, 0f, 1f, 1f)
+        const val MIN = 0.05f // najmniejszy kadr: 5% boku zdjęcia
     }
 }

@@ -165,7 +165,7 @@
     <string name="som_undo_cd">Cofnij</string>
     <string name="som_redo_cd">Ponów</string>
     <string name="som_compare_cd">Przytrzymaj, aby zobaczyć oryginał</string>
-    <string name="som_object_hint">Wytnie główny obiekt ze zdjęcia. Potem możesz go poprawić pędzlem.</string>
+    <string name="som_object_hint">Zaznaczony obiekt zostanie naklejką, reszta zniknie. ✓ Zastosuj zatwierdza, a pędzlem poprawisz szczegóły.</string>
     <string name="som_brush_size">Pędzel</string>
     <string name="som_brush_size_cd">Rozmiar pędzla %1$d z 4</string>
     <string name="som_crop_rect">Prostokąt</string>
@@ -184,4 +184,20 @@
     <string name="som_rail_frame">Ramka</string>
     <string name="som_rail_rotate">Obrót</string>
     <string name="som_rail_size">Rozmiar</string>
+    <string name="som_object_again">Wytnij ponownie</string>
+    <string name="som_brush_hint">Malujesz po zdjęciu: „Dodaj” dokłada do naklejki, „Usuń” zabiera. Dwa palce przybliżają i przesuwają.</string>
+    <string name="som_crop_aspect">Proporcje</string>
+    <string name="som_crop_free">Dowolne</string>
+    <string name="som_crop_reset">Resetuj kadr</string>
+    <string name="som_crop_hint">Przeciągnij róg ramki, aby zmienić kadr, albo środek, aby go przesunąć. Kształt wypełnia ramkę — koło w 1:1 to idealne koło.</string>
+    <string name="som_edge_hint">Wygładzenie zmiękcza brzeg naklejki, zwężenie zjada resztki tła przy krawędzi.</string>
+    <string name="som_level_medium">Średnie</string>
+    <string name="som_size_hint">Rozdzielczość zapisanej naklejki (dłuższy bok).</string>
+    <string name="som_title_object">Wycięcie obiektu</string>
+    <string name="som_title_brush">Pędzel</string>
+    <string name="som_title_crop">Kadr i kształt</string>
+    <string name="som_title_edge">Krawędź</string>
+    <string name="som_title_frame">Ramka</string>
+    <string name="som_title_rotate">Obrót</string>
+    <string name="som_title_size">Rozmiar</string>
 </resources>

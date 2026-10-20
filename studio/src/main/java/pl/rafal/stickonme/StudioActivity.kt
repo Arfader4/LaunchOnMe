@@ -91,6 +91,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
@@ -244,7 +246,7 @@ private fun StudioApp(pickMode: Boolean, wallpaperMode: Boolean, start: StudioSt
                 editing = withContext(Dispatchers.Default) {
                     val ready = start.edit || StickerLibrary.hasTransparency(image)
                     CutoutEditor(image, fromSticker = ready).apply {
-                        start.shape?.let { shape = StickerShapes.of(it).id }
+                        start.shape?.let { chooseShape(StickerShapes.of(it).id) } // kształt z karty launchera (koło → kadr 1:1)
                         start.frame?.let { f -> if (Layer.FRAMES.any { it.first == f }) frame = f }
                     }
                 }
@@ -637,60 +639,47 @@ private enum class Tool(@StringRes val labelRes: Int) {
 private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (File) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // Sekcja z dolnego paska narzędzi. Sekcje wycinania pokazują maskę, sekcje wykończenia — gotową naklejkę.
-    var section by remember { mutableStateOf(EditSection.BRUSH) }
-    val tab = if (section.finish) 1 else 0 // 0 = maska (wycinanie), 1 = gotowa naklejka (wykończenie)
+    // Jak w edytorach zdjęć w telefonie: ekran główny = podgląd GOTOWEJ naklejki + pasek narzędzi.
+    // Dotknięcie narzędzia otwiera je (section), a ✓ zatwierdza / ✕ anuluje zmiany z tego narzędzia.
+    var section by remember(editor) { mutableStateOf<EditSection?>(null) }
+    val maskView = section?.maskView == true
+    val tab = if (maskView) 0 else 1 // 0 = maska (wycinanie), 1 = gotowa naklejka / kadr
     var brushMode by remember { mutableStateOf(Tool.ERASE) } // start od całego zdjęcia → najpierw zwykle się usuwa
-    var cropOval by remember { mutableStateOf(false) }
-    val tool = when (section) {
-        EditSection.BRUSH -> brushMode
-        EditSection.CROP -> if (cropOval) Tool.OVAL else Tool.CROP
-        else -> Tool.MOVE // pozostałe sekcje: palec tylko przesuwa widok
-    }
+    val tool = if (section == EditSection.BRUSH) brushMode else Tool.MOVE // poza pędzlem palec tylko przesuwa widok
     var brush by remember { mutableFloatStateOf(BRUSH_SIZES[1]) } // średnica pędzla w dp ekranu
     var busy by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf<String?>(null) }
-    // Po „Wytnij obiekt” pytamy, czy zostawić wynik (pasek z ✓ / „Cofnij”).
-    var autoProposal by remember(editor) { mutableStateOf(false) }
-    var autoAt by remember(editor) { mutableIntStateOf(-1) } // wersja maski tuż po wycięciu — kolejna zmiana chowa pasek
-    // Zakładka "Wykończenie" pokazuje GOTOWĄ naklejkę (krawędź, kształt, ramka, obrót) — liczoną w tle
-    // chwilę po ostatniej zmianie; kolejna zmiana anuluje poprzednie liczenie (ensureActive w pętlach).
-    // Dwa etapy: (1) wycięcie + krawędź → cutPreview (wolniejsze, tylko po zmianie maski / krawędzi),
-    // (2) kształt + ramka z cutPreview → resultPreview (szybkie). Tryb "Dopasuj w kształcie" rysuje cutPreview
-    // na żywo w Compose, więc w trakcie gestów etap 2 się nie liczy — dopiero po wyjściu z trybu.
+    // Podgląd liczony w tle chwilę po ostatniej zmianie; kolejna zmiana anuluje poprzednie liczenie (ensureActive).
+    // Dwa etapy: (1) zdjęcie × maska + krawędź → cutPreview (wolniejsze, tylko po zmianie maski / krawędzi; ten obraz
+    // pokazuje też ekran kadru), (2) kadr + kształt + ramka z cutPreview → resultPreview (szybkie). Obrót całości
+    // nie liczy się w tle — podgląd obraca obraz przy rysowaniu, więc działa na żywo.
     // cutPreview nie zwalniamy ręcznie (recycle): może go jeszcze rysować płótno — zbierze go GC (ok. 2,5 MB).
     var cutPreview by remember(editor) { mutableStateOf<android.graphics.Bitmap?>(null) }
     var resultPreview by remember(editor) { mutableStateOf<ImageBitmap?>(null) }
     var cutting by remember { mutableStateOf(false) }   // etap 1 w toku
     var finishing by remember { mutableStateOf(false) } // etap 2 w toku
     val previewing = cutting || finishing
-    var fitting by remember(editor) { mutableStateOf(false) } // tryb "Dopasuj obraz w kształcie"
-    val fitMode = fitting && tab == 1 && editor.shape != StickerShapes.NONE
+    val cropping = section == EditSection.CROP
     LaunchedEffect(editor, tab, editor.edgeSmooth, editor.edgeShrink, editor.version) {
         if (tab == 1) {
             cutting = true
             try {
-                kotlinx.coroutines.delay(150) // suwak jeszcze jedzie
+                kotlinx.coroutines.delay(120)
                 // Podgląd na kopii do 800 px (zapis i tak liczy w pełnej rozdzielczości).
                 val cut = withContext(Dispatchers.Default) { runCatching { editor.cutout(workSide = PREVIEW_WORK_SIDE) { ensureActive() } }.getOrNull() }
-                cutPreview = cut
-                if (cut == null) resultPreview = null
+                if (cut != null) cutPreview = cut
             } finally {
                 cutting = false
             }
         }
     }
-    LaunchedEffect(
-        cutPreview, tab, fitMode, editor.shape, editor.frame, editor.frameColor,
-        editor.shapeOffsetX, editor.shapeOffsetY, editor.shapeZoom, editor.shapeRotation, // obrót całości nie — podgląd obraca się przy rysowaniu
-    ) {
+    LaunchedEffect(cutPreview, tab, cropping, editor.crop, editor.shape, editor.frame, editor.frameColor) {
         val cut = cutPreview
-        if (tab == 1 && !fitMode && cut != null) {
+        if (tab == 1 && !cropping && cut != null) {
             finishing = true
             try {
-                kotlinx.coroutines.delay(80)
+                kotlinx.coroutines.delay(60)
                 val image = withContext(Dispatchers.Default) { runCatching { editor.finish(cut, rotate = false) { ensureActive() } }.getOrNull() }
-                // finish może zwrócić samo wejście — wtedy to ten sam obraz, nic złego.
                 resultPreview = image?.asImageBitmap()
             } finally {
                 finishing = false
@@ -698,15 +687,40 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
         }
     }
 
-    // Zamknięcie edytora: kopie "Cofnij" od razu do zwolnienia (zdjęcie i maskę może jeszcze rysować animacja wyjścia).
-    DisposableEffect(editor) { onDispose { editor.releaseUndo() } }
+    // Zamknięcie edytora: kopie robocze od razu do zwolnienia (zdjęcie i maskę może jeszcze rysować animacja wyjścia).
+    DisposableEffect(editor) { onDispose { editor.release() } }
 
-    // Na start NIE wycinamy automatycznie — zaczynamy od całego zdjęcia (maska pełna), a „Wytnij obiekt”
-    // (ML Kit) to jedna z opcji na pasku narzędzi. Poprawka gotowej naklejki: maska z jej przezroczystości.
+    // Na start NIE wycinamy automatycznie — zaczynamy od całego zdjęcia (maska pełna). Wycinanie = narzędzie „Obiekt”.
     LaunchedEffect(editor) { busy = false }
 
-    // Zapis naklejki („✓ Gotowe”).
-    val save: () -> Unit = {
+    // „Wytnij obiekt” (ML Kit). W narzędziu „Obiekt” — od razu po wejściu i ponownie na żądanie.
+    fun runAuto() {
+        busy = true
+        message = null
+        scope.launch {
+            val prepared = autoMaskFor(editor)
+            if (prepared != null) editor.applyMask(prepared)
+            else message = context.getString(R.string.som_editor_auto_failed)
+            busy = false
+        }
+    }
+    fun open(s: EditSection) {
+        editor.beginStep()
+        message = null
+        section = s
+        if (s == EditSection.OBJECT) runAuto()
+    }
+    fun applyStep() {
+        editor.commitStep()
+        section = null
+    }
+    fun cancelStep() {
+        editor.cancelStep()
+        message = null
+        section = null
+    }
+    // Zapis naklejki („✓ Gotowe” na ekranie głównym).
+    fun save() {
         busy = true
         scope.launch {
             try {
@@ -724,39 +738,37 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
             }
         }
     }
-    // „Wytnij obiekt” (ML Kit) — tylko na żądanie, z kopią do „Cofnij”.
-    val runAuto: () -> Unit = {
-        busy = true
-        message = null
-        scope.launch {
-            val prepared = autoMaskFor(editor)
-            if (prepared != null) {
-                editor.applyMask(prepared)
-                autoAt = editor.version
-                autoProposal = true
-            } else {
-                message = context.getString(R.string.som_editor_auto_failed)
-            }
-            busy = false
-        }
-    }
+    // Wstecz w narzędziu = ✕ (anuluj krok), a nie wyjście z całego edytora.
+    BackHandler(enabled = section != null && !busy) { cancelStep() }
+
     val original = remember(editor) { editor.photo.asImageBitmap() }
     var comparing by remember { mutableStateOf(false) } // przytrzymany przycisk porównania = widać oryginał
     val compareCd = stringResource(R.string.som_compare_cd)
+    val current = section
 
     Column(Modifier.fillMaxSize()) {
-        // Górny pasek (makieta): ✕ | Cofnij · Ponów | ✓ Gotowe. Wszystko inne jest na dole, przy kciuku.
+        // Górny pasek. Ekran główny: ✕ | ✓ Gotowe. W narzędziu: nazwa + Cofnij / Ponów (przy masce).
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            StudioIconButton(StudioIcons.Close, stringResource(R.string.som_cancel), outlined = true, onClick = onCancel)
-            Spacer(Modifier.weight(1f))
-            // W trakcie wycinania / zapisu maska nie może się zmieniać (czyta ją wątek w tle).
-            StudioIconButton(StudioIcons.Undo, stringResource(R.string.som_undo_cd), enabled = !busy && editor.canUndo) { editor.undoLast() }
-            StudioIconButton(StudioIcons.Redo, stringResource(R.string.som_redo_cd), enabled = !busy && editor.canRedo) { editor.redoLast() }
-            Spacer(Modifier.weight(1f))
-            StudioPrimaryButton(stringResource(R.string.som_done), enabled = !busy, onClick = save)
+            if (current == null) {
+                StudioIconButton(StudioIcons.Close, stringResource(R.string.som_cancel), outlined = true, onClick = onCancel)
+                Spacer(Modifier.weight(1f))
+                StudioPrimaryButton(stringResource(R.string.som_done), enabled = !busy && !previewing) { save() }
+            } else {
+                Text(
+                    stringResource(current.titleRes),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f).padding(start = 4.dp),
+                )
+                if (current.maskView) {
+                    // W trakcie wycinania / zapisu maska nie może się zmieniać (czyta ją wątek w tle).
+                    StudioIconButton(StudioIcons.Undo, stringResource(R.string.som_undo_cd), enabled = !busy && editor.canUndo) { editor.undoLast() }
+                    StudioIconButton(StudioIcons.Redo, stringResource(R.string.som_redo_cd), enabled = !busy && editor.canRedo) { editor.redoLast() }
+                }
+            }
         }
 
         // Płótno na prawie cały ekran.
@@ -767,11 +779,13 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                 .padding(horizontal = 12.dp)
                 .clip(RoundedCornerShape(20.dp)),
         ) {
+            val cut = cutPreview
             if (tab == 0) {
                 MaskCanvas(editor, tool = tool, brushDp = brush, rotation = 0f, enabled = !busy)
+            } else if (cropping) {
+                if (cut != null) CropCanvas(editor, cut)
             } else {
-                val cut = cutPreview
-                if (fitMode && cut != null) ShapeFitCanvas(editor, cut) else ResultPreview(resultPreview, editor.rotation)
+                ResultPreview(resultPreview, editor.rotation)
             }
             if (comparing) {
                 Image(
@@ -781,33 +795,8 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                     modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
                 )
             }
-            if (busy || (tab == 1 && previewing && (if (fitMode) cutPreview == null else resultPreview == null))) CircularProgressIndicator(Modifier.align(Alignment.Center))
-
-            // Po „Wytnij obiekt”: zostaw (✓) albo cofnij do stanu sprzed wycięcia.
-            if (autoProposal && editor.version == autoAt && !busy && tab == 0) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .padding(10.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-                ) {
-                    Text(
-                        stringResource(R.string.som_editor_auto_done),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = { editor.undoLast(); autoProposal = false }) {
-                        Text(stringResource(R.string.som_editor_undo), color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    }
-                    StudioPrimaryButton(stringResource(R.string.som_editor_auto_keep), icon = null) { autoProposal = false }
-                }
-            }
+            val waiting = busy || (tab == 1 && (if (cropping) cut == null else previewing && resultPreview == null))
+            if (waiting) CircularProgressIndicator(Modifier.align(Alignment.Center))
 
             message?.let {
                 Text(
@@ -815,8 +804,8 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 12.dp, end = 68.dp, bottom = 12.dp)
+                        .align(Alignment.TopCenter)
+                        .padding(12.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(Color(0xE60E0F12))
                         .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -846,148 +835,175 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
             }
         }
 
-        // Opcje wybranej sekcji — bez suwaków: pigułki i kropki do dotknięcia.
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 210.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            when (section) {
-                EditSection.OBJECT -> {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        StudioPrimaryButton(stringResource(R.string.som_editor_auto), enabled = !busy, icon = StudioIcons.Subject, onClick = runAuto)
-                        StudioChip(stringResource(R.string.som_editor_whole_photo), selected = false) { if (!busy) editor.fill(true) }
-                    }
-                    Text(stringResource(R.string.som_object_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                EditSection.BRUSH -> {
-                    StudioSegmented(
-                        options = listOf(
-                            Tool.ADD to stringResource(R.string.som_add),
-                            Tool.ERASE to stringResource(R.string.som_editor_tool_erase),
-                            Tool.MOVE to stringResource(R.string.som_editor_tool_move),
-                        ),
-                        selected = brushMode,
-                        onSelect = { brushMode = it },
-                    )
-                    if (brushMode != Tool.MOVE) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StudioLabel(stringResource(R.string.som_brush_size))
-                            BRUSH_SIZES.forEachIndexed { i, size ->
-                                BrushDot(index = i, selected = brush == size) { brush = size }
-                            }
-                        }
-                    }
-                }
-                EditSection.CROP -> {
-                    StudioSegmented(
-                        options = listOf(false to stringResource(R.string.som_crop_rect), true to stringResource(R.string.som_editor_tool_oval)),
-                        selected = cropOval,
-                        onSelect = { cropOval = it },
-                    )
-                    Text(stringResource(R.string.som_editor_crop_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                EditSection.EDGE -> {
-                    StudioLabel(stringResource(R.string.som_edge_smooth))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        listOf(0f to R.string.som_level_none, 3f to R.string.som_level_light, 8f to R.string.som_level_strong).forEach { (value, label) ->
-                            StudioChip(stringResource(label), editor.edgeSmooth == value) { editor.edgeSmooth = value }
-                        }
-                    }
-                    StudioLabel(stringResource(R.string.som_edge_shrink))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        StudioChip(stringResource(R.string.som_level_none), editor.edgeShrink == 0f) { editor.edgeShrink = 0f }
-                        listOf(1f, 3f, 6f).forEach { value ->
-                            StudioChip(stringResource(R.string.som_px, value.roundToInt()), editor.edgeShrink == value) { editor.edgeShrink = value }
-                        }
-                    }
-                }
-                EditSection.SHAPE -> {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        StickerShapes.all.forEach { s -> StudioChip(s.label, editor.shape == s.id) { editor.shape = s.id } }
-                    }
-                    if (editor.shape != StickerShapes.NONE) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StudioChip(stringResource(R.string.som_editor_fit), fitting) { fitting = !fitting }
-                            if (editor.shapeFitChanged) StudioChip(stringResource(R.string.som_editor_fit_reset), false) { editor.resetShapeFit() }
-                        }
-                        if (fitMode) {
-                            Text(stringResource(R.string.som_editor_fit_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-                EditSection.FRAME -> {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        Layer.FRAMES.forEach { (key, label) -> StudioChip(label, editor.frame == key) { editor.frame = key } }
-                    }
-                    if (Layer.hasColor(editor.frame)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                            FrameColors.forEach { c ->
-                                Box(
-                                    Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(c))
-                                        .border(if (editor.frameColor == c) 3.dp else 1.dp, if (editor.frameColor == c) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline, CircleShape)
-                                        .clickable { editor.frameColor = c },
-                                )
-                            }
-                        }
-                    }
-                }
-                EditSection.ROTATE -> {
-                    Text(
-                        stringResource(R.string.som_editor_rotation, editor.rotation.roundToInt()),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        StudioChip("↺ 90°", false) { editor.rotation = normalizedDegrees(editor.rotation - 90f) }
-                        StudioChip("−5°", false) { editor.rotation = normalizedDegrees(editor.rotation - 5f) }
-                        StudioChip(stringResource(R.string.som_rotate_straight), editor.rotation == 0f) { editor.rotation = 0f }
-                        StudioChip("+5°", false) { editor.rotation = normalizedDegrees(editor.rotation + 5f) }
-                        StudioChip("↻ 90°", false) { editor.rotation = normalizedDegrees(editor.rotation + 90f) }
-                    }
-                }
-                EditSection.SIZE -> {
-                    StudioLabel(stringResource(R.string.som_editor_size))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        listOf(512 to R.string.som_editor_size_small, 768 to R.string.som_editor_size_medium, 1024 to R.string.som_editor_size_large).forEach { (side, label) ->
-                            StudioChip(stringResource(R.string.som_editor_size_chip, stringResource(label), side), editor.outputSide == side) { editor.outputSide = side }
-                        }
-                    }
+        if (current == null) {
+            // Ekran główny: pasek narzędzi (przewijany), ikona + podpis.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 16.dp),
+            ) {
+                EditSection.entries.forEach { s ->
+                    StudioRailItem(s.icon, stringResource(s.labelRes), selected = false) { if (!busy) open(s) }
                 }
             }
-        }
-
-        // Dolny pasek narzędzi (przewijany): ikona + podpis.
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 12.dp),
-        ) {
-            EditSection.entries.forEach { s ->
-                StudioRailItem(s.icon, stringResource(s.labelRes), section == s) { section = s }
+        } else {
+            // Opcje narzędzia — bez suwaków: pigułki i kropki do dotknięcia.
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 230.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                EditorOptions(current, editor, busy, brushMode, { brushMode = it }, brush, { brush = it }) { runAuto() }
             }
+            StudioStepBar(
+                cancelLabel = stringResource(R.string.som_cancel),
+                applyLabel = stringResource(R.string.som_apply),
+                enabled = !busy,
+                onCancel = { cancelStep() },
+                onApply = { applyStep() },
+            )
         }
     }
 }
 
-// Sekcje edytora naklejki (dolny pasek). finish = pokazuje gotową naklejkę zamiast maski.
-private enum class EditSection(@StringRes val labelRes: Int, val finish: Boolean) {
-    OBJECT(R.string.som_rail_object, false),
-    BRUSH(R.string.som_rail_brush, false),
-    CROP(R.string.som_rail_crop, false),
-    EDGE(R.string.som_rail_edge, true),
-    SHAPE(R.string.som_rail_shape, true),
-    FRAME(R.string.som_rail_frame, true),
-    ROTATE(R.string.som_rail_rotate, true),
-    SIZE(R.string.som_rail_size, true);
+// Opcje otwartego narzędzia (osobna funkcja — czytelniej niż jeden długi when w EditorScreen).
+@Composable
+private fun EditorOptions(
+    section: EditSection,
+    editor: CutoutEditor,
+    busy: Boolean,
+    brushMode: Tool,
+    onBrushMode: (Tool) -> Unit,
+    brush: Float,
+    onBrush: (Float) -> Unit,
+    onAuto: () -> Unit,
+) {
+    val hint: @Composable (Int) -> Unit = { res ->
+        Text(stringResource(res), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    when (section) {
+        EditSection.OBJECT -> {
+            hint(R.string.som_object_hint)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StudioChip(stringResource(R.string.som_object_again), false) { if (!busy) onAuto() }
+                StudioChip(stringResource(R.string.som_editor_whole_photo), false) { if (!busy) editor.fill(true) }
+            }
+        }
+        EditSection.BRUSH -> {
+            StudioSegmented(
+                options = listOf(
+                    Tool.ADD to stringResource(R.string.som_add),
+                    Tool.ERASE to stringResource(R.string.som_editor_tool_erase),
+                    Tool.MOVE to stringResource(R.string.som_editor_tool_move),
+                ),
+                selected = brushMode,
+                onSelect = onBrushMode,
+            )
+            if (brushMode != Tool.MOVE) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StudioLabel(stringResource(R.string.som_brush_size))
+                    BRUSH_SIZES.forEachIndexed { i, size ->
+                        BrushDot(index = i, selected = brush == size) { onBrush(size) }
+                    }
+                }
+            }
+            hint(R.string.som_brush_hint)
+        }
+        EditSection.CROP -> {
+            StudioLabel(stringResource(R.string.som_crop_aspect))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                CROP_ASPECTS.forEach { (value, label) ->
+                    StudioChip(if (value == null) stringResource(R.string.som_crop_free) else label, editor.aspect == value) { editor.changeAspect(value) }
+                }
+            }
+            StudioLabel(stringResource(R.string.som_editor_shape))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                StickerShapes.all.forEach { s -> StudioChip(s.label, editor.shape == s.id) { editor.chooseShape(s.id) } }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StudioChip(stringResource(R.string.som_crop_reset), false) { editor.resetCrop() }
+            }
+            hint(R.string.som_crop_hint)
+        }
+        EditSection.EDGE -> {
+            // Poziomy względem wielkości zdjęcia — wtedy efekt widać tak samo na małym i na 12-megapikselowym zdjęciu.
+            val longest = maxOf(editor.photo.width, editor.photo.height).toFloat()
+            StudioLabel(stringResource(R.string.som_edge_smooth))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                listOf(0f to R.string.som_level_none, 0.004f to R.string.som_level_light, 0.012f to R.string.som_level_strong).forEach { (f, label) ->
+                    val value = f * longest
+                    StudioChip(stringResource(label), editor.edgeSmooth == value) { editor.edgeSmooth = value }
+                }
+            }
+            StudioLabel(stringResource(R.string.som_edge_shrink))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                listOf(0f to R.string.som_level_none, 0.002f to R.string.som_level_light, 0.005f to R.string.som_level_medium, 0.01f to R.string.som_level_strong).forEach { (f, label) ->
+                    val value = f * longest
+                    StudioChip(stringResource(label), editor.edgeShrink == value) { editor.edgeShrink = value }
+                }
+            }
+            hint(R.string.som_edge_hint)
+        }
+        EditSection.FRAME -> {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                Layer.FRAMES.forEach { (key, label) -> StudioChip(label, editor.frame == key) { editor.frame = key } }
+            }
+            if (Layer.hasColor(editor.frame)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    FrameColors.forEach { c ->
+                        Box(
+                            Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(c))
+                                .border(if (editor.frameColor == c) 3.dp else 1.dp, if (editor.frameColor == c) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline, CircleShape)
+                                .clickable { editor.frameColor = c },
+                        )
+                    }
+                }
+            }
+        }
+        EditSection.ROTATE -> {
+            Text(
+                stringResource(R.string.som_editor_rotation, editor.rotation.roundToInt()),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                StudioChip("↺ 90°", false) { editor.rotation = normalizedDegrees(editor.rotation - 90f) }
+                StudioChip("−15°", false) { editor.rotation = normalizedDegrees(editor.rotation - 15f) }
+                StudioChip("−5°", false) { editor.rotation = normalizedDegrees(editor.rotation - 5f) }
+                StudioChip(stringResource(R.string.som_rotate_straight), editor.rotation == 0f) { editor.rotation = 0f }
+                StudioChip("+5°", false) { editor.rotation = normalizedDegrees(editor.rotation + 5f) }
+                StudioChip("+15°", false) { editor.rotation = normalizedDegrees(editor.rotation + 15f) }
+                StudioChip("↻ 90°", false) { editor.rotation = normalizedDegrees(editor.rotation + 90f) }
+            }
+        }
+        EditSection.SIZE -> {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                listOf(512 to R.string.som_editor_size_small, 768 to R.string.som_editor_size_medium, 1024 to R.string.som_editor_size_large).forEach { (side, label) ->
+                    StudioChip(stringResource(R.string.som_editor_size_chip, stringResource(label), side), editor.outputSide == side) { editor.outputSide = side }
+                }
+            }
+            hint(R.string.som_size_hint)
+        }
+    }
+}
+
+// Narzędzia edytora naklejki (pasek na ekranie głównym). maskView = pokazuje maskę na zdjęciu zamiast gotowej naklejki.
+private enum class EditSection(@StringRes val labelRes: Int, @StringRes val titleRes: Int, val maskView: Boolean) {
+    OBJECT(R.string.som_rail_object, R.string.som_title_object, true),
+    BRUSH(R.string.som_rail_brush, R.string.som_title_brush, true),
+    CROP(R.string.som_rail_crop, R.string.som_title_crop, false),
+    EDGE(R.string.som_rail_edge, R.string.som_title_edge, false),
+    FRAME(R.string.som_rail_frame, R.string.som_title_frame, false),
+    ROTATE(R.string.som_rail_rotate, R.string.som_title_rotate, false),
+    SIZE(R.string.som_rail_size, R.string.som_title_size, false);
 
     val icon: ImageVector
         get() = when (this) {
@@ -995,7 +1011,6 @@ private enum class EditSection(@StringRes val labelRes: Int, val finish: Boolean
             BRUSH -> StudioIcons.Brush
             CROP -> StudioIcons.Crop
             EDGE -> StudioIcons.Edge
-            SHAPE -> StudioIcons.Shape
             FRAME -> StudioIcons.Frame
             ROTATE -> StudioIcons.Rotate
             SIZE -> StudioIcons.Resize
@@ -1004,6 +1019,11 @@ private enum class EditSection(@StringRes val labelRes: Int, val finish: Boolean
 
 // Rozmiary pędzla (średnica w dp ekranu) — cztery kropki zamiast suwaka.
 private val BRUSH_SIZES = listOf(14f, 28f, 48f, 80f)
+
+// Proporcje kadru (szerokość / wysokość w pikselach); null = dowolne.
+private val CROP_ASPECTS: List<Pair<Float?, String>> = listOf(
+    null to "", 1f to "1:1", 4f / 5f to "4:5", 3f / 4f to "3:4", 9f / 16f to "9:16", 4f / 3f to "4:3", 16f / 9f to "16:9",
+)
 
 @Composable
 private fun BrushDot(index: Int, selected: Boolean, onClick: () -> Unit) {
@@ -1021,6 +1041,133 @@ private fun BrushDot(index: Int, selected: Boolean, onClick: () -> Unit) {
     ) {
         Box(Modifier.size((6 + index * 6).dp).clip(CircleShape).background(colors.onSurface))
     }
+}
+
+// Kadrowanie jak w zwykłym edytorze zdjęć: ramka na całym obrazie, rogi do przeciągania, środek przesuwa ramkę.
+// Przy zablokowanych proporcjach (1:1, 4:5…) rogi trzymają proporcje. Kształt widać jako obrys w ramce.
+// image = zdjęcie × maska w pełnym kadrze (cutPreview), współrzędne kadru w ułamkach 0..1.
+@Composable
+private fun CropCanvas(editor: CutoutEditor, image: android.graphics.Bitmap) {
+    val bitmap = remember(image) { image.asImageBitmap() }
+    val checker = rememberCheckerBrush()
+    val accent = MaterialTheme.colorScheme.secondary
+    val density = LocalDensity.current
+    val grab = with(density) { 32.dp.toPx() }   // promień „chwytu” rogu
+    val pad = with(density) { 24.dp.toPx() }    // margines, żeby rogi dało się złapać przy krawędzi ekranu
+    val corner = with(density) { 22.dp.toPx() } // długość ramion narożnika
+    val line = with(density) { 2.dp.toPx() }
+    val thick = with(density) { 4.dp.toPx() }
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val cw = constraints.maxWidth.toFloat()
+        val ch = constraints.maxHeight.toFloat()
+        val scale = minOf((cw - 2 * pad) / bitmap.width, (ch - 2 * pad) / bitmap.height).coerceAtLeast(0.01f)
+        val iw = bitmap.width * scale
+        val ih = bitmap.height * scale
+        val ox = (cw - iw) / 2f
+        val oy = (ch - ih) / 2f
+
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(editor, iw, ih, ox, oy) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        val start = editor.crop
+                        // Który róg (0 = lewy górny, 1 = prawy górny, 2 = prawy dolny, 3 = lewy dolny) albo środek (4).
+                        val corners = listOf(
+                            Offset(ox + start.left * iw, oy + start.top * ih),
+                            Offset(ox + start.right * iw, oy + start.top * ih),
+                            Offset(ox + start.right * iw, oy + start.bottom * ih),
+                            Offset(ox + start.left * iw, oy + start.bottom * ih),
+                        )
+                        val nearest = corners.indices.minByOrNull { (corners[it] - down.position).getDistance() } ?: 0
+                        val inside = down.position.x in corners[0].x..corners[1].x && down.position.y in corners[0].y..corners[2].y
+                        val mode = when {
+                            (corners[nearest] - down.position).getDistance() <= grab -> nearest
+                            inside -> 4
+                            else -> -1
+                        }
+                        if (mode >= 0) {
+                            down.consume()
+                            var pressed = true
+                            while (pressed) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                if (change == null || !change.pressed) {
+                                    pressed = false
+                                } else {
+                                    val nx = ((change.position.x - ox) / iw).coerceIn(0f, 1f)
+                                    val ny = ((change.position.y - oy) / ih).coerceIn(0f, 1f)
+                                    editor.crop = if (mode == 4) {
+                                        val dx = (change.position.x - down.position.x) / iw
+                                        val dy = (change.position.y - down.position.y) / ih
+                                        CropBox(start.left + dx, start.top + dy, start.right + dx, start.bottom + dy).clamped()
+                                    } else {
+                                        dragCorner(start, mode, nx, ny, editor.aspect?.let { it / editor.photoAspect })
+                                    }
+                                    change.consume()
+                                }
+                            }
+                        }
+                    }
+                },
+        ) {
+            val c = editor.crop
+            val l = ox + c.left * iw
+            val t = oy + c.top * ih
+            val r = ox + c.right * iw
+            val b = oy + c.bottom * ih
+            drawRect(checker, topLeft = Offset(ox, oy), size = Size(iw, ih))
+            drawImage(bitmap, dstOffset = IntOffset(ox.roundToInt(), oy.roundToInt()), dstSize = IntSize(iw.roundToInt(), ih.roundToInt()))
+            // Przyciemnienie poza kadrem (cztery pasy).
+            val dim = Color(0xB3000000)
+            drawRect(dim, Offset(ox, oy), Size(iw, t - oy))
+            drawRect(dim, Offset(ox, b), Size(iw, oy + ih - b))
+            drawRect(dim, Offset(ox, t), Size(l - ox, b - t))
+            drawRect(dim, Offset(r, t), Size(ox + iw - r, b - t))
+            // Siatka trójpodziału + ramka.
+            val grid = Color(0x66FFFFFF)
+            for (i in 1..2) {
+                val x = l + (r - l) * i / 3f
+                val y = t + (b - t) * i / 3f
+                drawLine(grid, Offset(x, t), Offset(x, b), strokeWidth = 1f)
+                drawLine(grid, Offset(l, y), Offset(r, y), strokeWidth = 1f)
+            }
+            drawRect(Color.White, Offset(l, t), Size(r - l, b - t), style = Stroke(line))
+            // Kształt w kadrze (obrys).
+            val shapePath = StickerShapes.path(editor.shape, r - l, b - t)
+            if (shapePath != null) {
+                shapePath.offset(l, t)
+                drawPath(shapePath.asComposePath(), accent, style = Stroke(thick))
+            }
+            // Narożniki do chwytania.
+            listOf(Offset(l, t) to Offset(1f, 1f), Offset(r, t) to Offset(-1f, 1f), Offset(r, b) to Offset(-1f, -1f), Offset(l, b) to Offset(1f, -1f)).forEach { (p, d) ->
+                drawLine(Color.White, p, Offset(p.x + d.x * corner, p.y), strokeWidth = thick, cap = StrokeCap.Round)
+                drawLine(Color.White, p, Offset(p.x, p.y + d.y * corner), strokeWidth = thick, cap = StrokeCap.Round)
+            }
+        }
+    }
+}
+
+// Przeciąganie rogu: przeciwległy róg stoi, ten idzie za palcem. ratio = proporcje w ułamkach zdjęcia (null = dowolne).
+private fun dragCorner(start: CropBox, corner: Int, x: Float, y: Float, ratio: Float?): CropBox {
+    val ax = if (corner == 0 || corner == 3) start.right else start.left  // przeciwległy róg (kotwica)
+    val ay = if (corner == 0 || corner == 1) start.bottom else start.top
+    val dirX = if (x >= ax) 1f else -1f
+    val dirY = if (y >= ay) 1f else -1f
+    val maxW = if (dirX > 0) 1f - ax else ax
+    val maxH = if (dirY > 0) 1f - ay else ay
+    var w = kotlin.math.abs(x - ax).coerceIn(CropBox.MIN, maxOf(CropBox.MIN, maxW))
+    var h = kotlin.math.abs(y - ay).coerceIn(CropBox.MIN, maxOf(CropBox.MIN, maxH))
+    if (ratio != null) {
+        if (w / h > ratio) w = h * ratio else h = w / ratio
+        if (w > maxW) { w = maxW; h = w / ratio }
+        if (h > maxH) { h = maxH; w = h * ratio }
+    }
+    val left = if (dirX > 0) ax else ax - w
+    val top = if (dirY > 0) ay else ay - h
+    return CropBox(left, top, left + w, top + h).clamped()
 }
 
 // Podgląd z maską: przygaszone zdjęcie w tle (widać, co można "domalować"), na nim wycięty obiekt na szachownicy.
@@ -1160,86 +1307,12 @@ private fun MaskCanvas(editor: CutoutEditor, tool: Tool, brushDp: Float, rotatio
     }
 }
 
-private const val SHAPE_ZOOM_MIN = 0.25f
-private const val SHAPE_ZOOM_MAX = 6f
-
-// Kąt sprowadzony do -180..180 (jak suwak obrotu).
+// Kąt sprowadzony do -180..180.
 private fun normalizedDegrees(d: Float): Float = (((d + 180f) % 360f + 360f) % 360f) - 180f
-
-// Dopasowanie obrazu w kształcie, na żywo: kształt stoi na środku, obraz pod nim jeździ.
-// Jeden palec = przesuwanie, dwa palce = powiększanie i obrót wokół palców (detectTransformGestures —
-// odpowiednik ManipulationDelta w WPF). Poza kształtem obraz jest przygaszony — widać, co zostanie ucięte.
-// Rysujemy w układzie ramki kształtu (piksele cutPreview) przeskalowanym do ekranu — ta sama geometria co
-// CutoutEditor.shapeMatrix, więc zapis wygląda dokładnie tak samo (ramki i obrotu całości tu nie widać).
-@Composable
-private fun ShapeFitCanvas(editor: CutoutEditor, cut: android.graphics.Bitmap) {
-    val image = remember(cut) { cut.asImageBitmap() }
-    val checker = rememberCheckerBrush()
-    val outline = MaterialTheme.colorScheme.secondary
-    val box = editor.shapeBox(cut.width, cut.height)
-    val shapePath = remember(editor.shape, box) {
-        box?.let { StickerShapes.path(editor.shape, it.width.toFloat(), it.height.toFloat())?.asComposePath() }
-    }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val cw = constraints.maxWidth.toFloat()
-        val ch = constraints.maxHeight.toFloat()
-        if (box != null && shapePath != null) {
-            val bw = box.width.toFloat()
-            val bh = box.height.toFloat()
-            val ds = minOf(cw * 0.8f / bw, ch * 0.8f / bh) // piksele ramki → ekran
-            val left = (cw - bw * ds) / 2f
-            val top = (ch - bh * ds) / 2f
-            val boxCenter = Offset(left + bw * ds / 2f, top + bh * ds / 2f)
-            Canvas(
-                Modifier
-                    .fillMaxSize()
-                    .pointerInput(editor, bw, bh, cw, ch) {
-                        detectTransformGestures { centroid, pan, zoom, turn ->
-                            // Środek obrazu na ekranie; obracamy i skalujemy go wokół palców (centroid), potem przesuwamy.
-                            val c = boxCenter + Offset(editor.shapeOffsetX * bw * ds, editor.shapeOffsetY * bh * ds)
-                            val newZoom = (editor.shapeZoom * zoom).coerceIn(SHAPE_ZOOM_MIN, SHAPE_ZOOM_MAX)
-                            val applied = newZoom / editor.shapeZoom
-                            val rad = Math.toRadians(turn.toDouble())
-                            val cos = kotlin.math.cos(rad).toFloat()
-                            val sin = kotlin.math.sin(rad).toFloat()
-                            val d = c - centroid
-                            val moved = centroid + Offset(d.x * cos - d.y * sin, d.x * sin + d.y * cos) * applied + pan
-                            editor.shapeOffsetX = ((moved.x - boxCenter.x) / (bw * ds)).coerceIn(-1.5f, 1.5f)
-                            editor.shapeOffsetY = ((moved.y - boxCenter.y) / (bh * ds)).coerceIn(-1.5f, 1.5f)
-                            editor.shapeZoom = newZoom
-                            editor.shapeRotation = normalizedDegrees(editor.shapeRotation + turn)
-                        }
-                    },
-            ) {
-                drawRect(checker)
-                val ox = editor.shapeOffsetX
-                val oy = editor.shapeOffsetY
-                val z = editor.shapeZoom
-                val r = editor.shapeRotation
-                // Obraz w układzie ramki: środek obrazu → środek ramki + przesunięcie, obrót, powiększenie.
-                fun DrawScope.fitted(alpha: Float) = withTransform({
-                    translate(bw / 2f + ox * bw, bh / 2f + oy * bh)
-                    rotate(r, pivot = Offset.Zero)
-                    scale(z, z, pivot = Offset.Zero)
-                }) {
-                    drawImage(image, topLeft = Offset(-image.width / 2f, -image.height / 2f), alpha = alpha)
-                }
-                withTransform({
-                    translate(left, top)
-                    scale(ds, ds, pivot = Offset.Zero)
-                }) {
-                    fitted(0.28f) // cały obraz przygaszony
-                    clipPath(shapePath) { fitted(1f) } // w kształcie — pełny
-                    drawPath(shapePath, outline, style = Stroke(width = 2.dp.toPx() / ds))
-                }
-            }
-        }
-    }
-}
 
 private val FrameColors = listOf(0xFFFFFFFFL, 0xFF16171AL, 0xFFFFD54FL, 0xFFFF8A80L, 0xFF80D8FFL, 0xFFB9F6CAL, 0xFFE1BEE7L)
 
-// Gotowa naklejka na szachownicy (tak zostanie zapisana).
+// Gotowa naklejka na szachownicy (tak zostanie zapisana); obrót całości tylko przy rysowaniu, więc działa na żywo.
 @Composable
 private fun ResultPreview(image: ImageBitmap?, rotation: Float) {
     val checker = rememberCheckerBrush()

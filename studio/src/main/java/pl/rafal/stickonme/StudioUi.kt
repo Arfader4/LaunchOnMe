@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -199,4 +200,48 @@ fun <T> StudioSegmented(options: List<Pair<T, String>>, selected: T, onSelect: (
 @Composable
 fun StudioLabel(text: String) {
     Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+}
+
+// Dolny pasek otwartego narzędzia: ✕ anuluje zmiany z tego narzędzia, ✓ je zatwierdza (jak w edytorach w telefonie).
+// Kolory jak w całym projekcie: ✕ czerwony, ✓ zielony.
+@Composable
+fun StudioStepBar(cancelLabel: String, applyLabel: String, enabled: Boolean, onCancel: () -> Unit, onApply: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, colors.outlineVariant, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .alpha(if (enabled) 1f else 0.5f)
+                .weight(1f)
+                .height(48.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .border(2.dp, colors.error, RoundedCornerShape(24.dp))
+                .clickable(enabled = enabled, role = Role.Button, onClick = onCancel),
+        ) {
+            Icon(StudioIcons.Close, contentDescription = null, tint = colors.error, modifier = Modifier.size(20.dp))
+            Text(cancelLabel, color = colors.error, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .alpha(if (enabled) 1f else 0.5f)
+                .weight(1f)
+                .height(48.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(colors.secondary)
+                .clickable(enabled = enabled, role = Role.Button, onClick = onApply),
+        ) {
+            Icon(StudioIcons.Check, contentDescription = null, tint = colors.onSecondary, modifier = Modifier.size(20.dp))
+            Text(applyLabel, color = colors.onSecondary, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+        }
+    }
 }

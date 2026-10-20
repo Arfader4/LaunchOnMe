@@ -165,7 +165,7 @@
     <string name="som_undo_cd">Undo</string>
     <string name="som_redo_cd">Redo</string>
     <string name="som_compare_cd">Hold to see the original</string>
-    <string name="som_object_hint">Cuts the main subject out of the photo. You can touch it up with the brush afterwards.</string>
+    <string name="som_object_hint">The marked subject becomes the sticker, the rest disappears. ✓ Apply confirms; touch up details with the brush.</string>
     <string name="som_brush_size">Brush</string>
     <string name="som_brush_size_cd">Brush size %1$d of 4</string>
     <string name="som_crop_rect">Rectangle</string>
@@ -184,4 +184,20 @@
     <string name="som_rail_frame">Frame</string>
     <string name="som_rail_rotate">Rotate</string>
     <string name="som_rail_size">Size</string>
+    <string name="som_object_again">Cut out again</string>
+    <string name="som_brush_hint">Paint on the photo: “Add” puts parts back into the sticker, “Erase” removes them. Two fingers zoom and pan.</string>
+    <string name="som_crop_aspect">Aspect ratio</string>
+    <string name="som_crop_free">Free</string>
+    <string name="som_crop_reset">Reset crop</string>
+    <string name="som_crop_hint">Drag a corner to change the crop, or the middle to move it. The shape fills the frame — a circle at 1:1 is a perfect circle.</string>
+    <string name="som_edge_hint">Smoothing softens the sticker edge, trimming eats leftover background along it.</string>
+    <string name="som_level_medium">Medium</string>
+    <string name="som_size_hint">Resolution of the saved sticker (longer side).</string>
+    <string name="som_title_object">Cut out subject</string>
+    <string name="som_title_brush">Brush</string>
+    <string name="som_title_crop">Crop and shape</string>
+    <string name="som_title_edge">Edge</string>
+    <string name="som_title_frame">Frame</string>
+    <string name="som_title_rotate">Rotate</string>
+    <string name="som_title_size">Size</string>
 </resources>

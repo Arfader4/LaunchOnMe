@@ -27,7 +27,8 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | 1.9.0 | StickOnMe wydzielone do osobnej aplikacji (moduł `:stickonme`, StickOnMe 1.0.0); launcher woła je intencjami, przeniesienie biblioteki w Ustawieniach | 1 |
 | SOM 1.1.0 | StickOnMe: nowy edytor naklejki wg makiety (pasek narzędzi z ikonami, bez suwaków, ✓ Gotowe, Ponów, porównanie z oryginałem) | 1 |
 | 1.9.1 | Hotfix automatu: „Włączono …” znika po 15 s i ustępuje nowej sugestii; automat nie kończy trybów sam (powrót do Start = tylko propozycja) | 1 |
-Razem od V1: 49 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
+| SOM 1.2.0 | StickOnMe: edytor naklejki jak w telefonie — narzędzia z ✓ Zastosuj / ✕ Anuluj, kadr z ramką i rogami + kształt w jednym, próg maski ML Kit (koniec „prostokątów”), krawędź względem rozmiaru zdjęcia, obrót na żywo | 1 |
+Razem od V1: 51 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).
