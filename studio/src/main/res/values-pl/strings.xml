@@ -200,4 +200,7 @@
     <string name="som_title_frame">Ramka</string>
     <string name="som_title_rotate">Obrót</string>
     <string name="som_title_size">Rozmiar</string>
+    <string name="som_preview_failed">Nie udało się policzyć podglądu (%1$s).</string>
+    <string name="som_object_share">Zostaje %1$d%% zdjęcia — reszta będzie przezroczysta.</string>
+    <string name="som_object_share_all">Zostaje %1$d%% zdjęcia — nie znaleziono wyraźnego obiektu. Spróbuj pędzla.</string>
 </resources>

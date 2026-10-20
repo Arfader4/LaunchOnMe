@@ -197,14 +197,38 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
     // Ciężka część (pętla po pikselach, skalowanie) — W TLE (Dispatchers.Default). Nie rusza bieżącej maski.
     fun prepareMask(confidence: FloatArray, width: Int, height: Int): Bitmap {
         val small = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        // Próg pewności: poniżej 0,3 = tło (0), powyżej 0,7 = obiekt (255), pomiędzy — miękkie przejście.
-        // Bez progu tło miało kilka % krycia: niewidoczne, ale naklejka zostawała prostokątem całego zdjęcia.
-        val pixels = IntArray(width * height) { i -> (((confidence[i] - 0.3f) / 0.4f).coerceIn(0f, 1f) * 255).roundToInt() shl 24 }
+        // Próg pewności: poniżej 0,45 = tło (0), powyżej 0,55 = obiekt (255), pomiędzy — wąskie miękkie przejście.
+        // Bez ostrego progu tło zostawało półprzezroczyste: na podglądzie maski wyglądało na „wycięte”,
+        // a w naklejce zostawał prostokąt całego zdjęcia.
+        val pixels = IntArray(width * height) { i -> (((confidence[i] - 0.45f) / 0.1f).coerceIn(0f, 1f) * 255).roundToInt() shl 24 }
         small.setPixels(pixels, 0, width, 0, 0, width, height)
         val full = Bitmap.createBitmap(mask.width, mask.height, Bitmap.Config.ALPHA_8)
         Canvas(full).drawBitmap(small, null, android.graphics.Rect(0, 0, mask.width, mask.height), Paint(Paint.FILTER_BITMAP_FLAG))
         small.recycle()
         return full
+    }
+
+    // Jaka część zdjęcia zostaje w naklejce (0–100 %, piksele maski powyżej połowy krycia) — liczone na siatce
+    // co kilka pikseli, więc szybko także dla 12 Mpx. Pokazujemy to po wycięciu obiektu.
+    fun coverage(): Int {
+        val w = mask.width
+        val h = mask.height
+        val step = maxOf(1, maxOf(w, h) / 400)
+        val row = IntArray(w)
+        var kept = 0
+        var all = 0
+        var y = 0
+        while (y < h) {
+            mask.getPixels(row, 0, w, 0, y, w, 1)
+            var x = 0
+            while (x < w) {
+                if ((row[x] ushr 24) > 127) kept++
+                all++
+                x += step
+            }
+            y += step
+        }
+        return if (all == 0) 0 else (kept * 100f / all).roundToInt()
     }
 
     // Podmiana maski na przygotowaną — na wątku UI (tam też maluje pędzel), to już tylko kopia pikseli.

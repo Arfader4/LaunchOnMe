@@ -649,6 +649,7 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
     var brush by remember { mutableFloatStateOf(BRUSH_SIZES[1]) } // średnica pędzla w dp ekranu
     var busy by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf<String?>(null) }
+    var objectShare by remember(editor) { mutableStateOf<Int?>(null) } // ile % zdjęcia zostaje po „Wytnij obiekt”
     // Podgląd liczony w tle chwilę po ostatniej zmianie; kolejna zmiana anuluje poprzednie liczenie (ensureActive).
     // Dwa etapy: (1) zdjęcie × maska + krawędź → cutPreview (wolniejsze, tylko po zmianie maski / krawędzi; ten obraz
     // pokazuje też ekran kadru), (2) kadr + kształt + ramka z cutPreview → resultPreview (szybkie). Obrót całości
@@ -666,7 +667,15 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
             try {
                 kotlinx.coroutines.delay(120)
                 // Podgląd na kopii do 800 px (zapis i tak liczy w pełnej rozdzielczości).
-                val cut = withContext(Dispatchers.Default) { runCatching { editor.cutout(workSide = PREVIEW_WORK_SIDE) { ensureActive() } }.getOrNull() }
+                // Błąd podglądu pokazujemy (nazwa wyjątku), zamiast po cichu zostawiać stary obraz.
+                val cut = try {
+                    withContext(Dispatchers.Default) { editor.cutout(workSide = PREVIEW_WORK_SIDE) { ensureActive() } }
+                } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    message = context.getString(R.string.som_preview_failed, e.javaClass.simpleName)
+                    null
+                }
                 if (cut != null) cutPreview = cut
             } finally {
                 cutting = false
@@ -679,7 +688,14 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
             finishing = true
             try {
                 kotlinx.coroutines.delay(60)
-                val image = withContext(Dispatchers.Default) { runCatching { editor.finish(cut, rotate = false) { ensureActive() } }.getOrNull() }
+                val image = try {
+                    withContext(Dispatchers.Default) { editor.finish(cut, rotate = false) { ensureActive() } }
+                } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    message = context.getString(R.string.som_preview_failed, e.javaClass.simpleName)
+                    null
+                }
                 resultPreview = image?.asImageBitmap()
             } finally {
                 finishing = false
@@ -697,11 +713,23 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
     fun runAuto() {
         busy = true
         message = null
+        objectShare = null
         scope.launch {
             val prepared = autoMaskFor(editor)
-            if (prepared != null) editor.applyMask(prepared)
-            else message = context.getString(R.string.som_editor_auto_failed)
+            if (prepared != null) {
+                editor.applyMask(prepared)
+                objectShare = withContext(Dispatchers.Default) { editor.coverage() }
+            } else {
+                message = context.getString(R.string.som_editor_auto_failed)
+            }
             busy = false
+        }
+    }
+    // Po narzędziu z maską stary podgląd jest nieaktualny — czyścimy go (kółko zamiast starego obrazu do czasu przeliczenia).
+    fun dropStalePreview() {
+        if (section?.maskView == true) {
+            cutPreview = null
+            resultPreview = null
         }
     }
     fun open(s: EditSection) {
@@ -712,10 +740,12 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
     }
     fun applyStep() {
         editor.commitStep()
+        dropStalePreview()
         section = null
     }
     fun cancelStep() {
         editor.cancelStep()
+        dropStalePreview()
         message = null
         section = null
     }
@@ -781,7 +811,7 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
         ) {
             val cut = cutPreview
             if (tab == 0) {
-                MaskCanvas(editor, tool = tool, brushDp = brush, rotation = 0f, enabled = !busy)
+                MaskCanvas(editor, tool = tool, brushDp = brush, rotation = 0f, enabled = !busy, ghost = section == EditSection.BRUSH)
             } else if (cropping) {
                 if (cut != null) CropCanvas(editor, cut)
             } else {
@@ -858,7 +888,7 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                EditorOptions(current, editor, busy, brushMode, { brushMode = it }, brush, { brush = it }) { runAuto() }
+                EditorOptions(current, editor, busy, objectShare, brushMode, { brushMode = it }, brush, { brush = it }) { runAuto() }
             }
             StudioStepBar(
                 cancelLabel = stringResource(R.string.som_cancel),
@@ -877,6 +907,7 @@ private fun EditorOptions(
     section: EditSection,
     editor: CutoutEditor,
     busy: Boolean,
+    objectShare: Int?,
     brushMode: Tool,
     onBrushMode: (Tool) -> Unit,
     brush: Float,
@@ -888,6 +919,15 @@ private fun EditorOptions(
     }
     when (section) {
         EditSection.OBJECT -> {
+            if (objectShare != null) {
+                // Ile zdjęcia zostaje — od razu widać, czy tło naprawdę zniknęło.
+                Text(
+                    stringResource(if (objectShare >= 95) R.string.som_object_share_all else R.string.som_object_share, objectShare),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (objectShare >= 95) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
+                )
+            }
             hint(R.string.som_object_hint)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StudioChip(stringResource(R.string.som_object_again), false) { if (!busy) onAuto() }
@@ -1173,7 +1213,8 @@ private fun dragCorner(start: CropBox, corner: Int, x: Float, y: Float, ratio: F
 // Podgląd z maską: przygaszone zdjęcie w tle (widać, co można "domalować"), na nim wycięty obiekt na szachownicy.
 // Jeden palec = pędzel (albo przesuwanie), dwa palce = przybliżanie i przesuwanie widoku.
 @Composable
-private fun MaskCanvas(editor: CutoutEditor, tool: Tool, brushDp: Float, rotation: Float, enabled: Boolean, maskOverride: ImageBitmap? = null) {
+// ghost = przygaszone zdjęcie pod spodem (przy pędzlu widać, co można domalować); bez niego — dokładnie to, co zostanie.
+private fun MaskCanvas(editor: CutoutEditor, tool: Tool, brushDp: Float, rotation: Float, enabled: Boolean, maskOverride: ImageBitmap? = null, ghost: Boolean = true) {
     val photo = remember(editor) { editor.photo.asImageBitmap() }
     val mask = remember(editor) { editor.mask.asImageBitmap() }
     var zoom by remember(editor) { mutableFloatStateOf(1f) }
@@ -1283,7 +1324,7 @@ private fun MaskCanvas(editor: CutoutEditor, tool: Tool, brushDp: Float, rotatio
             rotate(rotation, pivot = Offset(o.x + dst.width / 2f, o.y + dst.height / 2f)) {
                 // Wzór zaczepiony w rogu zdjęcia — przesuwa się razem z nim.
                 translate(o.x, o.y) { drawRect(checker, size = androidx.compose.ui.geometry.Size(dst.width.toFloat(), dst.height.toFloat())) }
-                if (rotation == 0f) drawImage(photo, dstOffset = dstOffset, dstSize = dst, alpha = 0.22f)
+                if (rotation == 0f && ghost) drawImage(photo, dstOffset = dstOffset, dstSize = dst, alpha = 0.22f)
                 // Warstwa: zdjęcie, a potem maska w trybie DstIn (zostaje tylko to, co zamalowane).
                 drawIntoCanvas { canvas ->
                     canvas.saveLayer(Rect(Offset.Zero, size), Paint())

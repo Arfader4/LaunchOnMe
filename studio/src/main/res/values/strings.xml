@@ -200,4 +200,7 @@
     <string name="som_title_frame">Frame</string>
     <string name="som_title_rotate">Rotate</string>
     <string name="som_title_size">Size</string>
+    <string name="som_preview_failed">Could not compute the preview (%1$s).</string>
+    <string name="som_object_share">%1$d%% of the photo stays — the rest will be transparent.</string>
+    <string name="som_object_share_all">%1$d%% of the photo stays — no clear subject found. Try the brush.</string>
 </resources>
