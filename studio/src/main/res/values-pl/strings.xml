@@ -203,4 +203,18 @@
     <string name="som_preview_failed">Nie udało się policzyć podglądu (%1$s).</string>
     <string name="som_object_share">Zostaje %1$d%% zdjęcia — reszta będzie przezroczysta.</string>
     <string name="som_object_share_all">Zostaje %1$d%% zdjęcia — nie znaleziono wyraźnego obiektu. Spróbuj pędzla.</string>
+    <string name="som_board_back_cd">Wróć do biblioteki (zapisuje tablicę)</string>
+    <string name="som_board_size_sub">%1$d × %2$d px</string>
+    <string name="som_board_wallpaper_short">Na tapetę</string>
+    <string name="som_board_save_short">Zapisz…</string>
+    <string name="som_rail_sticker">Naklejka</string>
+    <string name="som_rail_photo">Zdjęcie</string>
+    <string name="som_rail_text">Tekst</string>
+    <string name="som_rail_emoji">Emoji</string>
+    <string name="som_rail_background">Tło</string>
+    <string name="som_ctx_style">Styl</string>
+    <string name="som_ctx_front">Na wierzch</string>
+    <string name="som_ctx_back">Na spód</string>
+    <string name="som_ctx_duplicate">Duplikuj</string>
+    <string name="som_ctx_delete">Usuń</string>
 </resources>

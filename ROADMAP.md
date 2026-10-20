@@ -30,7 +30,8 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | SOM 1.2.0 | StickOnMe: edytor naklejki jak w telefonie — narzędzia z ✓ Zastosuj / ✕ Anuluj, kadr z ramką i rogami + kształt w jednym, próg maski ML Kit (koniec „prostokątów”), krawędź względem rozmiaru zdjęcia, obrót na żywo | 1 |
 | SOM 1.2.1 | StickOnMe: „Obiekt” — ostry próg maski (0,45–0,55), podgląd bez przygaszonego tła, „zostaje X% zdjęcia”, odświeżenie podglądu po ✓, błędy podglądu widoczne | 1 |
 | SOM 1.2.2 | StickOnMe: maska nakładana piksel po pikselu (getPixels) zamiast DST_IN z bitmapą ALPHA_8 — naklejka wreszcie bez tła | 1 |
-Razem od V1: 53 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
+| SOM 1.3.0 | StickOnMe: tablica wg makiety — górny pasek z Cofnij/Ponów, dolny pasek dodawania z ikonami, pływający pasek opcji warstwy, uchwyty ✕ i obrót/skala jednym palcem, tło i ramka w panelach z ✓/✕ | 1 |
+Razem od V1: 54 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).

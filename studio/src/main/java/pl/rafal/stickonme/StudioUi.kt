@@ -67,6 +67,17 @@ object StudioIcons {
     val Frame = icon("frame", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M8 7h8a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z")
     val Rotate = icon("rotate", "M20 12a8 8 0 1 1-2.3-5.7", "M20 4v5h-5")
     val Resize = icon("resize", "M15 3h6v6", "M9 21H3v-6", "M21 3l-7 7", "M3 21l7-7")
+    // Tablica / kolaż
+    val Back = icon("back", "M15 5l-7 7 7 7")
+    val Sticker = icon("sticker", "M4 4h16v10l-6 6H4z", "M14 20v-6h6")
+    val Photo = icon("photo", "M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z", "M11 10a2 2 0 1 1-4 0a2 2 0 1 1 4 0z", "M21 16l-5-5-9 8")
+    val Text = icon("text", "M5 6V4h14v2", "M12 4v16", "M9 20h6")
+    val Emoji = icon("emoji", "M21 12a9 9 0 1 1-18 0a9 9 0 1 1 18 0z", "M8 14c1 1.5 2.4 2.2 4 2.2s3-.7 4-2.2", "M9 9.5h.01", "M15 9.5h.01")
+    val Background = icon("background", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M3 15l5-4 4 3 3-2 6 4")
+    val ToFront = icon("to_front", "M12 20V9", "M7 13l5-5 5 5", "M5 4h14")
+    val ToBack = icon("to_back", "M12 4v11", "M7 11l5 5 5-5", "M5 20h14")
+    val Duplicate = icon("duplicate", "M10 8h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z", "M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3")
+    val Trash = icon("trash", "M4 7h16", "M10 11v6", "M14 11v6", "M6 7l1 13h10l1-13", "M9 7V4h6v3")
 }
 
 // Okrągły przycisk z samą ikoną (✕, Cofnij, Ponów…): 44 dp, z opisem dla czytnika ekranu.
@@ -243,5 +254,23 @@ fun StudioStepBar(cancelLabel: String, applyLabel: String, enabled: Boolean, onC
             Icon(StudioIcons.Check, contentDescription = null, tint = colors.onSecondary, modifier = Modifier.size(20.dp))
             Text(applyLabel, color = colors.onSecondary, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
         }
+    }
+}
+
+// Pozycja pływającego paska nad zaznaczonym elementem tablicy (mniejsza niż StudioRailItem).
+@Composable
+fun StudioContextItem(icon: ImageVector, label: String, tint: Color = MaterialTheme.colorScheme.onSurface, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+        modifier = Modifier
+            .width(64.dp)
+            .heightIn(min = 52.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = 6.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+        Text(label, color = tint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, textAlign = TextAlign.Center)
     }
 }

@@ -80,6 +80,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -120,7 +122,10 @@ private val EmojiSet = listOf(
     "🌿", "🍀", "🍕", "☕", "🍰", "🎉", "🎁", "🎈", "📚", "🎧", "🎮", "⚽", "🚗", "✈️", "🏠", "📍",
 )
 
-private enum class BoardDialog { NONE, STICKER, TEXT, EMOJI, BACKGROUND, FRAME, EXPORT }
+private enum class BoardDialog { NONE, STICKER, TEXT, EMOJI, EXPORT }
+
+// Panele na dole ekranu (zamiast okien): zmiany widać od razu na tablicy, ✓ Zastosuj / ✕ Anuluj jak w edytorze naklejki.
+private enum class BoardPanel { BACKGROUND, FRAME }
 
 // Edytor tablicy: warstwy można przesuwać palcem, dwoma palcami obracać i skalować. Warstwy mogą wychodzić
 // poza krawędź tablicy — tam są półprzezroczyste i przy zapisie zostaną przycięte.
@@ -146,6 +151,10 @@ fun BoardEditorScreen(
     var textDraft by remember { mutableStateOf<Layer?>(null) } // nowy albo edytowany tekst
     val history = remember { ArrayDeque<Board>() }             // cofanie (do 30 kroków)
     var historySize by remember { mutableStateOf(0) }
+    val redoStack = remember { ArrayDeque<Board>() }           // „Ponów” — kroki zdjęte przez Cofnij
+    var redoSize by remember { mutableStateOf(0) }
+    var panel by remember { mutableStateOf<BoardPanel?>(null) }
+    var panelStart by remember { mutableStateOf<Board?>(null) } // tablica sprzed otwarcia panelu (do ✕)
     var message by remember { mutableStateOf<String?>(null) }
     // Dla paska narzędzi wystarczy rodzaj zaznaczonej warstwy i nazwa tablicy — derivedStateOf zmienia się tylko,
     // gdy zmieni się wynik (jak INotifyPropertyChanged tylko dla tej jednej właściwości), a nie przy każdym ruchu.
@@ -182,6 +191,45 @@ fun BoardEditorScreen(
         history.addLast(board)
         while (history.size > 30) history.removeFirst()
         historySize = history.size
+        redoStack.clear() // nowa zmiana = stara „przyszłość” przepada
+        redoSize = 0
+    }
+    fun undo() {
+        history.removeLastOrNull()?.let { previous ->
+            redoStack.addLast(board)
+            board = previous
+        }
+        historySize = history.size
+        redoSize = redoStack.size
+    }
+    fun redo() {
+        redoStack.removeLastOrNull()?.let { next ->
+            history.addLast(board)
+            board = next
+        }
+        historySize = history.size
+        redoSize = redoStack.size
+    }
+    // Panel: jeden krok „Cofnij” na całą sesję panelu; ✕ przywraca tablicę sprzed otwarcia.
+    fun openPanel(p: BoardPanel) {
+        panelStart = board
+        history.addLast(board) // bez czyszczenia „Ponów” — panel może skończyć się bez zmian
+        while (history.size > 30) history.removeFirst()
+        historySize = history.size
+        panel = p
+    }
+    fun closePanel(apply: Boolean) {
+        val start = panelStart
+        if (!apply && start != null) board = start
+        if (!apply || board == start) { // nic się nie zmieniło albo anulowano — krok historii niepotrzebny
+            history.removeLastOrNull()
+            historySize = history.size
+        } else {
+            redoStack.clear() // zatwierdzona zmiana = stara „przyszłość” przepada
+            redoSize = 0
+        }
+        panel = null
+        panelStart = null
     }
     fun change(newBoard: Board) {
         push()
@@ -230,7 +278,8 @@ fun BoardEditorScreen(
             val photo = StickerLibrary.decode(context, uri, 1800) ?: return@launch
             val path = BoardStore.importPhoto(context, photo)
             if (photoForBackground) {
-                change(board.copy(bgType = Board.BG_IMAGE, bgImage = path))
+                val withPhoto = board.copy(bgType = Board.BG_IMAGE, bgImage = path)
+                if (panel == BoardPanel.BACKGROUND) board = withPhoto else change(withPhoto) // w panelu historia jest już zapisana
             } else {
                 val (cx, cy) = center()
                 // Zdjęcie na start zajmuje ok. 60% szerokości tablicy (skala względem rozmiaru logicznego, max 1400 px).
@@ -240,17 +289,51 @@ fun BoardEditorScreen(
         }
     }
 
+    // Komunikat (np. „Zapisano w Galerii”) znika sam po 3 s.
+    LaunchedEffect(message) {
+        if (message != null) {
+            kotlinx.coroutines.delay(3000)
+            message = null
+        }
+    }
+
+    // Wstecz: najpierw zamyka panel (= ✕), potem odznacza warstwę, a dopiero potem wychodzi z tablicy (zapis).
+    BackHandler(enabled = panel != null) { closePanel(apply = false) }
+    BackHandler(enabled = panel == null && selectedKind != null) { selectedId = null }
+
+    // Akcje zaznaczonej warstwy (biorą warstwę w chwili dotknięcia — zawsze aktualne położenie).
+    fun toFront() = selectedLayer()?.let { sel -> change(board.copy(layers = board.layers.filter { it.id != sel.id } + sel)) }
+    fun toBack() = selectedLayer()?.let { sel -> change(board.copy(layers = listOf(sel) + board.layers.filter { it.id != sel.id })) }
+    fun duplicate() = selectedLayer()?.let { sel ->
+        addLayer(sel.copy(id = java.util.UUID.randomUUID().toString(), x = sel.x + board.width * 0.04f, y = sel.y + board.width * 0.04f))
+    }
+    fun straighten() = selectedId?.let { id -> change(board.updateLayer(id) { it.copy(rotation = 0f) }) }
+    fun deleteLayer(id: String) {
+        change(board.copy(layers = board.layers.filter { it.id != id }))
+        if (selectedId == id) selectedId = null
+    }
+
     Column(Modifier.fillMaxSize().backPreview(backProgress)) {
-        // Pasek górny: zamknij (zapisuje), cofnij, eksport.
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
-            TextButton(enabled = !closing, onClick = { close() }) { Text(stringResource(R.string.som_board_done_back)) }
-            Text(boardName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            TextButton(enabled = historySize > 0, onClick = {
-                history.removeLastOrNull()?.let { board = it }
-                historySize = history.size
-            }) { Text("↶") }
+        // Górny pasek (makieta): ‹ | nazwa + rozmiar | Cofnij · Ponów | Zapisz / Na tapetę.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            StudioIconButton(StudioIcons.Back, stringResource(R.string.som_board_back_cd), enabled = !closing && panel == null, outlined = true) { close() }
+            Column(Modifier.weight(1f).padding(start = 6.dp)) {
+                Text(boardName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    stringResource(R.string.som_board_size_sub, initial.width, initial.height),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            StudioIconButton(StudioIcons.Undo, stringResource(R.string.som_undo_cd), enabled = panel == null && historySize > 0) { undo() }
+            StudioIconButton(StudioIcons.Redo, stringResource(R.string.som_redo_cd), enabled = panel == null && redoSize > 0) { redo() }
             if (onWallpaper != null) {
-                TextButton(enabled = !closing, onClick = {
+                StudioPrimaryButton(stringResource(R.string.som_board_wallpaper_short), enabled = !closing && panel == null) {
                     closing = true // jedno dotknięcie = jeden zapis i jeden obraz (podwójne nie wyśle dwóch)
                     val finished = board
                     selectedId = null
@@ -262,9 +345,9 @@ fun BoardEditorScreen(
                             closing = false
                         }
                     }
-                }) { Text(stringResource(R.string.som_board_set_wallpaper)) }
+                }
             } else {
-                TextButton(onClick = { dialog = BoardDialog.EXPORT }) { Text(stringResource(R.string.som_board_save_as)) }
+                StudioPrimaryButton(stringResource(R.string.som_board_save_short), enabled = panel == null, icon = null) { dialog = BoardDialog.EXPORT }
             }
         }
 
@@ -283,59 +366,122 @@ fun BoardEditorScreen(
                 onSelect = { selectedId = it },
                 onGestureStart = { push() },
                 onUpdate = { f -> board = f(board) },
+                onDelete = { id -> deleteLayer(id) },
+                interactive = panel == null, // w panelu (✓/✕) tablica tylko pokazuje zmiany — inaczej ✕ cofałby nie ten krok
                 modifier = Modifier.fillMaxSize(),
             )
             // Pierwsze wczytanie obrazów tablicy (wiele zdjęć) — kółko zamiast zacięcia ekranu.
             if (preloading) CircularProgressIndicator(Modifier.align(Alignment.Center))
-        }
 
-        message?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
-        }
-
-        // Dolny pasek: dla zaznaczonej warstwy jej opcje, inaczej dodawanie.
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(12.dp),
-        ) {
+            // Pływający pasek nad tablicą: opcje zaznaczonej warstwy (makieta). Przewijany, gdy się nie mieści.
             val kind = selectedKind
-            if (kind == null) {
-                ToolButton(stringResource(R.string.som_board_add_sticker)) { dialog = BoardDialog.STICKER }
-                ToolButton(stringResource(R.string.som_board_add_photo)) { photoForBackground = false; pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-                ToolButton(stringResource(R.string.som_board_add_text)) {
+            if (kind != null && panel == null) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp))
+                        .horizontalScroll(rememberScrollState())
+                        .padding(4.dp),
+                ) {
+                    if (kind == Layer.KIND_TEXT) {
+                        StudioContextItem(StudioIcons.Text, stringResource(R.string.som_ctx_style)) { textDraft = selectedLayer(); dialog = BoardDialog.TEXT }
+                    } else {
+                        StudioContextItem(StudioIcons.Frame, stringResource(R.string.som_rail_frame)) { openPanel(BoardPanel.FRAME) }
+                    }
+                    StudioContextItem(StudioIcons.ToFront, stringResource(R.string.som_ctx_front)) { toFront() }
+                    StudioContextItem(StudioIcons.ToBack, stringResource(R.string.som_ctx_back)) { toBack() }
+                    StudioContextItem(StudioIcons.Duplicate, stringResource(R.string.som_ctx_duplicate)) { duplicate() }
+                    StudioContextItem(StudioIcons.Rotate, stringResource(R.string.som_rotate_straight)) { straighten() }
+                    StudioContextItem(StudioIcons.Trash, stringResource(R.string.som_ctx_delete), tint = MaterialTheme.colorScheme.error) {
+                        selectedId?.let { deleteLayer(it) }
+                    }
+                    StudioContextItem(StudioIcons.Check, stringResource(R.string.som_done), tint = MaterialTheme.colorScheme.secondary) { selectedId = null }
+                }
+            }
+
+            message?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(12.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xE60E0F12))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+        }
+
+        val shownPanel = panel
+        if (shownPanel == null) {
+            // Dolny pasek: dodawanie (ikona + podpis), przewijany.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    .horizontalScroll(rememberScrollState())
+                    .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 14.dp),
+            ) {
+                StudioRailItem(StudioIcons.Sticker, stringResource(R.string.som_rail_sticker), selected = false) { dialog = BoardDialog.STICKER }
+                StudioRailItem(StudioIcons.Photo, stringResource(R.string.som_rail_photo), selected = false) {
+                    photoForBackground = false
+                    pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+                StudioRailItem(StudioIcons.Text, stringResource(R.string.som_rail_text), selected = false) {
                     val (cx, cy) = center()
                     textDraft = Layer(kind = Layer.KIND_TEXT, x = cx, y = cy, text = "", size = board.width * 0.09f, color = 0xFFFFFFFF, outlineWidth = board.width * 0.004f)
                     dialog = BoardDialog.TEXT
                 }
-                ToolButton(stringResource(R.string.som_board_add_emoji)) { dialog = BoardDialog.EMOJI }
-                ToolButton(stringResource(R.string.som_board_background)) { dialog = BoardDialog.BACKGROUND }
-            } else {
-                // Akcje biorą warstwę w chwili dotknięcia (selectedLayer()), więc zawsze aktualne położenie.
-                if (kind == Layer.KIND_TEXT) ToolButton(stringResource(R.string.som_board_text_style)) { textDraft = selectedLayer(); dialog = BoardDialog.TEXT }
-                else ToolButton(stringResource(R.string.som_board_frame)) { dialog = BoardDialog.FRAME }
-                ToolButton(stringResource(R.string.som_board_to_front)) {
-                    selectedLayer()?.let { sel -> change(board.copy(layers = board.layers.filter { it.id != sel.id } + sel)) }
+                StudioRailItem(StudioIcons.Emoji, stringResource(R.string.som_rail_emoji), selected = false) { dialog = BoardDialog.EMOJI }
+                StudioRailItem(StudioIcons.Background, stringResource(R.string.som_rail_background), selected = false) {
+                    selectedId = null
+                    openPanel(BoardPanel.BACKGROUND)
                 }
-                ToolButton(stringResource(R.string.som_board_to_back)) {
-                    selectedLayer()?.let { sel -> change(board.copy(layers = listOf(sel) + board.layers.filter { it.id != sel.id })) }
-                }
-                ToolButton(stringResource(R.string.som_board_duplicate)) {
-                    selectedLayer()?.let { sel ->
-                        addLayer(sel.copy(id = java.util.UUID.randomUUID().toString(), x = sel.x + board.width * 0.04f, y = sel.y + board.width * 0.04f))
+            }
+        } else {
+            // Panel (tło / ramka warstwy) — zmiany od razu na tablicy, na dole ✕ / ✓.
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 240.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    stringResource(if (shownPanel == BoardPanel.BACKGROUND) R.string.som_board_bg_title else R.string.som_board_frame_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (shownPanel == BoardPanel.BACKGROUND) {
+                    BackgroundPanel(
+                        board = board,
+                        onChange = { board = it },
+                        onPhoto = {
+                            photoForBackground = true
+                            pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        },
+                    )
+                } else {
+                    val layer = board.layers.firstOrNull { it.id == selectedId } // panel otwarty = czytanie w kompozycji jest ok
+                    if (layer != null) {
+                        FramePanel(layer = layer, onChange = { updated -> board = board.updateLayer(layer.id) { updated } })
                     }
                 }
-                ToolButton(stringResource(R.string.som_board_straighten)) {
-                    selectedId?.let { id -> change(board.updateLayer(id) { it.copy(rotation = 0f) }) }
-                }
-                ToolButton(stringResource(R.string.som_board_delete_layer)) {
-                    selectedId?.let { id -> change(board.copy(layers = board.layers.filter { it.id != id })) }
-                    selectedId = null
-                }
-                ToolButton(stringResource(R.string.som_done)) { selectedId = null }
             }
+            StudioStepBar(
+                cancelLabel = stringResource(R.string.som_cancel),
+                applyLabel = stringResource(R.string.som_apply),
+                enabled = true,
+                onCancel = { closePanel(apply = false) },
+                onApply = { closePanel(apply = true) },
+            )
         }
     }
 
@@ -392,23 +538,6 @@ fun BoardEditorScreen(
             },
             onDismiss = { dialog = BoardDialog.NONE },
         )
-        BoardDialog.BACKGROUND -> BackgroundDialog(
-            board = board,
-            onChange = { change(it) },
-            onPhoto = {
-                dialog = BoardDialog.NONE
-                photoForBackground = true
-                pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-            },
-            onDismiss = { dialog = BoardDialog.NONE },
-        )
-        BoardDialog.FRAME -> selectedLayer()?.let { layer -> // okno otwarte = czytanie tablicy w kompozycji jest w porządku
-            FrameDialog(
-                layer = layer,
-                onChange = { updated -> change(board.updateLayer(layer.id) { updated }) },
-                onDismiss = { dialog = BoardDialog.NONE },
-            )
-        }
         BoardDialog.EXPORT -> ExportDialog(
             onSticker = {
                 dialog = BoardDialog.NONE
@@ -462,19 +591,6 @@ private fun saveToGallery(context: Context, bitmap: Bitmap, name: String) {
     context.contentResolver.openOutputStream(uri)?.use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } ?: error("Zapis nieudany")
 }
 
-@Composable
-private fun ToolButton(label: String, onClick: () -> Unit) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest) // jaśniejsze niż tło paska — widać kształt
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-    ) { Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface) }
-}
-
 // Płótno: tablica dopasowana do ekranu z marginesem (widać, co wystaje poza krawędź).
 // Jeden palec: zaznacz i przesuń warstwę. Dwa palce: skala i obrót zaznaczonej warstwy.
 //
@@ -493,11 +609,15 @@ private fun BoardCanvas(
     onSelect: (String?) -> Unit,
     onGestureStart: () -> Unit,
     onUpdate: ((Board) -> Board) -> Unit, // zmiana liczona na AKTUALNEJ tablicy (kilka zdarzeń przed przerysowaniem)
+    onDelete: (String) -> Unit,           // uchwyt ✕ na rogu zaznaczonej warstwy
+    interactive: Boolean,                 // false = bez gestów (otwarty panel)
     modifier: Modifier,
 ) {
     val currentBoard by rememberUpdatedState(board)
     val currentSelected by rememberUpdatedState(selectedId)
     val currentOnMiss by rememberUpdatedState(onMiss)
+    val currentOnDelete by rememberUpdatedState(onDelete)
+    val deleteColor = MaterialTheme.colorScheme.error
     val outside = Color(0xFF0B0C0E)
     val selection = MaterialTheme.colorScheme.secondary
     // Wymiary tablicy — jedyne, czego potrzebuje kompozycja (skala i położenie na ekranie). Nie zmieniają się przy ruchu.
@@ -512,13 +632,70 @@ private fun BoardCanvas(
         val scale = minOf(w * 0.84f / boardW, h * 0.84f / boardH)
         val origin = Offset((w - boardW * scale) / 2f, (h - boardH * scale) / 2f)
         fun toBoard(p: Offset) = (p - origin) / scale
+        fun toScreen(p: Offset) = origin + p * scale
+        // Róg warstwy (dx, dy względem środka, w jednostkach tablicy) po obrocie warstwy — w układzie tablicy.
+        fun corner(l: Layer, dx: Float, dy: Float): Offset {
+            val rad = Math.toRadians(l.rotation.toDouble())
+            return Offset(l.x + (dx * cos(rad) - dy * sin(rad)).toFloat(), l.y + (dx * sin(rad) + dy * cos(rad)).toFloat())
+        }
 
         Canvas(
             Modifier
                 .fillMaxSize()
-                .pointerInput(scale, origin) {
+                .pointerInput(scale, origin, interactive) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
+                        if (!interactive) return@awaitEachGesture // panel otwarty — gesty wyłączone
+                        // Uchwyty zaznaczonej warstwy (makieta): ✕ na lewym górnym rogu usuwa, kółko na prawym dolnym
+                        // obraca i skaluje JEDNYM palcem (jak w edytorach w telefonie).
+                        val grab = 26.dp.toPx()
+                        val sel = currentSelected?.let { id -> currentBoard().layers.firstOrNull { it.id == id } }
+                        var handle = 0 // 0 = brak, 1 = usuń, 2 = obrót i skala
+                        if (sel != null) {
+                            val (lw, lh) = renderer.contentSize(sel, blocking = false)
+                            val hw = lw * sel.scale / 2f
+                            val hh = lh * sel.scale / 2f
+                            if ((toScreen(corner(sel, -hw, -hh)) - down.position).getDistance() <= grab) handle = 1
+                            else if ((toScreen(corner(sel, hw, hh)) - down.position).getDistance() <= grab) handle = 2
+                        }
+                        if (sel != null && handle == 1) {
+                            down.consume()
+                            var up: Offset? = null
+                            while (up == null) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                if (change == null) up = down.position
+                                else if (!change.pressed) up = change.position
+                                change?.consume()
+                            }
+                            // Usunięcie tylko, gdy palec puszczono nadal na uchwycie (przesunięcie = rezygnacja).
+                            if ((up - down.position).getDistance() <= grab) currentOnDelete(sel.id)
+                        } else if (sel != null && handle == 2) {
+                            down.consume()
+                            var begun = false // krok „Cofnij” dopiero przy pierwszym ruchu (samo dotknięcie niczego nie zmienia)
+                            val center = toScreen(Offset(sel.x, sel.y))
+                            val startVec = down.position - center
+                            val startDist = startVec.getDistance().coerceAtLeast(1f)
+                            val startAngle = kotlin.math.atan2(startVec.y, startVec.x)
+                            var pressed = true
+                            while (pressed) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                if (change == null || !change.pressed) {
+                                    pressed = false
+                                } else {
+                                    val v = change.position - center
+                                    val newScale = (sel.scale * v.getDistance() / startDist).coerceIn(0.02f, 30f)
+                                    val turn = Math.toDegrees((kotlin.math.atan2(v.y, v.x) - startAngle).toDouble()).toFloat()
+                                    if (!begun) {
+                                        onGestureStart() // jeden krok „Cofnij” na cały gest
+                                        begun = true
+                                    }
+                                    onUpdate { b -> b.updateLayer(sel.id) { it.copy(scale = newScale, rotation = sel.rotation + turn) } }
+                                    change.consume()
+                                }
+                            }
+                        } else {
                         val start = toBoard(down.position)
                         val hit = renderer.hit(currentBoard(), start.x, start.y)
                         // Dotknięcie pustego miejsca odznacza; dotknięcie warstwy ją zaznacza.
@@ -571,6 +748,7 @@ private fun BoardCanvas(
                         }
                         if (hit == null && !twoFingers && !started) onSelect(null)
                         target = null
+                        }
                     }
                 },
         ) {
@@ -634,9 +812,31 @@ private fun BoardCanvas(
                     canvas.drawRect(RectF(-hw, -hh, hw, hh), android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                         style = android.graphics.Paint.Style.STROKE
                         strokeWidth = 2.dp.toPx() / scale
-                        color = android.graphics.Color.argb(255, (selection.red * 255).toInt(), (selection.green * 255).toInt(), (selection.blue * 255).toInt())
+                        color = selection.toArgb()
                         pathEffect = android.graphics.DashPathEffect(floatArrayOf(10.dp.toPx() / scale, 6.dp.toPx() / scale), 0f)
                     })
+                    // Uchwyty: ✕ (lewy górny róg) i obrót/skala (prawy dolny). Stały rozmiar na ekranie (÷ scale).
+                    val r = 15.dp.toPx() / scale
+                    val ring = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                        style = android.graphics.Paint.Style.STROKE
+                        strokeWidth = 2.dp.toPx() / scale
+                        color = 0xFF0E0F12.toInt()
+                    }
+                    val glyph = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                        style = android.graphics.Paint.Style.STROKE
+                        strokeWidth = 2.5f.dp.toPx() / scale
+                        strokeCap = android.graphics.Paint.Cap.ROUND
+                        color = 0xFF0E0F12.toInt()
+                    }
+                    canvas.drawCircle(-hw, -hh, r, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = deleteColor.toArgb() })
+                    canvas.drawCircle(-hw, -hh, r, ring)
+                    val g = r * 0.4f
+                    canvas.drawLine(-hw - g, -hh - g, -hw + g, -hh + g, glyph)
+                    canvas.drawLine(-hw + g, -hh - g, -hw - g, -hh + g, glyph)
+                    canvas.drawCircle(hw, hh, r, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = selection.toArgb() })
+                    canvas.drawCircle(hw, hh, r, ring)
+                    val a = r * 0.5f
+                    canvas.drawArc(RectF(hw - a, hh - a, hw + a, hh + a), -60f, 270f, false, glyph) // strzałka obrotu
                     canvas.restore()
                 }
                 // Krawędź tablicy.
@@ -765,12 +965,12 @@ private fun StickerPickDialog(onPick: (File) -> Unit, onDismiss: () -> Unit) {
 
 @Composable
 private fun Swatches(colors: List<Long>, selected: Long?, onPick: (Long) -> Unit, allowNone: Boolean = false, onNone: () -> Unit = {}) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
         if (allowNone) {
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(30.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .border(if (selected == null) 3.dp else 1.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
                     .clickable(onClick = onNone),
@@ -779,7 +979,7 @@ private fun Swatches(colors: List<Long>, selected: Long?, onPick: (Long) -> Unit
         colors.forEach { c ->
             Box(
                 Modifier
-                    .size(30.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(Color(c))
                     .border(if (c == selected) 3.dp else 1.dp, if (c == selected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline, CircleShape)
@@ -898,61 +1098,41 @@ private fun EmojiDialog(onEmoji: (String) -> Unit, onKeyboardImage: (Uri) -> Uni
     )
 }
 
+// Tło tablicy: przezroczyste, kolor, gradient albo zdjęcie — zmiany od razu na tablicy.
 @Composable
-private fun BackgroundDialog(board: Board, onChange: (Board) -> Unit, onPhoto: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text(stringResource(R.string.som_board_bg_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    FilterChip(selected = board.bgType == Board.BG_TRANSPARENT, onClick = { onChange(board.copy(bgType = Board.BG_TRANSPARENT)) }, label = { Text(stringResource(R.string.som_board_bg_transparent)) })
-                    FilterChip(selected = board.bgType == Board.BG_IMAGE, onClick = onPhoto, label = { Text(stringResource(R.string.som_board_bg_photo)) })
-                }
-                Text(stringResource(R.string.som_board_color), style = MaterialTheme.typography.labelLarge)
-                Swatches(Palette, board.bgColor.takeIf { board.bgType == Board.BG_COLOR }, { onChange(board.copy(bgType = Board.BG_COLOR, bgColor = it)) })
-                Text(stringResource(R.string.som_board_gradient), style = MaterialTheme.typography.labelLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    Gradients.forEach { (a, b) ->
-                        val sel = board.bgType == Board.BG_GRADIENT && board.bgColor == a && board.bgColor2 == b
-                        Box(
-                            Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(a), Color(b))))
-                                .border(if (sel) 3.dp else 1.dp, if (sel) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
-                                .clickable { onChange(board.copy(bgType = Board.BG_GRADIENT, bgColor = a, bgColor2 = b)) },
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_done)) } },
-    )
+private fun BackgroundPanel(board: Board, onChange: (Board) -> Unit, onPhoto: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        StudioChip(stringResource(R.string.som_board_bg_transparent), board.bgType == Board.BG_TRANSPARENT) { onChange(board.copy(bgType = Board.BG_TRANSPARENT)) }
+        StudioChip(stringResource(R.string.som_board_bg_photo), board.bgType == Board.BG_IMAGE) { onPhoto() }
+    }
+    StudioLabel(stringResource(R.string.som_board_color))
+    Swatches(Palette, board.bgColor.takeIf { board.bgType == Board.BG_COLOR }, { onChange(board.copy(bgType = Board.BG_COLOR, bgColor = it)) })
+    StudioLabel(stringResource(R.string.som_board_gradient))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        Gradients.forEach { (a, b) ->
+            val sel = board.bgType == Board.BG_GRADIENT && board.bgColor == a && board.bgColor2 == b
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(a), Color(b))))
+                    .border(if (sel) 3.dp else 1.dp, if (sel) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
+                    .clickable { onChange(board.copy(bgType = Board.BG_GRADIENT, bgColor = a, bgColor2 = b)) },
+            )
+        }
+    }
 }
 
+// Ramka zdjęcia / naklejki na tablicy (polaroid, instax, kontur…) i jej kolor.
 @Composable
-private fun FrameDialog(layer: Layer, onChange: (Layer) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text(stringResource(R.string.som_board_frame_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    Layer.FRAMES.forEach { (key, label) ->
-                        FilterChip(selected = layer.frame == key, onClick = { onChange(layer.copy(frame = key)) }, label = { Text(label) })
-                    }
-                }
-                if (Layer.hasColor(layer.frame)) {
-                    Text(stringResource(R.string.som_board_frame_color), style = MaterialTheme.typography.labelLarge)
-                    Swatches(Palette, layer.frameColor, { onChange(layer.copy(frameColor = it)) })
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_done)) } },
-    )
+private fun FramePanel(layer: Layer, onChange: (Layer) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        Layer.FRAMES.forEach { (key, label) -> StudioChip(label, layer.frame == key) { onChange(layer.copy(frame = key)) } }
+    }
+    if (Layer.hasColor(layer.frame)) {
+        StudioLabel(stringResource(R.string.som_board_frame_color))
+        Swatches(Palette, layer.frameColor, { onChange(layer.copy(frameColor = it)) })
+    }
 }
 
 @Composable
