@@ -33,7 +33,8 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | SOM 1.3.0 | StickOnMe: tablica wg makiety — górny pasek z Cofnij/Ponów, dolny pasek dodawania z ikonami, pływający pasek opcji warstwy, uchwyty ✕ i obrót/skala jednym palcem, tło i ramka w panelach z ✓/✕ | 1 |
 | SOM 1.4.0 | StickOnMe: tekst na tablicy w stylu Instagrama — pełny ekran z podglądem na żywo, pionowy suwak rozmiaru, „A” (zwykły / tło / obrys), wyrównanie, B / I / U / cień, czcionki i kolory nad klawiaturą | 1 |
 | 1.9.2 | Hotfix: „Włączono …” to informacja (✕ = zamknij, „Wróć do …” = cofnij), szuflada „jedna lista” bez dubli aplikacji z folderów | 1 |
-Razem od V1: 56 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
+| 1.10.0 | OnHand 2 (`feature/onhand-2`): On5 załączniki w treści, On6 rysowanie i rysik, On7 naklejki StickOnMe | 3 |
+Razem od V1: 59 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).
@@ -400,3 +401,14 @@ Stan wyjściowy: 1.6.0 = gałęzie `feature/stickonme-perf`, `feature/onhand`, `
       ✕ (szary) tylko zamyka, a powrót to osobny przycisk z tekstem „Wróć do …” (`SmartItem.Prompt.onUndo`).
 - [x] Szuflada „Jedna lista z folderami”: aplikacje z folderów nie dublują się na liście (`FolderTree.appKeysInFolders`);
       wyszukiwanie dalej je znajduje.
+
+## 1.10.0 — OnHand 2 (gałąź `feature/onhand-2`, plan z 24.10)
+Uwagi z 24.10: grafiki i załączniki w treści, więcej edycji (rysowanie, rysik), integracja ze StickOnMe.
+- [x] On5 — załączniki w treści: treść dalej zwykłym tekstem, załącznik to osobna linia-znacznik „[📎 nazwa]”
+      (`data/NoteBlocks.kt`: parse / join / remove / plain; bez migracji bazy). Edytor rysuje tekst, zdjęcie na całą
+      szerokość albo wiersz pliku, tekst dalej — załącznik wstawia się w miejscu kursora (pole dzieli się na „przed” i „po”).
+      ⋮ → „Załączniki (N)” = wszystkie pliki osobno; starsze załączniki spoza treści zostają pod spodem („Inne załączniki”).
+      Usunięcie załącznika usuwa też znacznik. „Udostępnij → OnHand” dopisuje pliki do treści. Eksport .md w .zip:
+      znaczniki → `![nazwa](<folder/nazwa>)`. Podgląd na liście i tytuł z pierwszej linii bez znaczników.
+- [ ] On6 — rysowanie i rysik.
+- [ ] On7 — naklejki ze StickOnMe w notatce.

@@ -19,6 +19,7 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import pl.rafal.onhand.data.NoteBlocks
 import pl.rafal.onhand.data.NoteEntity
 import pl.rafal.onhand.data.NoteRepository
 import java.io.File
@@ -40,9 +41,10 @@ internal object NoteExport {
     private const val SHARE_DIR = "onhand_share" // musi się zgadzać z res/xml/onhand_paths.xml
 
     // Treść notatki jako tekst. .txt: tytuł, pusta linia, treść. .md: tytuł jako nagłówek "# …".
-    fun format(title: String, text: String, fmt: NoteFormat): String {
+    // folder: w paczce .zip znaczniki załączników w .md stają się odnośnikami do plików obok (1.10.0, On5).
+    fun format(title: String, text: String, fmt: NoteFormat, folder: String? = null): String {
         val t = title.trim()
-        val body = text.trimEnd()
+        val body = (if (fmt == NoteFormat.MD && folder != null) inlineLinks(text, folder) else text).trimEnd()
         return when {
             t.isEmpty() -> body
             fmt == NoteFormat.MD -> "# $t\n\n$body"
@@ -50,7 +52,20 @@ internal object NoteExport {
         }.trimEnd() + "\n"
     }
 
-    fun format(note: NoteEntity, fmt: NoteFormat): String = format(note.title, note.text, fmt)
+    fun format(note: NoteEntity, fmt: NoteFormat, folder: String? = null): String = format(note.title, note.text, fmt, folder)
+
+    // Linia „[📎 zdjecie.jpg]” → „![zdjecie.jpg](<Zakupy/zdjecie.jpg>)” (obraz) albo zwykły odnośnik (inny plik).
+    private fun inlineLinks(text: String, folder: String): String =
+        text.split('\n').joinToString("\n") { line ->
+            val name = NoteBlocks.nameOf(line)
+            if (name == null) {
+                line
+            } else {
+                val bang = if (NoteRepository.guessMime(name)?.startsWith("image/") == true) "!" else ""
+                val label = name.replace("[", "\\[").replace("]", "\\]")
+                "$bang[$label](<$folder/$name>)"
+            }
+        }
 
     // Nazwa pliku z tytułu: bez znaków, których nie lubią systemy plików (Windows: \ / : * ? " < > |).
     fun fileBaseName(note: NoteEntity): String {
@@ -223,7 +238,7 @@ internal object NoteExport {
                                 val folder = names[i].substringBeforeLast('.')
                                 // distinctBy: dwa wiersze z tą samą nazwą dałyby w zipie "duplicate entry".
                                 val items = repo.attachmentsFor(note.id).filter { repo.file(it).exists() }.distinctBy { it.name.lowercase() }
-                                val body = format(note, fmt) +
+                                val body = format(note, fmt, folder) +
                                     attachmentSection(items.map { it.name }, items.map { it.mimeType }, folder, fmt)
                                 val entry = ZipEntry(names[i])
                                 entry.time = note.updatedAt

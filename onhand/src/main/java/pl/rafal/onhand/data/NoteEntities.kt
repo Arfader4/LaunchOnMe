@@ -6,7 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 // Notatka OnHand. Treść to zwykły tekst. archivedAt: null = aktywna, liczba = w archiwum od tej chwili
-// (ten sam zwyczaj co pinned_items w launcherze).
+// (ten sam zwyczaj co pinned_items w launcherze). Od 1.10.0 w treści mogą być linie-znaczniki załączników (NoteBlocks).
 @Entity(tableName = "notes")
 data class NoteEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -18,7 +18,7 @@ data class NoteEntity(
 ) {
     // Tytuł do wyświetlenia: własny albo pierwsza linia treści (jak w Keep). Pusty = "Bez tytułu" w UI.
     val displayTitle: String
-        get() = title.ifBlank { text.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.take(60).orEmpty() }
+        get() = title.ifBlank { NoteBlocks.plain(text).lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.take(60).orEmpty() }
 }
 
 // Załącznik notatki (zdjęcie, plik). Kopia w filesDir/onhand/<noteId>/ — oryginał z "Udostępnij" bywa chwilowy.

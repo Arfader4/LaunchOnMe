@@ -18,6 +18,13 @@ import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
 import pl.rafal.onhand.data.AttachmentEntity
+import pl.rafal.onhand.data.NoteBlocks
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.layout.aspectRatio
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
@@ -487,7 +494,7 @@ private fun NoteRow(
 
 // Podgląd treści pod tytułem. Gdy tytułu nie ma, tytułem jest pierwsza linia — wtedy podgląd zaczyna się od kolejnej.
 private fun notePreview(note: NoteEntity): String {
-    val lines = note.text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+    val lines = NoteBlocks.plain(note.text).lines().map { it.trim() }.filter { it.isNotEmpty() }
     val rest = if (note.title.isBlank()) lines.drop(1) else lines
     return rest.joinToString(" · ").take(300)
 }
@@ -514,6 +521,40 @@ internal fun NoteEditorScreen(
     var text by rememberSaveable { mutableStateOf(if (startId > 0) "" else initialText) }
     // Istniejąca notatka: dopóki się nie wczyta, nie zapisujemy (inaczej puste pola nadpisałyby treść).
     var loaded by rememberSaveable { mutableStateOf(startId <= 0) }
+    // 1.10.0 (On5): treść w edytorze jako kawałki tekstu z załącznikami między nimi (NoteBlocks).
+    // `text` zostaje źródłem prawdy do zapisu; pola to jego widok z kursorem (TextFieldValue ≈ tekst + zaznaczenie).
+    var fields by remember { mutableStateOf(NoteBlocks.parse(text).segments.map { TextFieldValue(it) }) }
+    var inlineNames by remember { mutableStateOf(NoteBlocks.parse(text).names) }
+    // Stałe id pól (klucze w kompozycji): po usunięciu / wstawieniu załącznika pola przesuwają się, a fokus i stare
+    // wywołania onValueChange muszą trafić do właściwego pola, nie do „tego samego numeru”.
+    val idCounter = remember { java.util.concurrent.atomic.AtomicLong() } // zwykły licznik (≈ Interlocked.Increment), nie stan Compose
+    fun newIds(count: Int): List<Long> = List(count) { idCounter.getAndIncrement() }
+    var fieldIds by remember { mutableStateOf(newIds(fields.size)) }
+    val focusManager = LocalFocusManager.current
+    var bodyFocus by remember { mutableStateOf<Int?>(null) } // które pole treści ma kursor (null = wstawiamy na końcu)
+    // Nowa treść z zewnątrz (wczytanie, usunięcie załącznika): pola budujemy od nowa.
+    fun setBody(newText: String) {
+        val parsed = NoteBlocks.parse(newText)
+        fields = parsed.segments.map { TextFieldValue(it) }
+        fieldIds = newIds(fields.size)
+        inlineNames = parsed.names
+        text = NoteBlocks.join(parsed.segments, parsed.names)
+        bodyFocus = null
+    }
+    // Wstawienie załącznika w miejscu kursora: pole dzielimy na „przed” i „po”, znacznik ląduje między nimi.
+    fun insertInline(name: String) {
+        val i = (bodyFocus ?: fields.lastIndex).coerceIn(0, fields.lastIndex)
+        val field = fields[i]
+        val at = if (bodyFocus == null) field.text.length else field.selection.start.coerceIn(0, field.text.length)
+        val before = field.text.substring(0, at).removeSuffix("\n")
+        val after = field.text.substring(at).removePrefix("\n")
+        fields = fields.take(i) + TextFieldValue(before, TextRange(before.length)) + TextFieldValue(after, TextRange(0)) + fields.drop(i + 1)
+        fieldIds = fieldIds.take(i + 1) + newIds(1) + fieldIds.drop(i + 1) // pole „przed” zostaje (z fokusem), „po” jest nowe
+        inlineNames = inlineNames.take(i) + name + inlineNames.drop(i)
+        text = NoteBlocks.join(fields.map { it.text }, inlineNames)
+        bodyFocus = i + 1 // kolejny załącznik (kilka naraz) trafi zaraz za ten
+    }
+    var showAllAttachments by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -531,7 +572,7 @@ internal fun NoteEditorScreen(
                 draft.markLoaded(note.title, note.text)
                 if (!loaded) {
                     title = note.title
-                    text = note.text
+                    setBody(note.text)
                 }
             }
         }
@@ -622,7 +663,13 @@ internal fun NoteEditorScreen(
                     // Tylko gdy edytor jest jeszcze otwarty — inaczej zmiana stanu otworzyłaby go z powrotem.
                     withContext(Dispatchers.Main) { if (scope.isActive) onIdKnown(id) }
                     for (uri in uris) {
-                        if (repo.addAttachment(id, uri) == null) failed++
+                        val added = repo.addAttachment(id, uri)
+                        if (added == null) {
+                            failed++
+                        } else {
+                            // 1.10.0: od razu w treści, w miejscu kursora. Edytor już zamknięty → zostaje w „Innych załącznikach”.
+                            withContext(Dispatchers.Main) { if (scope.isActive) insertInline(added.name) }
+                        }
                     }
                 }
                 if (failed > 0) {
@@ -684,6 +731,14 @@ internal fun NoteEditorScreen(
                     // Pusta notatka: nie ma czego udostępniać ani eksportować.
                     val hasContent = loaded && (title.isNotBlank() || text.isNotBlank() || attachments.isNotEmpty())
                     val isArchived = note?.archivedAt != null
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.oh_attachments_view, attachments.size)) },
+                        enabled = attachments.isNotEmpty(),
+                        onClick = {
+                            menuOpen = false
+                            showAllAttachments = true
+                        },
+                    )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.oh_share)) },
                         enabled = hasContent,
@@ -776,19 +831,59 @@ internal fun NoteEditorScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(12.dp))
-            EditorField(
-                value = text,
-                onValueChange = { text = it },
-                hint = stringResource(R.string.oh_text_hint),
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = Int.MAX_VALUE,
-                readOnly = !loaded,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 240.dp),
-            )
-            if (attachments.isNotEmpty()) {
+            // 1.10.0: tekst, załącznik, dalszy tekst… Ostatnie pole jest wysokie, żeby łatwo było dopisać na końcu.
+            val byName = attachments.associateBy { it.name }
+            val emptyBody = text.isEmpty()
+            fields.forEachIndexed { i, field ->
+                val fieldId = fieldIds.getOrElse(i) { -1L - i }
+                key(fieldId) {
+                    BodyField(
+                        value = field,
+                        onValueChange = { changed ->
+                            // Numer pola liczony teraz, po id: pole, które właśnie znikło (np. po usunięciu załącznika),
+                            // może jeszcze raz zawołać onValueChange przy utracie fokusu — wtedy nic nie robimy.
+                            val at = fieldIds.indexOf(fieldId)
+                            if (at in fields.indices) {
+                                fields = fields.toMutableList().also { it[at] = changed }
+                                text = NoteBlocks.join(fields.map { it.text }, inlineNames)
+                                bodyFocus = at // przesunięcie kursora też tu trafia (pole już ma fokus, więc onFocusChanged milczy)
+                            }
+                        },
+                        hint = if (i == 0 && emptyBody) stringResource(R.string.oh_text_hint) else "",
+                        readOnly = !loaded,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (i == fields.lastIndex) Modifier.heightIn(min = 240.dp) else Modifier)
+                            .onFocusChanged { if (it.isFocused) bodyFocus = fieldIds.indexOf(fieldId).takeIf { at -> at >= 0 } },
+                    )
+                    if (i < inlineNames.size) {
+                        val name = inlineNames[i]
+                        val item = byName[name]
+                        InlineAttachment(
+                            repo = repo,
+                            name = name,
+                            item = item,
+                            onOpen = { if (item != null) NoteExport.open(context, repo.file(item), item.mimeType) },
+                            onRemove = {
+                                if (item != null) {
+                                    removing = item
+                                } else {
+                                    focusManager.clearFocus()
+                                    setBody(NoteBlocks.remove(text, name))
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+            // Załączniki spoza treści (starsze notatki, „Udostępnij → OnHand”) zostają pod spodem jak dotąd.
+            val inlineSet = inlineNames.toSet()
+            val others = attachments.filter { it.name !in inlineSet }
+            if (others.isNotEmpty()) {
                 AttachmentsSection(
                     repo = repo,
-                    items = attachments,
+                    items = others,
+                    title = stringResource(if (inlineSet.isEmpty()) R.string.oh_attachments else R.string.oh_attachments_other),
                     onOpen = { item -> NoteExport.open(context, repo.file(item), item.mimeType) },
                     onRemove = { item -> removing = item },
                 )
@@ -810,6 +905,30 @@ internal fun NoteEditorScreen(
         PinToModesDialog(host = host, repo = repo, noteId = pinId, onDismiss = { pinFor = null })
     }
 
+    // „Zobacz załączniki osobno”: wszystkie pliki notatki w jednym oknie (te z treści i spod spodu).
+    if (showAllAttachments) {
+        Dialog(onDismissRequest = { showAllAttachments = false }) {
+            Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
+                Column(Modifier.padding(16.dp).heightIn(max = 560.dp).verticalScroll(rememberScrollState())) {
+                    if (attachments.isEmpty()) {
+                        Text(stringResource(R.string.oh_attachments_none), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        AttachmentsSection(
+                            repo = repo,
+                            items = attachments,
+                            title = stringResource(R.string.oh_attachments),
+                            onOpen = { item -> NoteExport.open(context, repo.file(item), item.mimeType) },
+                            onRemove = { item -> removing = item },
+                        )
+                    }
+                    TextButton(onClick = { showAllAttachments = false }, modifier = Modifier.align(Alignment.End)) {
+                        Text(stringResource(R.string.oh_close))
+                    }
+                }
+            }
+        }
+    }
+
     val toRemove = removing
     if (toRemove != null) {
         AlertDialog(
@@ -820,6 +939,10 @@ internal fun NoteEditorScreen(
                 TextButton(onClick = {
                     removing = null
                     NoteRepository.backgroundScope.launch { repo.deleteAttachment(toRemove) }
+                    if (toRemove.name in inlineNames) {
+                        focusManager.clearFocus()
+                        setBody(NoteBlocks.remove(text, toRemove.name)) // znika też z treści
+                    }
                 }) { Text(stringResource(R.string.oh_remove), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
@@ -876,11 +999,115 @@ private fun EditorField(
     )
 }
 
+// Pole treści (kawałek między załącznikami) — jak EditorField, ale z kursorem (TextFieldValue),
+// bo wstawianie załącznika potrzebuje wiedzieć, gdzie stoi kursor.
+@Composable
+private fun BodyField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    hint: String,
+    readOnly: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val style = MaterialTheme.typography.bodyLarge
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        textStyle = style.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        readOnly = readOnly,
+        modifier = modifier,
+        decorationBox = { inner ->
+            Box {
+                if (value.text.isEmpty() && hint.isNotEmpty()) {
+                    Text(hint, style = style, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                inner()
+            }
+        },
+    )
+}
+
+// Załącznik w treści: zdjęcie na całą szerokość (z ✕), inny plik jako wiersz z nazwą.
+// item == null: pliku już nie ma (np. usunięty) — zostaje cienki wiersz z nazwą, ✕ usuwa sam znacznik.
+@Composable
+private fun InlineAttachment(
+    repo: NoteRepository,
+    name: String,
+    item: AttachmentEntity?,
+    onOpen: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val isImage = item?.mimeType?.startsWith("image/") == true
+    if (item != null && isImage) {
+        InlineImage(repo = repo, item = item, onOpen = onOpen, onRemove = onRemove)
+    } else if (item != null) {
+        FileRow(item = item, onOpen = onOpen, onRemove = onRemove)
+    } else {
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "📎 $name",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRemove) { Text("✕", color = Color(0xFFFF6B6B)) }
+        }
+    }
+}
+
+// Zdjęcie w treści: dekodowane do szerokości ekranu (max 1080 px), proporcje zachowane, wysokość ograniczona.
+@Composable
+private fun InlineImage(repo: NoteRepository, item: AttachmentEntity, onOpen: () -> Unit, onRemove: () -> Unit) {
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, item.path) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                ImageDecoder.decodeBitmap(ImageDecoder.createSource(repo.file(item))) { decoder, info, _ ->
+                    val max = maxOf(info.size.width, info.size.height).coerceAtLeast(1)
+                    val scale = minOf(1f, 1080f / max)
+                    decoder.setTargetSize(
+                        (info.size.width * scale).toInt().coerceAtLeast(1),
+                        (info.size.height * scale).toInt().coerceAtLeast(1),
+                    )
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                }.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onOpen),
+    ) {
+        val image = bitmap
+        if (image != null) {
+            Image(
+                bitmap = image,
+                contentDescription = item.name,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .aspectRatio(image.width.toFloat() / image.height.coerceAtLeast(1)),
+            )
+        } else {
+            Text("🖼", modifier = Modifier.align(Alignment.Center).padding(32.dp), style = MaterialTheme.typography.headlineSmall)
+        }
+        RemoveBadge(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+    }
+}
+
 // Załączniki pod treścią: zdjęcia jako miniatury w poziomym pasku, reszta jako wiersze z nazwą.
 @Composable
 private fun AttachmentsSection(
     repo: NoteRepository,
     items: List<AttachmentEntity>,
+    title: String,
     onOpen: (AttachmentEntity) -> Unit,
     onRemove: (AttachmentEntity) -> Unit,
 ) {
@@ -888,7 +1115,7 @@ private fun AttachmentsSection(
     val others = items.filter { it.mimeType?.startsWith("image/") != true }
     Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp)) {
         Text(
-            text = stringResource(R.string.oh_attachments) + " (" + items.size + ")",
+            text = title + " (" + items.size + ")",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),

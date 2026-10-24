@@ -56,6 +56,7 @@ import androidx.core.content.IntentCompat
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import pl.rafal.onhand.data.NoteBlocks
 import pl.rafal.onhand.data.NoteRepository
 
 // To, co przyszło z "Udostępnij": temat (np. tytuł strony), tekst/link i pliki (content://).
@@ -304,8 +305,12 @@ private suspend fun saveIncoming(repo: NoteRepository, incoming: Incoming, title
         targetId
     }
     var failed = 0
+    val added = ArrayList<String>()
     for (uri in incoming.uris) {
-        if (repo.addAttachment(id, uri) == null) failed++
+        val item = repo.addAttachment(id, uri)
+        if (item == null) failed++ else added += item.name
     }
+    // 1.10.0 (On5): udostępnione pliki od razu w treści (na końcu), jak dodane w edytorze.
+    if (added.isNotEmpty()) repo.appendText(id, added.joinToString("\n") { NoteBlocks.token(it) })
     return id to failed
 }

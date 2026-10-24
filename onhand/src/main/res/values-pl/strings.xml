@@ -64,4 +64,9 @@
     <string name="oh_pin_no_modes">Nie ma jeszcze trybów. Najpierw utwórz tryb w LaunchOnMe.</string>
     <string name="oh_done">Gotowe</string>
     <string name="oh_share_pin_to">Przypnij do trybu (opcjonalnie)</string>
+    <!-- 1.10.0 On5: załączniki w treści -->
+    <string name="oh_attachments_view">Załączniki (%1$d)</string>
+    <string name="oh_attachments_other">Inne załączniki</string>
+    <string name="oh_attachments_none">Brak załączników</string>
+    <string name="oh_close">Zamknij</string>
 </resources>
