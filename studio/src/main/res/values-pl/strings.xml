@@ -277,4 +277,25 @@
     <string name="som_pin_binder">Klips biurowy</string>
     <string name="som_pin_clothespin">Klamerka</string>
     <string name="som_pin_corner">Zagięty róg</string>
+    <!-- SOM 1.9.0 -->
+    <string name="som_ctx_insert_photo">Wstaw zdjęcie</string>
+    <string name="som_tpl_collages">Szablony kolaży</string>
+    <string name="som_tpl_wallpapers">Szablony tapet</string>
+    <string name="som_tpl_cork">Tablica korkowa</string>
+    <string name="som_tpl_album">Album rodzinny</string>
+    <string name="som_tpl_gallery">Galeria na ścianie</string>
+    <string name="som_tpl_vintage">Vintage</string>
+    <string name="som_tpl_fridge">Lodówka</string>
+    <string name="som_tpl_line">Sznurek ze zdjęciami</string>
+    <string name="som_tpl_film">Klisza</string>
+    <string name="som_tpl_w_frame">Zdjęcie w ramie</string>
+    <string name="som_tpl_w_polaroid">Polaroid z pinezką</string>
+    <string name="som_tpl_w_stack">Stos zdjęć</string>
+    <string name="som_tpl_w_gallery">Galeria minimal</string>
+    <string name="som_tpl_w_heart">Serce akwarela</string>
+    <string name="som_tpl_text_memories">Wspomnienia</string>
+    <string name="som_tpl_text_family">Rodzina</string>
+    <string name="som_tpl_text_long_ago">Dawno temu…</string>
+    <string name="som_tpl_text_summer">Lato</string>
+    <string name="som_tpl_text_moments">Nasze chwile</string>
 </resources>

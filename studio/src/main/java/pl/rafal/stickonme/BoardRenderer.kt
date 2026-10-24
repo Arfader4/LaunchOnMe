@@ -49,6 +49,8 @@ class BoardRenderer(
         // do wersji 1.2, więc stare tablice wyglądają tak samo. Bitmapa w pamięci może być mniejsza (podgląd) albo
         // większa (eksport) — przy rysowaniu skalujemy ją do rozmiaru logicznego. Jak "jednostki" vs piksele w XAML.
         const val LOGICAL_SIDE = 1400
+        // Puste miejsce na zdjęcie z szablonu: szerokość logiczna (wysokość wg proporcji miejsca).
+        const val SLOT_SIDE = 1000f
         fun logicalScale(width: Int, height: Int): Float = minOf(1f, LOGICAL_SIDE.toFloat() / maxOf(width, height).coerceAtLeast(1))
     }
 
@@ -229,8 +231,8 @@ class BoardRenderer(
         }
         else -> {
             val img = image(layer.path, blocking)
-            val w = img?.width ?: 400f
-            val h = img?.height ?: 400f
+            val w = if (layer.emptySlot) SLOT_SIDE else img?.width ?: 400f
+            val h = if (layer.emptySlot) SLOT_SIDE / layer.slot else img?.height ?: 400f
             val (padX, top, bottom) = framePadding(layer.frame, w, h)
             (w + padX * 2) to (h + top + bottom)
         }
@@ -337,6 +339,10 @@ class BoardRenderer(
     }
 
     private fun drawImage(canvas: Canvas, layer: Layer, blocking: Boolean) {
+        if (layer.emptySlot) {
+            if (!blocking) drawSlot(canvas, layer) // w eksporcie i miniaturze puste miejsce nie istnieje
+            return
+        }
         val img = image(layer.path, blocking)
         if (img == null) {
             // Brak pliku (usunięty z biblioteki): szary prostokąt zamiast pustego miejsca.
@@ -363,6 +369,25 @@ class BoardRenderer(
             else canvas.drawBitmap(bmp, -bmp.width / 2f, -bmp.height / 2f, filter)
         }
         canvas.restore()
+    }
+
+    // Puste miejsce z szablonu: półprzezroczysty prostokąt z przerywanym brzegiem i plusem („dotknij, żeby wstawić”).
+    private fun drawSlot(canvas: Canvas, layer: Layer) {
+        val w = SLOT_SIDE
+        val h = SLOT_SIDE / layer.slot
+        val rect = RectF(-w / 2f, -h / 2f, w / 2f, h / 2f)
+        canvas.drawRect(rect, Paint().apply { color = 0x55FFFFFF })
+        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 8f
+            color = 0xCCFFFFFF.toInt()
+            pathEffect = android.graphics.DashPathEffect(floatArrayOf(36f, 22f), 0f)
+        }
+        canvas.drawRect(rect, line)
+        val plus = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 14f; strokeCap = Paint.Cap.ROUND; color = 0xDDFFFFFF.toInt() }
+        val r = minOf(w, h) * 0.12f
+        canvas.drawLine(-r, 0f, r, 0f, plus)
+        canvas.drawLine(0f, -r, 0f, r, plus)
     }
 
     // Obraz z filtrami — liczony raz i trzymany w pamięci (styl malarski to nawet kilkaset ms). Klucz jak przy ramkach:

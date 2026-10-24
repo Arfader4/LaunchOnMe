@@ -277,4 +277,25 @@
     <string name="som_pin_binder">Binder clip</string>
     <string name="som_pin_clothespin">Clothespin</string>
     <string name="som_pin_corner">Folded corner</string>
+    <!-- SOM 1.9.0 -->
+    <string name="som_ctx_insert_photo">Add photo</string>
+    <string name="som_tpl_collages">Collage templates</string>
+    <string name="som_tpl_wallpapers">Wallpaper templates</string>
+    <string name="som_tpl_cork">Cork board</string>
+    <string name="som_tpl_album">Family album</string>
+    <string name="som_tpl_gallery">Gallery wall</string>
+    <string name="som_tpl_vintage">Vintage</string>
+    <string name="som_tpl_fridge">Fridge door</string>
+    <string name="som_tpl_line">Clothesline</string>
+    <string name="som_tpl_film">Film strip</string>
+    <string name="som_tpl_w_frame">Framed photo</string>
+    <string name="som_tpl_w_polaroid">Pinned polaroid</string>
+    <string name="som_tpl_w_stack">Instax stack</string>
+    <string name="som_tpl_w_gallery">Gallery minimal</string>
+    <string name="som_tpl_w_heart">Watercolour heart</string>
+    <string name="som_tpl_text_memories">Memories</string>
+    <string name="som_tpl_text_family">Family</string>
+    <string name="som_tpl_text_long_ago">Long ago…</string>
+    <string name="som_tpl_text_summer">Summer</string>
+    <string name="som_tpl_text_moments">Our moments</string>
 </resources>

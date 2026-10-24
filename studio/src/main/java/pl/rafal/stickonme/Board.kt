@@ -27,6 +27,7 @@ data class Layer(
     val filters: String = "",         // filtry obrazu (StickerFilters, np. "sepia,paper"); "" = bez
     val original: String? = null,     // zdjęcie: oryginał w assets (do ponownej edycji w PhotoEditor), null = brak
     val photoEdit: String = "",       // zdjęcie: ustawienia kadru i korekty (PhotoEdit.toJson)
+    val slot: Float = 0f,             // > 0 = miejsce na zdjęcie z szablonu (proporcje szer./wys.); puste, gdy path == null
     // Tekst / emoji
     val text: String = "",
     val font: String = "sans-serif",
@@ -47,6 +48,7 @@ data class Layer(
         .putOpt("path", path).put("frame", frame).put("frameColor", frameColor)
         .put("filters", filters)
         .putOpt("original", original).put("photoEdit", photoEdit)
+        .put("slot", slot.toDouble())
         .put("text", text).put("font", font).put("bold", bold).put("italic", italic)
         .put("color", color).put("size", size.toDouble())
         .put("outlineColor", outlineColor).put("outlineWidth", outlineWidth.toDouble())
@@ -106,6 +108,7 @@ data class Layer(
             filters = o.optString("filters", ""),
             original = if (o.isNull("original")) null else o.optString("original").ifEmpty { null },
             photoEdit = o.optString("photoEdit", ""),
+            slot = o.optDouble("slot", 0.0).toFloat(),
             text = o.optString("text", ""),
             font = o.optString("font", "sans-serif"),
             bold = o.optBoolean("bold", false),

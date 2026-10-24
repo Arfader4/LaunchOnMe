@@ -165,6 +165,7 @@ fun BoardEditorScreen(
     // gdy zmieni się wynik (jak INotifyPropertyChanged tylko dla tej jednej właściwości), a nie przy każdym ruchu.
     val selectedKind by remember { derivedStateOf { boardState.value.layers.firstOrNull { it.id == selectedId }?.kind } }
     val boardName by remember { derivedStateOf { boardState.value.name } }
+    val selectedIsSlot by remember { derivedStateOf { boardState.value.layers.firstOrNull { it.id == selectedId }?.emptySlot == true } }
     val selectedHasOriginal by remember { derivedStateOf { boardState.value.layers.firstOrNull { it.id == selectedId }?.original != null } }
     fun selectedLayer(): Layer? = board.layers.firstOrNull { it.id == selectedId } // czytane w chwili akcji
 
@@ -305,13 +306,14 @@ fun BoardEditorScreen(
                 )
             } else {
                 // Ta sama szerokość na tablicy co przed edycją.
-                val oldImg = withContext(Dispatchers.IO) { renderer.bitmap(old.path) }
-                val scale = if (img != null && oldImg != null) old.scale * oldImg.width / img.width else old.scale
+                // Puste miejsce z szablonu ma szerokość logiczną SLOT_SIDE.
+                val oldWidth = if (old.emptySlot) BoardRenderer.SLOT_SIDE else withContext(Dispatchers.IO) { renderer.bitmap(old.path) }?.width
+                val scale = if (img != null && oldWidth != null) old.scale * oldWidth / img.width else old.scale
                 change(
                     board.updateLayer(old.id) {
                         it.copy(
                             path = path, scale = scale, frame = result.frame, frameColor = result.frameColor,
-                            filters = result.filters, photoEdit = result.edit.toJson(),
+                            filters = result.filters, photoEdit = result.edit.toJson(), original = draft.original,
                         )
                     },
                 )
@@ -321,8 +323,9 @@ fun BoardEditorScreen(
         }
     }
 
-    // Zdjęcie z galerii jako warstwa albo jako tło (kopia do assets tablicy).
+    // Zdjęcie z galerii jako warstwa albo jako tło (kopia do assets tablicy); slotTarget = puste miejsce z szablonu.
     var photoForBackground by remember { mutableStateOf(false) }
+    var slotTarget by remember { mutableStateOf<String?>(null) }
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         if (uri != null) scope.launch {
             val photo = StickerLibrary.decode(context, uri, 1800) ?: return@launch
@@ -332,7 +335,14 @@ fun BoardEditorScreen(
                 if (panel == BoardPanel.BACKGROUND) board = withPhoto else change(withPhoto) // w panelu historia jest już zapisana
             } else {
                 // Zdjęcie jako warstwa: najpierw edytor zdjęcia (kadr, korekta, filtry, ramka), oryginał zostaje w assets.
-                photoDraft = PhotoDraft(photo, path, null, PhotoEdit(), Layer.FRAME_INSTAX, 0xFFFFFFFF, "")
+                // Do miejsca z szablonu: proporcje, kształt, ramka i filtry z szablonu.
+                val slot = slotTarget?.let { id -> board.layers.firstOrNull { it.id == id } }
+                slotTarget = null
+                photoDraft = if (slot != null) {
+                    PhotoDraft(photo, path, slot.id, PhotoEdit.of(slot.photoEdit).copy(aspect = slot.slot), slot.frame, slot.frameColor, slot.filters)
+                } else {
+                    PhotoDraft(photo, path, null, PhotoEdit(), Layer.FRAME_INSTAX, 0xFFFFFFFF, "")
+                }
             }
         }
     }
@@ -440,6 +450,13 @@ fun BoardEditorScreen(
                     } else {
                         StudioContextItem(StudioIcons.Frame, stringResource(R.string.som_rail_frame)) { openPanel(BoardPanel.FRAME) }
                         StudioContextItem(StudioIcons.Filter, stringResource(R.string.som_rail_filter)) { openPanel(BoardPanel.FILTER) }
+                        if (selectedIsSlot) {
+                            StudioContextItem(StudioIcons.Photo, stringResource(R.string.som_ctx_insert_photo), tint = MaterialTheme.colorScheme.secondary) {
+                                slotTarget = selectedId
+                                photoForBackground = false
+                                pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }
+                        }
                         if (selectedHasOriginal) {
                             StudioContextItem(StudioIcons.Photo, stringResource(R.string.som_ctx_edit_photo)) { editPhoto() }
                         }
@@ -1217,6 +1234,17 @@ private fun ExportDialog(onSticker: () -> Unit, onGallery: () -> Unit, onDismiss
 @Composable
 fun NewBoardDialog(onCreate: (Board) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var building by remember { mutableStateOf(false) }
+    fun fromTemplate(t: Templates.Template) {
+        if (!building) {
+            building = true
+            scope.launch {
+                runCatching { Templates.build(context, t) }.onSuccess(onCreate)
+                building = false
+            }
+        }
+    }
     val presets = remember { boardPresets(context) }
     var customW by remember { mutableStateOf("1500") }
     var customH by remember { mutableStateOf("1500") }
@@ -1242,6 +1270,15 @@ fun NewBoardDialog(onCreate: (Board) -> Unit, onDismiss: () -> Unit) {
                     val h = customH.toIntOrNull()?.coerceIn(128, 5000) ?: 1500
                     onCreate(Board(name = context.getString(R.string.som_board_custom_name, w, h), width = w, height = h, bgType = Board.BG_COLOR))
                 }) { Text(stringResource(R.string.som_board_create_custom)) }
+                // Szablony: gotowe kolaże i tapety z miejscami na zdjęcia.
+                Text(stringResource(R.string.som_tpl_collages), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    Templates.collages.forEach { t -> StudioChip(stringResource(t.labelRes), false) { fromTemplate(t) } }
+                }
+                Text(stringResource(R.string.som_tpl_wallpapers), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    Templates.wallpapers.forEach { t -> StudioChip(stringResource(t.labelRes), false) { fromTemplate(t) } }
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_cancel)) } },
