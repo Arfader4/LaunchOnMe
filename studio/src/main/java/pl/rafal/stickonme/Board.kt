@@ -69,6 +69,14 @@ data class Layer(
         const val FRAME_TAPE = "tape"         // przyklejone taśmą
         const val FRAME_STAMP = "stamp"       // ząbkowany brzeg jak znaczek pocztowy
         const val FRAME_FILM = "film"         // czarny pasek kliszy z perforacją
+        // SOM 1.7.0 (rysowane w FrameArt.kt)
+        const val FRAME_ALBUM = "album"       // zdjęcie wklejone w album: kartka + papierowe narożniki
+        const val FRAME_TAPE4 = "tape4"       // cztery kawałki taśmy na rogach
+        const val FRAME_WOOD = "wood"         // zwykła drewniana ramka
+        const val FRAME_GOLD = "gold"         // złota rama obrazu
+        const val FRAME_SILVER = "silver"     // srebrna rama obrazu
+        const val FRAME_BAROQUE = "baroque"   // szeroka barokowa rama z ornamentami
+        const val FRAME_GALLERY = "gallery"   // cienka rama + biały passe-partout
 
         // Ramki do wyboru (tablica i edytor naklejki) — kolejność = kolejność czipów.
         // Getter: etykiety czytane przy każdym użyciu (zmiana języka bez restartu).
@@ -77,9 +85,13 @@ data class Layer(
             FRAME_SHADOW to StudioText.get(R.string.som_frame_shadow), FRAME_STAMP to StudioText.get(R.string.som_frame_stamp),
             FRAME_INSTAX to "Instax", FRAME_POLAROID to "Polaroid",
             FRAME_FILM to StudioText.get(R.string.som_frame_film), FRAME_TAPE to StudioText.get(R.string.som_frame_tape),
+            FRAME_TAPE4 to StudioText.get(R.string.som_frame_tape4), FRAME_ALBUM to StudioText.get(R.string.som_frame_album),
+            FRAME_WOOD to StudioText.get(R.string.som_frame_wood), FRAME_GALLERY to StudioText.get(R.string.som_frame_gallery),
+            FRAME_GOLD to StudioText.get(R.string.som_frame_gold), FRAME_SILVER to StudioText.get(R.string.som_frame_silver),
+            FRAME_BAROQUE to StudioText.get(R.string.som_frame_baroque),
         )
-        // Ramki, w których kolor ma znaczenie (cień i klisza mają własny).
-        fun hasColor(frame: String) = frame != FRAME_NONE && frame != FRAME_SHADOW && frame != FRAME_FILM
+        // Ramki, w których kolor ma znaczenie (cień, klisza, drewno i ramy obrazu mają własny).
+        fun hasColor(frame: String) = frame !in setOf(FRAME_NONE, FRAME_SHADOW, FRAME_FILM, FRAME_WOOD, FRAME_GOLD, FRAME_SILVER, FRAME_BAROQUE)
 
         fun of(o: JSONObject) = Layer(
             id = o.optString("id", UUID.randomUUID().toString()),

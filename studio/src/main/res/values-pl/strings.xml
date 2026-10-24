@@ -254,4 +254,12 @@
     <string name="som_photo_saturation">Nasycenie</string>
     <string name="som_photo_warmth">Ciepło</string>
     <string name="som_ctx_edit_photo">Edytuj</string>
+    <!-- SOM 1.7.0 -->
+    <string name="som_frame_tape4">4 taśmy</string>
+    <string name="som_frame_album">Album</string>
+    <string name="som_frame_wood">Drewno</string>
+    <string name="som_frame_gallery">Passe-partout</string>
+    <string name="som_frame_gold">Złota rama</string>
+    <string name="som_frame_silver">Srebrna rama</string>
+    <string name="som_frame_baroque">Barokowa</string>
 </resources>

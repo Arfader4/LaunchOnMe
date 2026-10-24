@@ -239,6 +239,7 @@ class BoardRenderer(
     // Marginesy ramki: (boki, góra, dół) w px obrazu.
     private fun framePadding(frame: String, w: Float, h: Float): Triple<Float, Float, Float> {
         val m = max(w, h)
+        FrameArt.padding(frame, m)?.let { return it }
         return when (frame) {
             Layer.FRAME_INSTAX -> Triple(m * 0.06f, m * 0.06f, m * 0.22f)
             Layer.FRAME_POLAROID -> Triple(m * 0.07f, m * 0.07f, m * 0.28f)
@@ -420,7 +421,7 @@ class BoardRenderer(
         val (padX, top, bottom) = framePadding(frame, w, h)
         val totalW = w + padX * 2
         val totalH = h + top + bottom
-        val margin = m * (if (frame == Layer.FRAME_TAPE) 0.16f else 0.07f) // miejsce na cień karty / rozmycie / wystającą taśmę
+        val margin = m * (FrameArt.margin(frame) ?: if (frame == Layer.FRAME_TAPE) 0.16f else 0.07f) // miejsce na cień karty / rozmycie / wystającą taśmę
         val out = Bitmap.createBitmap(
             (totalW + margin * 2).toInt().coerceAtLeast(1),
             (totalH + margin * 2).toInt().coerceAtLeast(1),
@@ -432,6 +433,9 @@ class BoardRenderer(
         val imgY = top
         val filter = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
         val card = RectF(0f, 0f, totalW, totalH)
+        if (FrameArt.draw(canvas, frame, bmp, imgX, imgY, totalW, totalH, m, color, filter)) {
+            return Framed(out, -totalW / 2f - margin, -totalH / 2f - margin)
+        }
         when (frame) {
             Layer.FRAME_INSTAX, Layer.FRAME_POLAROID -> {
                 val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
