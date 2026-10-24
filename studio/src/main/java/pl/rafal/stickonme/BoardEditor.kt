@@ -83,6 +83,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
@@ -126,10 +127,10 @@ private val EmojiSet = listOf(
 internal val BoardPalette: List<Long> get() = Palette
 internal val BoardFonts: List<Pair<String, Int>> get() = Fonts
 
-private enum class BoardDialog { NONE, STICKER, TEXT, EMOJI, EXPORT }
+private enum class BoardDialog { NONE, STICKER, TEXT, EMOJI, EXPORT, PIN }
 
 // Panele na dole ekranu (zamiast okien): zmiany widać od razu na tablicy, ✓ Zastosuj / ✕ Anuluj jak w edytorze naklejki.
-private enum class BoardPanel { BACKGROUND, FRAME }
+private enum class BoardPanel { BACKGROUND, FRAME, FILTER }
 
 // Edytor tablicy: warstwy można przesuwać palcem, dwoma palcami obracać i skalować. Warstwy mogą wychodzić
 // poza krawędź tablicy — tam są półprzezroczyste i przy zapisie zostaną przycięte.
@@ -164,6 +165,8 @@ fun BoardEditorScreen(
     // gdy zmieni się wynik (jak INotifyPropertyChanged tylko dla tej jednej właściwości), a nie przy każdym ruchu.
     val selectedKind by remember { derivedStateOf { boardState.value.layers.firstOrNull { it.id == selectedId }?.kind } }
     val boardName by remember { derivedStateOf { boardState.value.name } }
+    val selectedIsSlot by remember { derivedStateOf { boardState.value.layers.firstOrNull { it.id == selectedId }?.emptySlot == true } }
+    val selectedHasOriginal by remember { derivedStateOf { boardState.value.layers.firstOrNull { it.id == selectedId }?.original != null } }
     fun selectedLayer(): Layer? = board.layers.firstOrNull { it.id == selectedId } // czytane w chwili akcji
 
     // Obrazy warstw i tła wczytywane w tle (podgląd nigdy nie dekoduje na wątku UI). Po wczytaniu "loaded" rośnie,
@@ -174,7 +177,7 @@ fun BoardEditorScreen(
     val needs by remember {
         derivedStateOf {
             boardState.value.let { b ->
-                b.layers.mapNotNull { l -> l.path?.let { BoardRenderer.Need(it, l.frame, l.frameColor) } }.toSet() +
+                b.layers.mapNotNull { l -> l.path?.let { BoardRenderer.Need(it, l.frame, l.frameColor, l.filters) } }.toSet() +
                     setOfNotNull(b.bgImage?.let { BoardRenderer.Need(it) })
             }
         }
@@ -275,8 +278,54 @@ fun BoardEditorScreen(
         onDispose { lifecycle?.removeObserver(observer) }
     }
 
-    // Zdjęcie z galerii jako warstwa albo jako tło (kopia do assets tablicy).
+    // Zdjęcie w edytorze zdjęcia: nowe (layerId = null) albo ponowna edycja warstwy.
+    var photoDraft by remember { mutableStateOf<PhotoDraft?>(null) }
+    fun editPhoto() = selectedLayer()?.let { sel ->
+        val source = sel.original
+        if (source != null) scope.launch {
+            StickerLibrary.decodeFile(source, 1800)?.let { photo ->
+                photoDraft = PhotoDraft(photo, source, sel.id, PhotoEdit.of(sel.photoEdit), sel.frame, sel.frameColor, sel.filters)
+            }
+        }
+    }
+    fun finishPhoto(draft: PhotoDraft, result: PhotoResult) {
+        scope.launch {
+            val path = BoardStore.importImage(context, result.bitmap, png = !result.opaque)
+            val img = withContext(Dispatchers.IO) { renderer.bitmap(path) }
+            val old = draft.layerId?.let { id -> board.layers.firstOrNull { it.id == id } }
+            if (old == null) {
+                val (cx, cy) = center()
+                // Zdjęcie na start zajmuje ok. 60% szerokości tablicy (skala względem rozmiaru logicznego, max 1400 px).
+                val scale = if (img != null) board.width * 0.6f / img.width else 1f
+                addLayer(
+                    Layer(
+                        kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = scale,
+                        frame = result.frame, frameColor = result.frameColor, filters = result.filters,
+                        original = draft.original, photoEdit = result.edit.toJson(),
+                    ),
+                )
+            } else {
+                // Ta sama szerokość na tablicy co przed edycją.
+                // Puste miejsce z szablonu ma szerokość logiczną SLOT_SIDE.
+                val oldWidth = if (old.emptySlot) BoardRenderer.SLOT_SIDE else withContext(Dispatchers.IO) { renderer.bitmap(old.path) }?.width
+                val scale = if (img != null && oldWidth != null) old.scale * oldWidth / img.width else old.scale
+                change(
+                    board.updateLayer(old.id) {
+                        it.copy(
+                            path = path, scale = scale, frame = result.frame, frameColor = result.frameColor,
+                            filters = result.filters, photoEdit = result.edit.toJson(), original = draft.original,
+                        )
+                    },
+                )
+            }
+            result.bitmap.recycle()
+            photoDraft = null
+        }
+    }
+
+    // Zdjęcie z galerii jako warstwa albo jako tło (kopia do assets tablicy); slotTarget = puste miejsce z szablonu.
     var photoForBackground by remember { mutableStateOf(false) }
+    var slotTarget by remember { mutableStateOf<String?>(null) }
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         if (uri != null) scope.launch {
             val photo = StickerLibrary.decode(context, uri, 1800) ?: return@launch
@@ -285,10 +334,15 @@ fun BoardEditorScreen(
                 val withPhoto = board.copy(bgType = Board.BG_IMAGE, bgImage = path)
                 if (panel == BoardPanel.BACKGROUND) board = withPhoto else change(withPhoto) // w panelu historia jest już zapisana
             } else {
-                val (cx, cy) = center()
-                // Zdjęcie na start zajmuje ok. 60% szerokości tablicy (skala względem rozmiaru logicznego, max 1400 px).
-                val scale = board.width * 0.6f / (photo.width * BoardRenderer.logicalScale(photo.width, photo.height))
-                addLayer(Layer(kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = scale, frame = Layer.FRAME_INSTAX))
+                // Zdjęcie jako warstwa: najpierw edytor zdjęcia (kadr, korekta, filtry, ramka), oryginał zostaje w assets.
+                // Do miejsca z szablonu: proporcje, kształt, ramka i filtry z szablonu.
+                val slot = slotTarget?.let { id -> board.layers.firstOrNull { it.id == id } }
+                slotTarget = null
+                photoDraft = if (slot != null) {
+                    PhotoDraft(photo, path, slot.id, PhotoEdit.of(slot.photoEdit).copy(aspect = slot.slot), slot.frame, slot.frameColor, slot.filters)
+                } else {
+                    PhotoDraft(photo, path, null, PhotoEdit(), Layer.FRAME_INSTAX, 0xFFFFFFFF, "")
+                }
             }
         }
     }
@@ -395,6 +449,17 @@ fun BoardEditorScreen(
                         StudioContextItem(StudioIcons.Text, stringResource(R.string.som_ctx_style)) { textDraft = selectedLayer(); dialog = BoardDialog.TEXT }
                     } else {
                         StudioContextItem(StudioIcons.Frame, stringResource(R.string.som_rail_frame)) { openPanel(BoardPanel.FRAME) }
+                        StudioContextItem(StudioIcons.Filter, stringResource(R.string.som_rail_filter)) { openPanel(BoardPanel.FILTER) }
+                        if (selectedIsSlot) {
+                            StudioContextItem(StudioIcons.Photo, stringResource(R.string.som_ctx_insert_photo), tint = MaterialTheme.colorScheme.secondary) {
+                                slotTarget = selectedId
+                                photoForBackground = false
+                                pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }
+                        }
+                        if (selectedHasOriginal) {
+                            StudioContextItem(StudioIcons.Photo, stringResource(R.string.som_ctx_edit_photo)) { editPhoto() }
+                        }
                     }
                     StudioContextItem(StudioIcons.ToFront, stringResource(R.string.som_ctx_front)) { toFront() }
                     StudioContextItem(StudioIcons.ToBack, stringResource(R.string.som_ctx_back)) { toBack() }
@@ -434,6 +499,7 @@ fun BoardEditorScreen(
                     .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 14.dp),
             ) {
                 StudioRailItem(StudioIcons.Sticker, stringResource(R.string.som_rail_sticker), selected = false) { dialog = BoardDialog.STICKER }
+                StudioRailItem(StudioIcons.Pin, stringResource(R.string.som_rail_pins), selected = false) { dialog = BoardDialog.PIN }
                 StudioRailItem(StudioIcons.Photo, stringResource(R.string.som_rail_photo), selected = false) {
                     photoForBackground = false
                     pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -460,7 +526,13 @@ fun BoardEditorScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
-                    stringResource(if (shownPanel == BoardPanel.BACKGROUND) R.string.som_board_bg_title else R.string.som_board_frame_title),
+                    stringResource(
+                        when (shownPanel) {
+                            BoardPanel.BACKGROUND -> R.string.som_board_bg_title
+                            BoardPanel.FRAME -> R.string.som_board_frame_title
+                            BoardPanel.FILTER -> R.string.som_board_filter_title
+                        },
+                    ),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -475,7 +547,9 @@ fun BoardEditorScreen(
                     )
                 } else {
                     val layer = board.layers.firstOrNull { it.id == selectedId } // panel otwarty = czytanie w kompozycji jest ok
-                    if (layer != null) {
+                    if (layer != null && shownPanel == BoardPanel.FILTER) {
+                        FilterPicker(layer.filters) { f -> board = board.updateLayer(layer.id) { it.copy(filters = f) } }
+                    } else if (layer != null) {
                         FramePanel(layer = layer, onChange = { updated -> board = board.updateLayer(layer.id) { updated } })
                     }
                 }
@@ -509,6 +583,24 @@ fun BoardEditorScreen(
             onCancel = { dialog = BoardDialog.NONE; textDraft = null },
         )
     }
+    // Zdjęcie: pełnoekranowy edytor nad tablicą.
+    val pd = photoDraft
+    if (pd != null) {
+        PhotoEditorOverlay(
+            photo = pd.photo,
+            initialEdit = pd.edit,
+            initialFrame = pd.frame,
+            initialFrameColor = pd.frameColor,
+            initialFilters = pd.filters,
+            onDone = { result -> finishPhoto(pd, result) },
+            onCancel = {
+                photoDraft = null
+                // Nowe zdjęcie (albo do pustego miejsca) anulowane: kopia oryginału w assets nikomu już niepotrzebna.
+                val target = pd.layerId?.let { id -> board.layers.firstOrNull { it.id == id } }
+                if (target == null || target.emptySlot) runCatching { File(pd.original).delete() }
+            },
+        )
+    }
     }
 
     // --- Okna ---
@@ -522,6 +614,22 @@ fun BoardEditorScreen(
                     val img = withContext(Dispatchers.IO) { renderer.bitmap(path) } // dekodowanie poza wątkiem UI (od razu w pamięci podglądu)
                     val (cx, cy) = center()
                     val scale = if (img != null) board.width * 0.45f / maxOf(img.width, img.height) else 1f // rozmiar logiczny
+                    addLayer(Layer(kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = scale))
+                }
+            },
+            onDismiss = { dialog = BoardDialog.NONE },
+        )
+        BoardDialog.PIN -> PinPickDialog(
+            onPick = { id, color ->
+                dialog = BoardDialog.NONE
+                scope.launch {
+                    val image = withContext(Dispatchers.Default) { Pins.render(id, color) }
+                    val path = BoardStore.importImage(context, image, png = true)
+                    image.recycle()
+                    val img = withContext(Dispatchers.IO) { renderer.bitmap(path) }
+                    val (cx, cy) = center()
+                    // Przypinka mała w stosunku do tablicy (pinezka ok. 9% szerokości, taśma ok. 24%).
+                    val scale = if (img != null) board.width * Pins.of(id).boardShare / img.width else 1f
                     addLayer(Layer(kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = scale))
                 }
             },
@@ -1131,6 +1239,17 @@ private fun ExportDialog(onSticker: () -> Unit, onGallery: () -> Unit, onDismiss
 @Composable
 fun NewBoardDialog(onCreate: (Board) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var building by remember { mutableStateOf(false) }
+    fun fromTemplate(t: Templates.Template) {
+        if (!building) {
+            building = true
+            scope.launch {
+                runCatching { Templates.build(context, t) }.onSuccess(onCreate)
+                building = false
+            }
+        }
+    }
     val presets = remember { boardPresets(context) }
     var customW by remember { mutableStateOf("1500") }
     var customH by remember { mutableStateOf("1500") }
@@ -1156,8 +1275,63 @@ fun NewBoardDialog(onCreate: (Board) -> Unit, onDismiss: () -> Unit) {
                     val h = customH.toIntOrNull()?.coerceIn(128, 5000) ?: 1500
                     onCreate(Board(name = context.getString(R.string.som_board_custom_name, w, h), width = w, height = h, bgType = Board.BG_COLOR))
                 }) { Text(stringResource(R.string.som_board_create_custom)) }
+                // Szablony: gotowe kolaże i tapety z miejscami na zdjęcia.
+                Text(stringResource(R.string.som_tpl_collages), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    Templates.collages.forEach { t -> StudioChip(stringResource(t.labelRes), false) { fromTemplate(t) } }
+                }
+                Text(stringResource(R.string.som_tpl_wallpapers), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    Templates.wallpapers.forEach { t -> StudioChip(stringResource(t.labelRes), false) { fromTemplate(t) } }
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_cancel)) } },
+    )
+}
+
+// Zdjęcie otwarte w edytorze zdjęcia: oryginał, jego plik w assets i (przy ponownej edycji) id warstwy.
+private class PhotoDraft(
+    val photo: Bitmap,
+    val original: String,
+    val layerId: String?,
+    val edit: PhotoEdit,
+    val frame: String,
+    val frameColor: Long,
+    val filters: String,
+)
+
+// Wybór przypinki (pinezka, taśma, spinacz…) i jej koloru. Miniatury rysowane od razu (małe, kilka ms).
+@Composable
+private fun PinPickDialog(onPick: (String, Long) -> Unit, onDismiss: () -> Unit) {
+    var color by remember { mutableStateOf<Long?>(null) } // null = kolor domyślny każdej przypinki
+    val previews = remember(color) { Pins.all.map { p -> p to Pins.render(p.id, color ?: p.defaultColor, 0.3f).asImageBitmap() } }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(stringResource(R.string.som_pins_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyVerticalGrid(columns = GridCells.Adaptive(88.dp), modifier = Modifier.heightIn(max = 340.dp)) {
+                    items(previews, key = { it.first.id }) { (pin, image) ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .padding(4.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable { onPick(pin.id, color ?: pin.defaultColor) }
+                                .padding(6.dp),
+                        ) {
+                            Image(image, contentDescription = null, modifier = Modifier.size(64.dp))
+                            Text(stringResource(pin.labelRes), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+                StudioLabel(stringResource(R.string.som_pins_color))
+                Swatches(Palette, color, { color = it }, allowNone = true, onNone = { color = null })
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_close)) } },
     )
 }

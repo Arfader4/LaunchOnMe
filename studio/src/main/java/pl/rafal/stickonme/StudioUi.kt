@@ -3,6 +3,7 @@ package pl.rafal.stickonme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -29,6 +31,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -65,6 +68,9 @@ object StudioIcons {
     val Edge = icon("edge", "M20 4C10 4 5 10 5 19", "M5 19c5 0 11-3 13-9", "M9 14h5")
     val Shape = icon("shape", "M5 3h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M21 15.5a5.5 5.5 0 1 1-11 0a5.5 5.5 0 1 1 11 0z")
     val Frame = icon("frame", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M8 7h8a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z")
+    val Filter = icon("filter", "M15 9a5 5 0 1 1-10 0a5 5 0 1 1 10 0z", "M19 15a5 5 0 1 1-10 0a5 5 0 1 1 10 0z")
+    val Adjust = icon("adjust", "M4 7h10", "M18 7h2", "M4 17h4", "M12 17h8", "M16 9a2 2 0 1 1 0-4a2 2 0 1 1 0 4z", "M10 19a2 2 0 1 1 0-4a2 2 0 1 1 0 4z")
+    val Pin = icon("pin", "M15 4l5 5", "M17.5 6.5L13 11l-3-1-3 3 7 7 3-3-1-3 4.5-4.5", "M8.5 15.5L4 20")
     val Rotate = icon("rotate", "M20 12a8 8 0 1 1-2.3-5.7", "M20 4v5h-5")
     val Resize = icon("resize", "M15 3h6v6", "M9 21H3v-6", "M21 3l-7 7", "M3 21l7-7")
     // Tablica / kolaż
@@ -273,4 +279,23 @@ fun StudioContextItem(icon: ImageVector, label: String, tint: Color = MaterialTh
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
         Text(label, color = tint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, textAlign = TextAlign.Center)
     }
+}
+
+// Wybór filtrów (edytor naklejki i warstwa na tablicy): kolory i faktury można łączyć, styl malarski — jeden naraz.
+@Composable
+fun FilterPicker(value: String, onChange: (String) -> Unit) {
+    StudioLabel(stringResource(R.string.som_filter_looks))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        StudioChip(stringResource(R.string.som_filter_none), value.isEmpty()) { onChange("") }
+        StickerFilters.looks.forEach { f ->
+            StudioChip(stringResource(f.labelRes), StickerFilters.has(value, f.id)) { onChange(StickerFilters.toggle(value, f.id)) }
+        }
+    }
+    StudioLabel(stringResource(R.string.som_filter_paintings))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        StickerFilters.paintings.forEach { f ->
+            StudioChip(stringResource(f.labelRes), StickerFilters.has(value, f.id)) { onChange(StickerFilters.toggle(value, f.id)) }
+        }
+    }
+    Text(stringResource(R.string.som_filter_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }

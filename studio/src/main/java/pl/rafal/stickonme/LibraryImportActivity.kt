@@ -80,7 +80,7 @@ class LibraryImportActivity : ComponentActivity() {
                     val board = Board.of(file.readText()) ?: return@runCatching
                     val fixed = board.copy(
                         bgImage = board.bgImage?.let(::local),
-                        layers = board.layers.map { l -> l.copy(path = l.path?.let(::local)) },
+                        layers = board.layers.map { l -> l.copy(path = l.path?.let(::local), original = l.original?.let(::local)) },
                     )
                     if (fixed != board) file.writeText(fixed.toJson())
                 }

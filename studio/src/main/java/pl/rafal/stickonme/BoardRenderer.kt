@@ -49,6 +49,8 @@ class BoardRenderer(
         // do wersji 1.2, więc stare tablice wyglądają tak samo. Bitmapa w pamięci może być mniejsza (podgląd) albo
         // większa (eksport) — przy rysowaniu skalujemy ją do rozmiaru logicznego. Jak "jednostki" vs piksele w XAML.
         const val LOGICAL_SIDE = 1400
+        // Puste miejsce na zdjęcie z szablonu: szerokość logiczna (wysokość wg proporcji miejsca).
+        const val SLOT_SIDE = 1000f
         fun logicalScale(width: Int, height: Int): Float = minOf(1f, LOGICAL_SIDE.toFloat() / maxOf(width, height).coerceAtLeast(1))
     }
 
@@ -106,8 +108,8 @@ class BoardRenderer(
         Img(bmp, logicalW.coerceAtLeast(1f), logicalH.coerceAtLeast(1f))
     }.getOrNull()
 
-    // Co trzeba mieć w pamięci przed rysowaniem: obraz i (jeśli jest) ramka. Tło = frame NONE.
-    data class Need(val path: String, val frame: String = Layer.FRAME_NONE, val frameColor: Long = 0)
+    // Co trzeba mieć w pamięci przed rysowaniem: obraz, (jeśli są) filtry i ramka. Tło = frame NONE, bez filtrów.
+    data class Need(val path: String, val frame: String = Layer.FRAME_NONE, val frameColor: Long = 0, val filters: String = "")
 
     // Wczytanie w tle brakujących obrazów i policzenie ramek (kontur / cień to kosztowne liczenie — nie na wątku UI).
     // check() = punkt przerwania (ensureActive korutyny), jak CancellationToken w C#.
@@ -115,7 +117,8 @@ class BoardRenderer(
         for (need in needs) {
             check()
             val img = bitmap(need.path) ?: continue
-            if (need.frame != Layer.FRAME_NONE) framedCached(img.bitmap, need.frame, need.frameColor)
+            val base = filtered(img.bitmap, need.filters, blocking = true, check)
+            if (need.frame != Layer.FRAME_NONE) framedCached(base, need.frame, need.frameColor)
         }
     }
 
@@ -130,6 +133,7 @@ class BoardRenderer(
             bitmaps.evictAll()
             missing.clear()
             framedCache.evictAll()
+            filteredCache.evictAll()
         }
         textCache.evictAll()
     }
@@ -227,9 +231,10 @@ class BoardRenderer(
         }
         else -> {
             val img = image(layer.path, blocking)
-            val w = img?.width ?: 400f
-            val h = img?.height ?: 400f
-            val (padX, top, bottom) = framePadding(layer.frame, w, h)
+            val w = if (layer.emptySlot) SLOT_SIDE else img?.width ?: 400f
+            val h = if (layer.emptySlot) SLOT_SIDE / layer.slot else img?.height ?: 400f
+            // Puste miejsce rysujemy bez ramki (pojawi się razem ze zdjęciem) — zaznaczenie = sam prostokąt.
+            val (padX, top, bottom) = if (layer.emptySlot) Triple(0f, 0f, 0f) else framePadding(layer.frame, w, h)
             (w + padX * 2) to (h + top + bottom)
         }
     }
@@ -237,6 +242,7 @@ class BoardRenderer(
     // Marginesy ramki: (boki, góra, dół) w px obrazu.
     private fun framePadding(frame: String, w: Float, h: Float): Triple<Float, Float, Float> {
         val m = max(w, h)
+        FrameArt.padding(frame, m)?.let { return it }
         return when (frame) {
             Layer.FRAME_INSTAX -> Triple(m * 0.06f, m * 0.06f, m * 0.22f)
             Layer.FRAME_POLAROID -> Triple(m * 0.07f, m * 0.07f, m * 0.28f)
@@ -334,6 +340,10 @@ class BoardRenderer(
     }
 
     private fun drawImage(canvas: Canvas, layer: Layer, blocking: Boolean) {
+        if (layer.emptySlot) {
+            if (!blocking) drawSlot(canvas, layer) // w eksporcie i miniaturze puste miejsce nie istnieje
+            return
+        }
         val img = image(layer.path, blocking)
         if (img == null) {
             // Brak pliku (usunięty z biblioteki): szary prostokąt zamiast pustego miejsca.
@@ -341,7 +351,8 @@ class BoardRenderer(
             if (blocking || isMissing(layer.path)) canvas.drawRect(RectF(-200f, -200f, 200f, 200f), Paint().apply { color = 0x55808080 })
             return
         }
-        val bmp = img.bitmap
+        // Filtry zmieniają tylko kolory — rozmiar bitmapy ten sam, więc img.k dalej pasuje.
+        val bmp = filtered(img.bitmap, layer.filters, blocking)
         val filter = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
         // Piksele bitmapy → jednostki logiczne (ramka ma marginesy proporcjonalne do obrazu, więc skaluje się razem z nim).
         canvas.save()
@@ -350,10 +361,56 @@ class BoardRenderer(
             canvas.drawBitmap(bmp, -bmp.width / 2f, -bmp.height / 2f, filter)
         } else {
             // Obraz z ramką liczony raz i trzymany w pamięci (kontur to 16 kopii sylwetki — co klatkę byłoby za drogo).
-            val framed = framedCached(bmp, layer.frame, layer.frameColor)
-            canvas.drawBitmap(framed.bitmap, framed.offsetX, framed.offsetY, filter)
+            // Filtry jeszcze się liczą (podgląd dostał obraz bez nich): ramki dla tej tymczasowej wersji NIE liczymy na
+            // wątku UI — jeśli jej nie ma w pamięci, chwilę rysujemy sam obraz, a preload policzy właściwą.
+            val waiting = !blocking && bmp === img.bitmap && layer.filters.isNotEmpty()
+            val framed = if (waiting) synchronized(lock) { framedCache.get(FrameKey(bmp, layer.frame, layer.frameColor)) }
+                else framedCached(bmp, layer.frame, layer.frameColor)
+            if (framed != null) canvas.drawBitmap(framed.bitmap, framed.offsetX, framed.offsetY, filter)
+            else canvas.drawBitmap(bmp, -bmp.width / 2f, -bmp.height / 2f, filter)
         }
         canvas.restore()
+    }
+
+    // Puste miejsce z szablonu: półprzezroczysty prostokąt z przerywanym brzegiem i plusem („dotknij, żeby wstawić”).
+    private fun drawSlot(canvas: Canvas, layer: Layer) {
+        val w = SLOT_SIDE
+        val h = SLOT_SIDE / layer.slot
+        val rect = RectF(-w / 2f, -h / 2f, w / 2f, h / 2f)
+        canvas.drawRect(rect, Paint().apply { color = 0x55FFFFFF })
+        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 8f
+            color = 0xCCFFFFFF.toInt()
+            pathEffect = android.graphics.DashPathEffect(floatArrayOf(36f, 22f), 0f)
+        }
+        canvas.drawRect(rect, line)
+        val plus = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 14f; strokeCap = Paint.Cap.ROUND; color = 0xDDFFFFFF.toInt() }
+        val r = minOf(w, h) * 0.12f
+        canvas.drawLine(-r, 0f, r, 0f, plus)
+        canvas.drawLine(0f, -r, 0f, r, plus)
+    }
+
+    // Obraz z filtrami — liczony raz i trzymany w pamięci (styl malarski to nawet kilkaset ms). Klucz jak przy ramkach:
+    // bitmapa źródłowa (po referencji) + zestaw filtrów. W podglądzie (blocking = false) bez liczenia: na razie obraz bez
+    // filtrów, a previewMiss każe ekranowi policzyć je w tle (preload) i przerysować.
+    private data class FilterKey(val source: Bitmap, val filters: String)
+    private val filteredCache = object : android.util.LruCache<FilterKey, Bitmap>(minOf(48L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 8).toInt()) {
+        override fun sizeOf(key: FilterKey, value: Bitmap) = value.byteCount + key.source.byteCount
+    }
+
+    private fun filtered(bmp: Bitmap, filters: String, blocking: Boolean, check: () -> Unit = {}): Bitmap {
+        if (filters.isEmpty()) return bmp
+        val key = FilterKey(bmp, filters)
+        val cached = synchronized(lock) { filteredCache.get(key) }
+        if (cached != null) return cached
+        if (!blocking) {
+            previewMiss = true
+            return bmp
+        }
+        val made = StickerFilters.apply(bmp, filters, check) // liczone poza lockiem
+        synchronized(lock) { filteredCache.put(key, made) }
+        return made
     }
 
     // Obraz w ramce: bitmapa z zapasem na cień + przesunięcie jej lewego górnego rogu względem środka warstwy.
@@ -390,7 +447,7 @@ class BoardRenderer(
         val (padX, top, bottom) = framePadding(frame, w, h)
         val totalW = w + padX * 2
         val totalH = h + top + bottom
-        val margin = m * (if (frame == Layer.FRAME_TAPE) 0.16f else 0.07f) // miejsce na cień karty / rozmycie / wystającą taśmę
+        val margin = m * (FrameArt.margin(frame) ?: if (frame == Layer.FRAME_TAPE) 0.16f else 0.07f) // miejsce na cień karty / rozmycie / wystającą taśmę
         val out = Bitmap.createBitmap(
             (totalW + margin * 2).toInt().coerceAtLeast(1),
             (totalH + margin * 2).toInt().coerceAtLeast(1),
@@ -402,6 +459,9 @@ class BoardRenderer(
         val imgY = top
         val filter = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
         val card = RectF(0f, 0f, totalW, totalH)
+        if (FrameArt.draw(canvas, frame, bmp, imgX, imgY, totalW, totalH, m, color, filter)) {
+            return Framed(out, -totalW / 2f - margin, -totalH / 2f - margin)
+        }
         when (frame) {
             Layer.FRAME_INSTAX, Layer.FRAME_POLAROID -> {
                 val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

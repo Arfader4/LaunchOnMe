@@ -225,4 +225,77 @@
     <string name="som_text_shadow_cd">Shadow</string>
     <string name="som_text_size_cd">Text size — drag up or down</string>
     <string name="som_text_placeholder">Type something…</string>
+    <!-- SOM 1.5.0: filtry -->
+    <string name="som_rail_filter">Filters</string>
+    <string name="som_title_filter">Filters</string>
+    <string name="som_board_filter_title">Filters</string>
+    <string name="som_filter_none">None</string>
+    <string name="som_filter_looks">Colour and texture (can be combined)</string>
+    <string name="som_filter_paintings">Painting style (one at a time)</string>
+    <string name="som_filter_bw">Black &amp; white</string>
+    <string name="som_filter_sepia">Sepia</string>
+    <string name="som_filter_vintage">Vintage</string>
+    <string name="som_filter_print">Printed photo</string>
+    <string name="som_filter_paper">Old paper</string>
+    <string name="som_filter_glass">Glass glare</string>
+    <string name="som_filter_oil">Oil paint</string>
+    <string name="som_filter_watercolor">Watercolour</string>
+    <string name="som_filter_pencil">Pencil</string>
+    <string name="som_filter_comic">Comic</string>
+    <string name="som_filter_hint">Filters are applied in a fixed order, so the result does not depend on the order you tap them.</string>
+    <!-- SOM 1.6.0 -->
+    <string name="som_photo_title">Photo</string>
+    <string name="som_photo_adjust">Adjust</string>
+    <string name="som_photo_original">Original</string>
+    <string name="som_photo_reset">Reset</string>
+    <string name="som_photo_crop_hint">Drag, pinch and twist the photo with your fingers to place it in the frame.</string>
+    <string name="som_photo_brightness">Brightness</string>
+    <string name="som_photo_contrast">Contrast</string>
+    <string name="som_photo_saturation">Saturation</string>
+    <string name="som_photo_warmth">Warmth</string>
+    <string name="som_ctx_edit_photo">Edit</string>
+    <!-- SOM 1.7.0 -->
+    <string name="som_frame_tape4">4 tapes</string>
+    <string name="som_frame_album">Photo album</string>
+    <string name="som_frame_wood">Wood</string>
+    <string name="som_frame_gallery">Gallery mat</string>
+    <string name="som_frame_gold">Gold</string>
+    <string name="som_frame_silver">Silver</string>
+    <string name="som_frame_baroque">Baroque</string>
+    <!-- SOM 1.8.0 -->
+    <string name="som_rail_pins">Pins</string>
+    <string name="som_pins_title">Pins and tapes</string>
+    <string name="som_pins_color">Colour (∅ = default)</string>
+    <string name="som_pin_pushpin">Push pin</string>
+    <string name="som_pin_nail">Nail</string>
+    <string name="som_pin_staple">Staple</string>
+    <string name="som_pin_paperclip">Paper clip</string>
+    <string name="som_pin_tape">Tape</string>
+    <string name="som_pin_tape_x">Tape X</string>
+    <string name="som_pin_washi">Washi tape</string>
+    <string name="som_pin_magnet">Magnet</string>
+    <string name="som_pin_binder">Binder clip</string>
+    <string name="som_pin_clothespin">Clothespin</string>
+    <string name="som_pin_corner">Folded corner</string>
+    <!-- SOM 1.9.0 -->
+    <string name="som_ctx_insert_photo">Add photo</string>
+    <string name="som_tpl_collages">Collage templates</string>
+    <string name="som_tpl_wallpapers">Wallpaper templates</string>
+    <string name="som_tpl_cork">Cork board</string>
+    <string name="som_tpl_album">Family album</string>
+    <string name="som_tpl_gallery">Gallery wall</string>
+    <string name="som_tpl_vintage">Vintage</string>
+    <string name="som_tpl_fridge">Fridge door</string>
+    <string name="som_tpl_line">Clothesline</string>
+    <string name="som_tpl_film">Film strip</string>
+    <string name="som_tpl_w_frame">Framed photo</string>
+    <string name="som_tpl_w_polaroid">Pinned polaroid</string>
+    <string name="som_tpl_w_stack">Instax stack</string>
+    <string name="som_tpl_w_gallery">Gallery minimal</string>
+    <string name="som_tpl_w_heart">Watercolour heart</string>
+    <string name="som_tpl_text_memories">Memories</string>
+    <string name="som_tpl_text_family">Family</string>
+    <string name="som_tpl_text_long_ago">Long ago…</string>
+    <string name="som_tpl_text_summer">Summer</string>
+    <string name="som_tpl_text_moments">Our moments</string>
 </resources>

@@ -24,6 +24,10 @@ data class Layer(
     val path: String? = null,
     val frame: String = FRAME_NONE,
     val frameColor: Long = 0xFFFFFFFF,
+    val filters: String = "",         // filtry obrazu (StickerFilters, np. "sepia,paper"); "" = bez
+    val original: String? = null,     // zdjęcie: oryginał w assets (do ponownej edycji w PhotoEditor), null = brak
+    val photoEdit: String = "",       // zdjęcie: ustawienia kadru i korekty (PhotoEdit.toJson)
+    val slot: Float = 0f,             // > 0 = miejsce na zdjęcie z szablonu (proporcje szer./wys.); puste, gdy path == null
     // Tekst / emoji
     val text: String = "",
     val font: String = "sans-serif",
@@ -38,10 +42,16 @@ data class Layer(
     val highlight: Long? = null,      // kolor "zakreślacza" pod tekstem (null = bez)
     val align: String = ALIGN_CENTER, // wyrównanie linii tekstu: left / center / right
 ) {
+    // Puste miejsce z szablonu (czeka na zdjęcie). Getter w ciele klasy — nie wchodzi do equals / copy / JSON.
+    val emptySlot: Boolean get() = kind == KIND_IMAGE && slot > 0f && path == null
+
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("kind", kind).put("x", x.toDouble()).put("y", y.toDouble())
         .put("scale", scale.toDouble()).put("rotation", rotation.toDouble())
         .putOpt("path", path).put("frame", frame).put("frameColor", frameColor)
+        .put("filters", filters)
+        .putOpt("original", original).put("photoEdit", photoEdit)
+        .put("slot", slot.toDouble())
         .put("text", text).put("font", font).put("bold", bold).put("italic", italic)
         .put("color", color).put("size", size.toDouble())
         .put("outlineColor", outlineColor).put("outlineWidth", outlineWidth.toDouble())
@@ -64,6 +74,14 @@ data class Layer(
         const val FRAME_TAPE = "tape"         // przyklejone taśmą
         const val FRAME_STAMP = "stamp"       // ząbkowany brzeg jak znaczek pocztowy
         const val FRAME_FILM = "film"         // czarny pasek kliszy z perforacją
+        // SOM 1.7.0 (rysowane w FrameArt.kt)
+        const val FRAME_ALBUM = "album"       // zdjęcie wklejone w album: kartka + papierowe narożniki
+        const val FRAME_TAPE4 = "tape4"       // cztery kawałki taśmy na rogach
+        const val FRAME_WOOD = "wood"         // zwykła drewniana ramka
+        const val FRAME_GOLD = "gold"         // złota rama obrazu
+        const val FRAME_SILVER = "silver"     // srebrna rama obrazu
+        const val FRAME_BAROQUE = "baroque"   // szeroka barokowa rama z ornamentami
+        const val FRAME_GALLERY = "gallery"   // cienka rama + biały passe-partout
 
         // Ramki do wyboru (tablica i edytor naklejki) — kolejność = kolejność czipów.
         // Getter: etykiety czytane przy każdym użyciu (zmiana języka bez restartu).
@@ -72,9 +90,13 @@ data class Layer(
             FRAME_SHADOW to StudioText.get(R.string.som_frame_shadow), FRAME_STAMP to StudioText.get(R.string.som_frame_stamp),
             FRAME_INSTAX to "Instax", FRAME_POLAROID to "Polaroid",
             FRAME_FILM to StudioText.get(R.string.som_frame_film), FRAME_TAPE to StudioText.get(R.string.som_frame_tape),
+            FRAME_TAPE4 to StudioText.get(R.string.som_frame_tape4), FRAME_ALBUM to StudioText.get(R.string.som_frame_album),
+            FRAME_WOOD to StudioText.get(R.string.som_frame_wood), FRAME_GALLERY to StudioText.get(R.string.som_frame_gallery),
+            FRAME_GOLD to StudioText.get(R.string.som_frame_gold), FRAME_SILVER to StudioText.get(R.string.som_frame_silver),
+            FRAME_BAROQUE to StudioText.get(R.string.som_frame_baroque),
         )
-        // Ramki, w których kolor ma znaczenie (cień i klisza mają własny).
-        fun hasColor(frame: String) = frame != FRAME_NONE && frame != FRAME_SHADOW && frame != FRAME_FILM
+        // Ramki, w których kolor ma znaczenie (cień, klisza, drewno i ramy obrazu mają własny).
+        fun hasColor(frame: String) = frame !in setOf(FRAME_NONE, FRAME_SHADOW, FRAME_FILM, FRAME_WOOD, FRAME_GOLD, FRAME_SILVER, FRAME_BAROQUE)
 
         fun of(o: JSONObject) = Layer(
             id = o.optString("id", UUID.randomUUID().toString()),
@@ -86,6 +108,10 @@ data class Layer(
             path = if (o.isNull("path")) null else o.optString("path"),
             frame = o.optString("frame", FRAME_NONE),
             frameColor = o.optLong("frameColor", 0xFFFFFFFF),
+            filters = o.optString("filters", ""),
+            original = if (o.isNull("original")) null else o.optString("original").ifEmpty { null },
+            photoEdit = o.optString("photoEdit", ""),
+            slot = o.optDouble("slot", 0.0).toFloat(),
             text = o.optString("text", ""),
             font = o.optString("font", "sans-serif"),
             bold = o.optBoolean("bold", false),
@@ -189,8 +215,8 @@ object BoardStore {
             thumbnailFile(context, board.id).delete()
             val assetsDir = assets(context).canonicalPath + File.separator
             val usedElsewhere = list(context).filter { it.id != board.id }
-                .flatMap { b -> b.layers.mapNotNull { it.path } + listOfNotNull(b.bgImage) }.toSet()
-            (board.layers.mapNotNull { it.path } + listOfNotNull(board.bgImage))
+                .flatMap { b -> b.layers.flatMap { listOfNotNull(it.path, it.original) } + listOfNotNull(b.bgImage) }.toSet()
+            (board.layers.flatMap { listOfNotNull(it.path, it.original) } + listOfNotNull(board.bgImage))
                 .filter { it !in usedElsewhere }
                 .map(::File)
                 .filter { it.canonicalPath.startsWith(assetsDir) }
@@ -208,6 +234,13 @@ object BoardStore {
     }
 
     // Zdjęcie z galerii jako warstwa albo tło: kopia w assets/ (oryginał może zniknąć z telefonu).
+    // Obraz z edytora zdjęcia: JPEG, gdy zakrywa całe okno, inaczej PNG (przezroczyste rogi / kształt).
+    suspend fun importImage(context: Context, image: Bitmap, png: Boolean): String = withContext(Dispatchers.IO) {
+        val file = File(assets(context), "${UUID.randomUUID()}.${if (png) "png" else "jpg"}")
+        file.outputStream().use { image.compress(if (png) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG, 92, it) }
+        file.absolutePath
+    }
+
     suspend fun importPhoto(context: Context, photo: Bitmap): String = withContext(Dispatchers.IO) {
         val file = File(assets(context), "${UUID.randomUUID()}.jpg")
         file.outputStream().use { photo.compress(Bitmap.CompressFormat.JPEG, 92, it) }

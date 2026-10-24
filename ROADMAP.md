@@ -32,7 +32,13 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | SOM 1.2.2 | StickOnMe: maska nakładana piksel po pikselu (getPixels) zamiast DST_IN z bitmapą ALPHA_8 — naklejka wreszcie bez tła | 1 |
 | SOM 1.3.0 | StickOnMe: tablica wg makiety — górny pasek z Cofnij/Ponów, dolny pasek dodawania z ikonami, pływający pasek opcji warstwy, uchwyty ✕ i obrót/skala jednym palcem, tło i ramka w panelach z ✓/✕ | 1 |
 | SOM 1.4.0 | StickOnMe: tekst na tablicy w stylu Instagrama — pełny ekran z podglądem na żywo, pionowy suwak rozmiaru, „A” (zwykły / tło / obrys), wyrównanie, B / I / U / cień, czcionki i kolory nad klawiaturą | 1 |
-Razem od V1: 55 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
+| SOM 1.5.0 | StickOnMe: filtry — czarno-białe, sepia, vintage, wydruk, stary papier, poblask szkła (łączone) + style malarskie: olej, akwarela, ołówek, komiks; w edytorze naklejki („Filtry”) i dla zdjęcia / naklejki na tablicy | 1 |
+| SOM 1.6.0 | StickOnMe: edytor zdjęcia przed dodaniem na tablicę — okno kadru z proporcjami i kształtem, przesuwanie / powiększanie / obrót palcami, korekta (jasność, kontrast, nasycenie, ciepło), filtry i ramka; „Edytuj” wraca do oryginału z zapisanymi ustawieniami | 1 |
+| SOM 1.7.0 | StickOnMe: nowe ramki (FrameArt.kt) — album z narożnikami, 4 taśmy, drewno ze słojami, złota i srebrna rama obrazu, barokowa z perełkami i rozetami, passe-partout z cienką ramą | 1 |
+| SOM 1.8.0 | StickOnMe: przypinki (Pins.kt) — pinezka, gwóźdź, zszywka, spinacz, taśma, taśma X, washi, magnes, klips biurowy, klamerka na sznurku, zagięty róg; rysowane do PNG i dodawane jak naklejka, z wyborem koloru | 1 |
+| SOM 1.9.0 | StickOnMe: szablony kolaży (Templates.kt) — tablica korkowa, album rodzinny, galeria na ścianie, vintage, lodówka, sznurek ze zdjęciami, klisza; puste miejsca na zdjęcia (Layer.slot) z „Wstaw zdjęcie” → edytor zdjęcia z proporcjami miejsca | 1 |
+| SOM 1.10.0 | StickOnMe: szablony tapet — zdjęcie w ramie, polaroid z pinezką, stos zdjęć z washi, galeria minimal, serce akwarela; rozmiar ekranu, położenia w ułamkach tablicy | 1 |
+Razem od V1: 61 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
 - [x] Ikony aplikacji i folderów na karcie wyrównane do tej samej linii (środek komórki).
