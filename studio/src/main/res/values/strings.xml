@@ -262,4 +262,19 @@
     <string name="som_frame_gold">Gold</string>
     <string name="som_frame_silver">Silver</string>
     <string name="som_frame_baroque">Baroque</string>
+    <!-- SOM 1.8.0 -->
+    <string name="som_rail_pins">Pins</string>
+    <string name="som_pins_title">Pins and tapes</string>
+    <string name="som_pins_color">Colour (∅ = default)</string>
+    <string name="som_pin_pushpin">Push pin</string>
+    <string name="som_pin_nail">Nail</string>
+    <string name="som_pin_staple">Staple</string>
+    <string name="som_pin_paperclip">Paper clip</string>
+    <string name="som_pin_tape">Tape</string>
+    <string name="som_pin_tape_x">Tape X</string>
+    <string name="som_pin_washi">Washi tape</string>
+    <string name="som_pin_magnet">Magnet</string>
+    <string name="som_pin_binder">Binder clip</string>
+    <string name="som_pin_clothespin">Clothespin</string>
+    <string name="som_pin_corner">Folded corner</string>
 </resources>

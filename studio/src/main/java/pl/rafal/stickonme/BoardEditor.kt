@@ -83,6 +83,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
@@ -126,7 +127,7 @@ private val EmojiSet = listOf(
 internal val BoardPalette: List<Long> get() = Palette
 internal val BoardFonts: List<Pair<String, Int>> get() = Fonts
 
-private enum class BoardDialog { NONE, STICKER, TEXT, EMOJI, EXPORT }
+private enum class BoardDialog { NONE, STICKER, TEXT, EMOJI, EXPORT, PIN }
 
 // Panele na dole ekranu (zamiast okien): zmiany widać od razu na tablicy, ✓ Zastosuj / ✕ Anuluj jak w edytorze naklejki.
 private enum class BoardPanel { BACKGROUND, FRAME, FILTER }
@@ -481,6 +482,7 @@ fun BoardEditorScreen(
                     .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 14.dp),
             ) {
                 StudioRailItem(StudioIcons.Sticker, stringResource(R.string.som_rail_sticker), selected = false) { dialog = BoardDialog.STICKER }
+                StudioRailItem(StudioIcons.Pin, stringResource(R.string.som_rail_pins), selected = false) { dialog = BoardDialog.PIN }
                 StudioRailItem(StudioIcons.Photo, stringResource(R.string.som_rail_photo), selected = false) {
                     photoForBackground = false
                     pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -590,6 +592,22 @@ fun BoardEditorScreen(
                     val img = withContext(Dispatchers.IO) { renderer.bitmap(path) } // dekodowanie poza wątkiem UI (od razu w pamięci podglądu)
                     val (cx, cy) = center()
                     val scale = if (img != null) board.width * 0.45f / maxOf(img.width, img.height) else 1f // rozmiar logiczny
+                    addLayer(Layer(kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = scale))
+                }
+            },
+            onDismiss = { dialog = BoardDialog.NONE },
+        )
+        BoardDialog.PIN -> PinPickDialog(
+            onPick = { id, color ->
+                dialog = BoardDialog.NONE
+                scope.launch {
+                    val image = withContext(Dispatchers.Default) { Pins.render(id, color) }
+                    val path = BoardStore.importImage(context, image, png = true)
+                    image.recycle()
+                    val img = withContext(Dispatchers.IO) { renderer.bitmap(path) }
+                    val (cx, cy) = center()
+                    // Przypinka mała w stosunku do tablicy (pinezka ok. 9% szerokości, taśma ok. 24%).
+                    val scale = if (img != null) board.width * Pins.of(id).boardShare / img.width else 1f
                     addLayer(Layer(kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = scale))
                 }
             },
@@ -1240,3 +1258,38 @@ private class PhotoDraft(
     val frameColor: Long,
     val filters: String,
 )
+
+// Wybór przypinki (pinezka, taśma, spinacz…) i jej koloru. Miniatury rysowane od razu (małe, kilka ms).
+@Composable
+private fun PinPickDialog(onPick: (String, Long) -> Unit, onDismiss: () -> Unit) {
+    var color by remember { mutableStateOf<Long?>(null) } // null = kolor domyślny każdej przypinki
+    val previews = remember(color) { Pins.all.map { p -> p to Pins.render(p.id, color ?: p.defaultColor, 0.3f).asImageBitmap() } }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(stringResource(R.string.som_pins_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyVerticalGrid(columns = GridCells.Adaptive(88.dp), modifier = Modifier.heightIn(max = 340.dp)) {
+                    items(previews, key = { it.first.id }) { (pin, image) ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .padding(4.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable { onPick(pin.id, color ?: pin.defaultColor) }
+                                .padding(6.dp),
+                        ) {
+                            Image(image, contentDescription = null, modifier = Modifier.size(64.dp))
+                            Text(stringResource(pin.labelRes), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+                StudioLabel(stringResource(R.string.som_pins_color))
+                Swatches(Palette, color, { color = it }, allowNone = true, onNone = { color = null })
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_close)) } },
+    )
+}

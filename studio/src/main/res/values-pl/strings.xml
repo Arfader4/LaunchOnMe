@@ -262,4 +262,19 @@
     <string name="som_frame_gold">Złota rama</string>
     <string name="som_frame_silver">Srebrna rama</string>
     <string name="som_frame_baroque">Barokowa</string>
+    <!-- SOM 1.8.0 -->
+    <string name="som_rail_pins">Przypinki</string>
+    <string name="som_pins_title">Przypinki i taśmy</string>
+    <string name="som_pins_color">Kolor (∅ = domyślny)</string>
+    <string name="som_pin_pushpin">Pinezka</string>
+    <string name="som_pin_nail">Gwóźdź</string>
+    <string name="som_pin_staple">Zszywka</string>
+    <string name="som_pin_paperclip">Spinacz</string>
+    <string name="som_pin_tape">Taśma</string>
+    <string name="som_pin_tape_x">Taśma X</string>
+    <string name="som_pin_washi">Taśma washi</string>
+    <string name="som_pin_magnet">Magnes</string>
+    <string name="som_pin_binder">Klips biurowy</string>
+    <string name="som_pin_clothespin">Klamerka</string>
+    <string name="som_pin_corner">Zagięty róg</string>
 </resources>

@@ -70,6 +70,7 @@ object StudioIcons {
     val Frame = icon("frame", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M8 7h8a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z")
     val Filter = icon("filter", "M15 9a5 5 0 1 1-10 0a5 5 0 1 1 10 0z", "M19 15a5 5 0 1 1-10 0a5 5 0 1 1 10 0z")
     val Adjust = icon("adjust", "M4 7h10", "M18 7h2", "M4 17h4", "M12 17h8", "M16 9a2 2 0 1 1 0-4a2 2 0 1 1 0 4z", "M10 19a2 2 0 1 1 0-4a2 2 0 1 1 0 4z")
+    val Pin = icon("pin", "M15 4l5 5", "M17.5 6.5L13 11l-3-1-3 3 7 7 3-3-1-3 4.5-4.5", "M8.5 15.5L4 20")
     val Rotate = icon("rotate", "M20 12a8 8 0 1 1-2.3-5.7", "M20 4v5h-5")
     val Resize = icon("resize", "M15 3h6v6", "M9 21H3v-6", "M21 3l-7 7", "M3 21l7-7")
     // Tablica / kolaż
