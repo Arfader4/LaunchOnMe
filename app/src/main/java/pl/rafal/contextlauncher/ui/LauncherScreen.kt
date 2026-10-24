@@ -695,16 +695,20 @@ private fun LauncherContent(
         val current = suggestion
         when {
             notice != null && noticeMode != null -> {
+                // 1.9.2: to informacja, nie pytanie. ✕ = zamknij (tryb zostaje), „Wróć do …” = powrót.
+                // Dawniej ✕ cofało zmianę — wyglądało jak „odrzuć”, a wracało do Start i chowało sugestię na godzinę.
                 val previous = modes.firstOrNull { it.id == notice.previousModeId }
                 SmartItem.Prompt(
                     key = "auto:${noticeMode.id}",
                     color = noticeMode.color,
                     title = stringResource(R.string.ls_prompt_switched_on, noticeMode.name),
-                    subtitle = notice.reason.replaceFirstChar { it.uppercase() } + (previous?.let { " · " + stringResource(R.string.ls_prompt_back_to, it.name) } ?: ""),
+                    subtitle = notice.reason.replaceFirstChar { it.uppercase() },
                     acceptLabel = stringResource(R.string.ls_prompt_keep_mode),
                     onAccept = viewModel::keepAutoSwitch,
-                    rejectLabel = stringResource(R.string.common_undo),
-                    onReject = viewModel::undoAutoSwitch,
+                    rejectLabel = stringResource(R.string.ls_prompt_close_notice),
+                    onReject = viewModel::keepAutoSwitch,
+                    undoLabel = previous?.let { stringResource(R.string.ls_prompt_undo_to, it.name) } ?: stringResource(R.string.common_undo),
+                    onUndo = viewModel::undoAutoSwitch,
                 )
             }
             current is pl.rafal.contextlauncher.suggest.Suggestion.SwitchTo -> modes.firstOrNull { it.id == current.modeId }?.let { m ->

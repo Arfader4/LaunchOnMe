@@ -43,7 +43,8 @@
     <string name="ls_menu_end_timed">End timed mode</string>
     <string name="ls_until_time">until %1$s</string>
     <string name="ls_prompt_switched_on">Switched on: %1$s</string>
-    <string name="ls_prompt_back_to">✕ returns to %1$s</string>
+    <string name="ls_prompt_undo_to">Back to %1$s</string>
+    <string name="ls_prompt_close_notice">Close</string>
     <string name="ls_prompt_keep_mode">Keep mode</string>
     <string name="ls_prompt_switch_question">Switch to %1$s?</string>
     <string name="ls_prompt_switch">Switch</string>

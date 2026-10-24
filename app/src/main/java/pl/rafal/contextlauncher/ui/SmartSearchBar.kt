@@ -76,6 +76,10 @@ sealed interface SmartItem {
         // 1.6.2: odliczanie automatu (start, koniec w ms od epoki) i jak je pokazać; null = brak odliczania.
         val countdown: Pair<Long, Long>? = null,
         val countdownStyle: AutoCountdown = AutoCountdown.NONE,
+        // 1.9.2: informacja zamiast pytania („Włączono …”): bez ✓, przycisk z tekstem (np. „Cofnij”),
+        // a ✕ tylko zamyka informację. null = zwykła propozycja ✓ / ✕.
+        val undoLabel: String? = null,
+        val onUndo: (() -> Unit)? = null,
     ) : SmartItem
 
     // Ostatnio używane aplikacje (np. z ostatniej godziny) — dotknięcie ikony je otwiera.
@@ -277,7 +281,20 @@ private fun PromptContent(item: SmartItem.Prompt, ringProgress: (() -> Float)?) 
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (ringProgress != null) {
+        val undo = item.onUndo
+        if (undo != null) {
+            // Informacja po zmianie trybu: tekst mówi, co się stanie — ✓ / ✕ wyglądały jak pytanie „wrócić?”.
+            Text(
+                item.undoLabel.orEmpty(),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(onClick = undo)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            )
+        } else if (ringProgress != null) {
             // Kółko odliczania: obwód wokół ✓ zamyka się, gdy automat zaraz przełączy.
             Box(
                 contentAlignment = Alignment.Center,
@@ -300,7 +317,13 @@ private fun PromptContent(item: SmartItem.Prompt, ringProgress: (() -> Float)?) 
             RoundAction("✓", AcceptColor, item.acceptLabel, item.onAccept)
         }
         Spacer(Modifier.width(2.dp))
-        RoundAction("✕", MaterialTheme.colorScheme.error, item.rejectLabel, item.onReject)
+        // Przy informacji ✕ = zamknij (szary, nie czerwony — nic nie odrzucamy).
+        RoundAction(
+            "✕",
+            if (undo != null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+            item.rejectLabel,
+            item.onReject,
+        )
     }
 }
 

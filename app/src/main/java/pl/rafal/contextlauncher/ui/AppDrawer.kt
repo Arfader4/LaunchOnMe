@@ -153,7 +153,9 @@ fun AppDrawer(
     val entries = remember(apps, rootFolders, folderTree, settings, launchCounts, manualOrder, query) {
         val needle = query.trim()
         val folders = if (needle.isEmpty()) rootFolders else rootFolders.filter { it.name.contains(needle, ignoreCase = true) }
-        arrangeEntries(apps, folders, folderTree, settings, launchCounts, manualOrder, collator)
+        // 1.9.2: w jednej liście aplikacja z folderu jest tylko w folderze (bez dubli). Wyszukiwanie dalej ją znajduje.
+        val listed = if (integrated && needle.isEmpty()) apps.filter { it.key !in folderTree.appKeysInFolders } else apps
+        arrangeEntries(listed, folders, folderTree, settings, launchCounts, manualOrder, collator)
     }
 
     // Zamykanie gestem w dół. Lista sama przewija się w dół/górę; to, czego NIE zużyła (bo jest już na górze),

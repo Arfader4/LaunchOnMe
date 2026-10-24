@@ -43,7 +43,8 @@
     <string name="ls_menu_end_timed">Zakończ tryb na czas</string>
     <string name="ls_until_time">do %1$s</string>
     <string name="ls_prompt_switched_on">Włączono: %1$s</string>
-    <string name="ls_prompt_back_to">✕ wraca do %1$s</string>
+    <string name="ls_prompt_undo_to">Wróć do %1$s</string>
+    <string name="ls_prompt_close_notice">Zamknij</string>
     <string name="ls_prompt_keep_mode">Zostaw tryb</string>
     <string name="ls_prompt_switch_question">Włączyć %1$s?</string>
     <string name="ls_prompt_switch">Przełącz</string>

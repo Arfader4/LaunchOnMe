@@ -29,6 +29,10 @@ class FolderTree(
             .mapValues { (_, apps) -> apps.sortedWith(compareBy(collator) { it.app.label }) }
     }
 
+    // 1.9.2: klucze aplikacji, które leżą w jakimkolwiek folderze (szuflada „jedna lista” ich nie dubluje).
+    // Po appsByFolder, bo pola klasy inicjują się po kolei (jak w C#).
+    val appKeysInFolders: Set<String> = appsByFolder.values.flatten().mapTo(HashSet()) { it.app.key }
+
     fun folder(id: Long?): FolderEntity? = id?.let { byId[it] }
 
     fun subfolders(parentId: Long?): List<FolderEntity> = children[parentId].orEmpty()
