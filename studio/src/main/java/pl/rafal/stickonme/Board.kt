@@ -25,6 +25,8 @@ data class Layer(
     val frame: String = FRAME_NONE,
     val frameColor: Long = 0xFFFFFFFF,
     val filters: String = "",         // filtry obrazu (StickerFilters, np. "sepia,paper"); "" = bez
+    val original: String? = null,     // zdjęcie: oryginał w assets (do ponownej edycji w PhotoEditor), null = brak
+    val photoEdit: String = "",       // zdjęcie: ustawienia kadru i korekty (PhotoEdit.toJson)
     // Tekst / emoji
     val text: String = "",
     val font: String = "sans-serif",
@@ -44,6 +46,7 @@ data class Layer(
         .put("scale", scale.toDouble()).put("rotation", rotation.toDouble())
         .putOpt("path", path).put("frame", frame).put("frameColor", frameColor)
         .put("filters", filters)
+        .putOpt("original", original).put("photoEdit", photoEdit)
         .put("text", text).put("font", font).put("bold", bold).put("italic", italic)
         .put("color", color).put("size", size.toDouble())
         .put("outlineColor", outlineColor).put("outlineWidth", outlineWidth.toDouble())
@@ -89,6 +92,8 @@ data class Layer(
             frame = o.optString("frame", FRAME_NONE),
             frameColor = o.optLong("frameColor", 0xFFFFFFFF),
             filters = o.optString("filters", ""),
+            original = if (o.isNull("original")) null else o.optString("original").ifEmpty { null },
+            photoEdit = o.optString("photoEdit", ""),
             text = o.optString("text", ""),
             font = o.optString("font", "sans-serif"),
             bold = o.optBoolean("bold", false),
@@ -192,8 +197,8 @@ object BoardStore {
             thumbnailFile(context, board.id).delete()
             val assetsDir = assets(context).canonicalPath + File.separator
             val usedElsewhere = list(context).filter { it.id != board.id }
-                .flatMap { b -> b.layers.mapNotNull { it.path } + listOfNotNull(b.bgImage) }.toSet()
-            (board.layers.mapNotNull { it.path } + listOfNotNull(board.bgImage))
+                .flatMap { b -> b.layers.flatMap { listOfNotNull(it.path, it.original) } + listOfNotNull(b.bgImage) }.toSet()
+            (board.layers.flatMap { listOfNotNull(it.path, it.original) } + listOfNotNull(board.bgImage))
                 .filter { it !in usedElsewhere }
                 .map(::File)
                 .filter { it.canonicalPath.startsWith(assetsDir) }
@@ -211,6 +216,13 @@ object BoardStore {
     }
 
     // Zdjęcie z galerii jako warstwa albo tło: kopia w assets/ (oryginał może zniknąć z telefonu).
+    // Obraz z edytora zdjęcia: JPEG, gdy zakrywa całe okno, inaczej PNG (przezroczyste rogi / kształt).
+    suspend fun importImage(context: Context, image: Bitmap, png: Boolean): String = withContext(Dispatchers.IO) {
+        val file = File(assets(context), "${UUID.randomUUID()}.${if (png) "png" else "jpg"}")
+        file.outputStream().use { image.compress(if (png) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG, 92, it) }
+        file.absolutePath
+    }
+
     suspend fun importPhoto(context: Context, photo: Bitmap): String = withContext(Dispatchers.IO) {
         val file = File(assets(context), "${UUID.randomUUID()}.jpg")
         file.outputStream().use { photo.compress(Bitmap.CompressFormat.JPEG, 92, it) }

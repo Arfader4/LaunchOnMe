@@ -243,4 +243,15 @@
     <string name="som_filter_pencil">Ołówek</string>
     <string name="som_filter_comic">Komiks</string>
     <string name="som_filter_hint">Filtry nakładają się w stałej kolejności — wynik nie zależy od kolejności dotykania.</string>
+    <!-- SOM 1.6.0 -->
+    <string name="som_photo_title">Zdjęcie</string>
+    <string name="som_photo_adjust">Korekta</string>
+    <string name="som_photo_original">Oryginał</string>
+    <string name="som_photo_reset">Od nowa</string>
+    <string name="som_photo_crop_hint">Przesuwaj, powiększaj i obracaj zdjęcie palcami, żeby ułożyć je w oknie.</string>
+    <string name="som_photo_brightness">Jasność</string>
+    <string name="som_photo_contrast">Kontrast</string>
+    <string name="som_photo_saturation">Nasycenie</string>
+    <string name="som_photo_warmth">Ciepło</string>
+    <string name="som_ctx_edit_photo">Edytuj</string>
 </resources>

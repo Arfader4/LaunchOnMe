@@ -1356,7 +1356,7 @@ private fun MaskCanvas(editor: CutoutEditor, tool: Tool, brushDp: Float, rotatio
 // Kąt sprowadzony do -180..180.
 private fun normalizedDegrees(d: Float): Float = (((d + 180f) % 360f + 360f) % 360f) - 180f
 
-private val FrameColors = listOf(0xFFFFFFFFL, 0xFF16171AL, 0xFFFFD54FL, 0xFFFF8A80L, 0xFF80D8FFL, 0xFFB9F6CAL, 0xFFE1BEE7L)
+internal val FrameColors = listOf(0xFFFFFFFFL, 0xFF16171AL, 0xFFFFD54FL, 0xFFFF8A80L, 0xFF80D8FFL, 0xFFB9F6CAL, 0xFFE1BEE7L)
 
 // Gotowa naklejka na szachownicy (tak zostanie zapisana); obrót całości tylko przy rysowaniu, więc działa na żywo.
 @Composable

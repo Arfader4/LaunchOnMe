@@ -243,4 +243,15 @@
     <string name="som_filter_pencil">Pencil</string>
     <string name="som_filter_comic">Comic</string>
     <string name="som_filter_hint">Filters are applied in a fixed order, so the result does not depend on the order you tap them.</string>
+    <!-- SOM 1.6.0 -->
+    <string name="som_photo_title">Photo</string>
+    <string name="som_photo_adjust">Adjust</string>
+    <string name="som_photo_original">Original</string>
+    <string name="som_photo_reset">Reset</string>
+    <string name="som_photo_crop_hint">Drag, pinch and twist the photo with your fingers to place it in the frame.</string>
+    <string name="som_photo_brightness">Brightness</string>
+    <string name="som_photo_contrast">Contrast</string>
+    <string name="som_photo_saturation">Saturation</string>
+    <string name="som_photo_warmth">Warmth</string>
+    <string name="som_ctx_edit_photo">Edit</string>
 </resources>

@@ -164,6 +164,7 @@ fun BoardEditorScreen(
     // gdy zmieni się wynik (jak INotifyPropertyChanged tylko dla tej jednej właściwości), a nie przy każdym ruchu.
     val selectedKind by remember { derivedStateOf { boardState.value.layers.firstOrNull { it.id == selectedId }?.kind } }
     val boardName by remember { derivedStateOf { boardState.value.name } }
+    val selectedHasOriginal by remember { derivedStateOf { boardState.value.layers.firstOrNull { it.id == selectedId }?.original != null } }
     fun selectedLayer(): Layer? = board.layers.firstOrNull { it.id == selectedId } // czytane w chwili akcji
 
     // Obrazy warstw i tła wczytywane w tle (podgląd nigdy nie dekoduje na wątku UI). Po wczytaniu "loaded" rośnie,
@@ -275,6 +276,50 @@ fun BoardEditorScreen(
         onDispose { lifecycle?.removeObserver(observer) }
     }
 
+    // Zdjęcie w edytorze zdjęcia: nowe (layerId = null) albo ponowna edycja warstwy.
+    var photoDraft by remember { mutableStateOf<PhotoDraft?>(null) }
+    fun editPhoto() = selectedLayer()?.let { sel ->
+        val source = sel.original
+        if (source != null) scope.launch {
+            StickerLibrary.decodeFile(source, 1800)?.let { photo ->
+                photoDraft = PhotoDraft(photo, source, sel.id, PhotoEdit.of(sel.photoEdit), sel.frame, sel.frameColor, sel.filters)
+            }
+        }
+    }
+    fun finishPhoto(draft: PhotoDraft, result: PhotoResult) {
+        scope.launch {
+            val path = BoardStore.importImage(context, result.bitmap, png = !result.opaque)
+            val img = withContext(Dispatchers.IO) { renderer.bitmap(path) }
+            val old = draft.layerId?.let { id -> board.layers.firstOrNull { it.id == id } }
+            if (old == null) {
+                val (cx, cy) = center()
+                // Zdjęcie na start zajmuje ok. 60% szerokości tablicy (skala względem rozmiaru logicznego, max 1400 px).
+                val scale = if (img != null) board.width * 0.6f / img.width else 1f
+                addLayer(
+                    Layer(
+                        kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = scale,
+                        frame = result.frame, frameColor = result.frameColor, filters = result.filters,
+                        original = draft.original, photoEdit = result.edit.toJson(),
+                    ),
+                )
+            } else {
+                // Ta sama szerokość na tablicy co przed edycją.
+                val oldImg = withContext(Dispatchers.IO) { renderer.bitmap(old.path) }
+                val scale = if (img != null && oldImg != null) old.scale * oldImg.width / img.width else old.scale
+                change(
+                    board.updateLayer(old.id) {
+                        it.copy(
+                            path = path, scale = scale, frame = result.frame, frameColor = result.frameColor,
+                            filters = result.filters, photoEdit = result.edit.toJson(),
+                        )
+                    },
+                )
+            }
+            result.bitmap.recycle()
+            photoDraft = null
+        }
+    }
+
     // Zdjęcie z galerii jako warstwa albo jako tło (kopia do assets tablicy).
     var photoForBackground by remember { mutableStateOf(false) }
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
@@ -285,10 +330,8 @@ fun BoardEditorScreen(
                 val withPhoto = board.copy(bgType = Board.BG_IMAGE, bgImage = path)
                 if (panel == BoardPanel.BACKGROUND) board = withPhoto else change(withPhoto) // w panelu historia jest już zapisana
             } else {
-                val (cx, cy) = center()
-                // Zdjęcie na start zajmuje ok. 60% szerokości tablicy (skala względem rozmiaru logicznego, max 1400 px).
-                val scale = board.width * 0.6f / (photo.width * BoardRenderer.logicalScale(photo.width, photo.height))
-                addLayer(Layer(kind = Layer.KIND_IMAGE, path = path, x = cx, y = cy, scale = scale, frame = Layer.FRAME_INSTAX))
+                // Zdjęcie jako warstwa: najpierw edytor zdjęcia (kadr, korekta, filtry, ramka), oryginał zostaje w assets.
+                photoDraft = PhotoDraft(photo, path, null, PhotoEdit(), Layer.FRAME_INSTAX, 0xFFFFFFFF, "")
             }
         }
     }
@@ -396,6 +439,9 @@ fun BoardEditorScreen(
                     } else {
                         StudioContextItem(StudioIcons.Frame, stringResource(R.string.som_rail_frame)) { openPanel(BoardPanel.FRAME) }
                         StudioContextItem(StudioIcons.Filter, stringResource(R.string.som_rail_filter)) { openPanel(BoardPanel.FILTER) }
+                        if (selectedHasOriginal) {
+                            StudioContextItem(StudioIcons.Photo, stringResource(R.string.som_ctx_edit_photo)) { editPhoto() }
+                        }
                     }
                     StudioContextItem(StudioIcons.ToFront, stringResource(R.string.som_ctx_front)) { toFront() }
                     StudioContextItem(StudioIcons.ToBack, stringResource(R.string.som_ctx_back)) { toBack() }
@@ -516,6 +562,19 @@ fun BoardEditorScreen(
                 }
             },
             onCancel = { dialog = BoardDialog.NONE; textDraft = null },
+        )
+    }
+    // Zdjęcie: pełnoekranowy edytor nad tablicą.
+    val pd = photoDraft
+    if (pd != null) {
+        PhotoEditorOverlay(
+            photo = pd.photo,
+            initialEdit = pd.edit,
+            initialFrame = pd.frame,
+            initialFrameColor = pd.frameColor,
+            initialFilters = pd.filters,
+            onDone = { result -> finishPhoto(pd, result) },
+            onCancel = { photoDraft = null },
         )
     }
     }
@@ -1170,3 +1229,14 @@ fun NewBoardDialog(onCreate: (Board) -> Unit, onDismiss: () -> Unit) {
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.som_cancel)) } },
     )
 }
+
+// Zdjęcie otwarte w edytorze zdjęcia: oryginał, jego plik w assets i (przy ponownej edycji) id warstwy.
+private class PhotoDraft(
+    val photo: Bitmap,
+    val original: String,
+    val layerId: String?,
+    val edit: PhotoEdit,
+    val frame: String,
+    val frameColor: Long,
+    val filters: String,
+)
