@@ -24,6 +24,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import android.content.Intent
 import androidx.compose.foundation.layout.aspectRatio
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -554,7 +556,27 @@ internal fun NoteEditorScreen(
         text = NoteBlocks.join(fields.map { it.text }, inlineNames)
         bodyFocus = i + 1 // kolejny załącznik (kilka naraz) trafi zaraz za ten
     }
+    // Nowy załącznik zaraz za innym (rysunek na kopii zdjęcia, naklejka wycięta ze zdjęcia). Gdy tamtego nie ma
+    // w treści — na końcu.
+    fun insertAfter(afterName: String, name: String) {
+        val k = inlineNames.indexOf(afterName)
+        if (k < 0) {
+            bodyFocus = null
+            insertInline(name)
+        } else {
+            fields = fields.take(k + 1) + TextFieldValue("") + fields.drop(k + 1)
+            fieldIds = fieldIds.take(k + 1) + newIds(1) + fieldIds.drop(k + 1)
+            bodyFocus?.let { if (it > k) bodyFocus = it + 1 } // pola za wstawionym przesunęły się o jedno
+            inlineNames = inlineNames.take(k + 1) + name + inlineNames.drop(k + 1)
+            text = NoteBlocks.join(fields.map { it.text }, inlineNames)
+        }
+    }
     var showAllAttachments by remember { mutableStateOf(false) }
+    // 1.10.0 (On6): otwarty ekran rysowania — nowy rysunek (item = null) albo dorysowanie na obrazie z notatki.
+    var drawing by remember { mutableStateOf<DrawTarget?>(null) }
+    var imageVersion by remember { mutableStateOf(0) } // po nadpisaniu rysunku obrazy w treści wczytują się na nowo
+    // Zdjęcie wysłane do StickOnMe (id załącznika) — rememberSaveable, bo w tym czasie system może odtworzyć aktywność.
+    var cutoutForId by rememberSaveable { mutableStateOf<Long?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -689,6 +711,77 @@ internal fun NoteEditorScreen(
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         addFiles(uris)
     }
+    // 1.10.0 (On7): naklejka z biblioteki StickOnMe trafia do treści jak zdjęcie (ta sama ścieżka co galeria).
+    val pickSticker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        StickOnMeLink.resultUri(result.data)?.let { addFiles(listOf(it)) }
+    }
+    // Zdjęcie z notatki → wycięta naklejka wraca i staje zaraz za zdjęciem.
+    val cutSticker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val source = attachments.firstOrNull { it.id == cutoutForId }
+        cutoutForId = null
+        val uri = StickOnMeLink.resultUri(result.data)
+        if (source == null && uri != null) {
+            addFiles(listOf(uri)) // zdjęcia już nie znamy (np. po odtworzeniu ekranu) — naklejka trafia w miejsce kursora
+        } else if (source != null && uri != null) {
+            val app = context.applicationContext
+            NoteRepository.backgroundScope.launch {
+                val added = repo.addAttachment(source.noteId, uri)
+                withContext(Dispatchers.Main) {
+                    if (added == null) Toast.makeText(app, OnHandText.get(R.string.oh_attach_failed, 1), Toast.LENGTH_LONG).show()
+                    else if (scope.isActive) insertAfter(source.name, added.name)
+                }
+            }
+        }
+    }
+    val openStickOnMe = { intent: Intent, launcher: androidx.activity.result.ActivityResultLauncher<Intent> ->
+        if (StickOnMeLink.isInstalled(context)) {
+            runCatching { launcher.launch(intent) }
+                .onFailure { Toast.makeText(context, OnHandText.get(R.string.oh_open_failed), Toast.LENGTH_SHORT).show() }
+        } else {
+            Toast.makeText(context, OnHandText.get(R.string.oh_stickonme_missing), Toast.LENGTH_LONG).show()
+        }
+        Unit
+    }
+    val makeSticker = { item: AttachmentEntity ->
+        cutoutForId = item.id
+        openStickOnMe(StickOnMeLink.cutoutIntent(context, repo.file(item)), cutSticker)
+    }
+    // Zapis rysunku: nowy → załącznik PNG w miejscu kursora; rysunek PNG → nadpisany w miejscu;
+    // inne zdjęcie (np. JPG z aparatu) → oryginał zostaje, a kopia z rysunkiem staje zaraz za nim.
+    val saveDrawing = { target: DrawTarget, bitmap: android.graphics.Bitmap ->
+        val t = title
+        val x = text
+        val app = context.applicationContext
+        val source = target.item
+        NoteRepository.backgroundScope.launch {
+            var ok: Boolean
+            if (source != null && source.mimeType == "image/png") {
+                ok = repo.replaceImage(source, bitmap)
+                withContext(Dispatchers.Main) { if (ok && scope.isActive) imageVersion++ }
+            } else {
+                ok = false
+                draft.addAttachments(t, x) { id ->
+                    withContext(Dispatchers.Main) { if (scope.isActive) onIdKnown(id) }
+                    val name = if (source == null) {
+                        OnHandText.get(R.string.oh_draw_file_name, java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.ROOT).format(java.util.Date()))
+                    } else {
+                        OnHandText.get(R.string.oh_draw_copy_name, source.name.substringBeforeLast('.'))
+                    }
+                    val added = repo.addImage(id, bitmap, name)
+                    ok = added != null
+                    if (added != null) {
+                        withContext(Dispatchers.Main) {
+                            if (scope.isActive) {
+                                if (source == null) insertInline(added.name) else insertAfter(source.name, added.name)
+                            }
+                        }
+                    }
+                }
+            }
+            if (!ok) withContext(Dispatchers.Main) { Toast.makeText(app, OnHandText.get(R.string.oh_draw_failed), Toast.LENGTH_LONG).show() }
+        }
+        Unit
+    }
 
     Column(
         Modifier
@@ -719,6 +812,21 @@ internal fun NoteEditorScreen(
                         onClick = {
                             attachMenuOpen = false
                             runCatching { pickFiles.launch(arrayOf("*/*")) }
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("✏  " + stringResource(R.string.oh_attach_drawing)) },
+                        onClick = {
+                            attachMenuOpen = false
+                            focusManager.clearFocus() // kursor zostaje zapamiętany w bodyFocus — tam wstawi się rysunek
+                            drawing = DrawTarget(null)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("🏷  " + stringResource(R.string.oh_attach_sticker)) },
+                        onClick = {
+                            attachMenuOpen = false
+                            openStickOnMe(StickOnMeLink.pickIntent(), pickSticker)
                         },
                     )
                 }
@@ -863,6 +971,9 @@ internal fun NoteEditorScreen(
                             repo = repo,
                             name = name,
                             item = item,
+                            version = imageVersion,
+                            onDraw = { if (item != null) drawing = DrawTarget(item) },
+                            onSticker = { if (item != null) makeSticker(item) },
                             onOpen = { if (item != null) NoteExport.open(context, repo.file(item), item.mimeType) },
                             onRemove = {
                                 if (item != null) {
@@ -903,6 +1014,29 @@ internal fun NoteEditorScreen(
     val pinId = pinFor
     if (pinId != null && host != null) {
         PinToModesDialog(host = host, repo = repo, noteId = pinId, onDismiss = { pinFor = null })
+    }
+
+    // Ekran rysowania na całe okno (Dialog bez ramek — nad edytorem, klawiatura się chowa).
+    val drawTarget = drawing
+    if (drawTarget != null) {
+        Dialog(
+            onDismissRequest = { },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+                dismissOnBackPress = false, // Wstecz obsługuje sam ekran (pyta, gdy coś narysowano)
+                dismissOnClickOutside = false,
+            ),
+        ) {
+            DrawingScreen(
+                background = drawTarget.item?.let { repo.file(it) },
+                onCancel = { drawing = null },
+                onDone = { bitmap ->
+                    drawing = null
+                    if (bitmap != null) saveDrawing(drawTarget, bitmap)
+                },
+            )
+        }
     }
 
     // „Zobacz załączniki osobno”: wszystkie pliki notatki w jednym oknie (te z treści i spod spodu).
@@ -999,6 +1133,9 @@ private fun EditorField(
     )
 }
 
+// Cel ekranu rysowania: null = nowa kartka, inaczej obraz z notatki, na którym dorysowujemy.
+private data class DrawTarget(val item: AttachmentEntity?)
+
 // Pole treści (kawałek między załącznikami) — jak EditorField, ale z kursorem (TextFieldValue),
 // bo wstawianie załącznika potrzebuje wiedzieć, gdzie stoi kursor.
 @Composable
@@ -1035,12 +1172,15 @@ private fun InlineAttachment(
     repo: NoteRepository,
     name: String,
     item: AttachmentEntity?,
+    version: Int,
+    onDraw: () -> Unit,
+    onSticker: () -> Unit,
     onOpen: () -> Unit,
     onRemove: () -> Unit,
 ) {
     val isImage = item?.mimeType?.startsWith("image/") == true
     if (item != null && isImage) {
-        InlineImage(repo = repo, item = item, onOpen = onOpen, onRemove = onRemove)
+        InlineImage(repo = repo, item = item, version = version, onDraw = onDraw, onSticker = onSticker, onOpen = onOpen, onRemove = onRemove)
     } else if (item != null) {
         FileRow(item = item, onOpen = onOpen, onRemove = onRemove)
     } else {
@@ -1060,8 +1200,17 @@ private fun InlineAttachment(
 
 // Zdjęcie w treści: dekodowane do szerokości ekranu (max 1080 px), proporcje zachowane, wysokość ograniczona.
 @Composable
-private fun InlineImage(repo: NoteRepository, item: AttachmentEntity, onOpen: () -> Unit, onRemove: () -> Unit) {
-    val bitmap by produceState<ImageBitmap?>(initialValue = null, item.path) {
+private fun InlineImage(
+    repo: NoteRepository,
+    item: AttachmentEntity,
+    version: Int,
+    onDraw: () -> Unit,
+    onSticker: () -> Unit,
+    onOpen: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, item.path, version) {
         value = withContext(Dispatchers.IO) {
             runCatching {
                 ImageDecoder.decodeBitmap(ImageDecoder.createSource(repo.file(item))) { decoder, info, _ ->
@@ -1098,7 +1247,26 @@ private fun InlineImage(repo: NoteRepository, item: AttachmentEntity, onOpen: ()
         } else {
             Text("🖼", modifier = Modifier.align(Alignment.Center).padding(32.dp), style = MaterialTheme.typography.headlineSmall)
         }
-        RemoveBadge(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+        // ⋯ w rogu: Otwórz, Rysuj na obrazie (On6), Zrób naklejkę w StickOnMe (On7), Usuń.
+        Box(Modifier.align(Alignment.TopEnd).padding(6.dp)) {
+            Box(
+                Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xCC101214))
+                    .clickable { menuOpen = true },
+                contentAlignment = Alignment.Center,
+            ) { Text("⋯", color = Color.White, style = MaterialTheme.typography.titleMedium) }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.oh_image_open)) }, onClick = { menuOpen = false; onOpen() })
+                DropdownMenuItem(text = { Text("✏  " + stringResource(R.string.oh_image_draw)) }, onClick = { menuOpen = false; onDraw() })
+                DropdownMenuItem(text = { Text("🏷  " + stringResource(R.string.oh_image_sticker)) }, onClick = { menuOpen = false; onSticker() })
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.oh_remove), color = MaterialTheme.colorScheme.error) },
+                    onClick = { menuOpen = false; onRemove() },
+                )
+            }
+        }
     }
 }
 

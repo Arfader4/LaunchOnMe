@@ -116,6 +116,41 @@ class NoteRepository(private val context: Context) {
         }.getOrNull()
     }
 
+    // 1.10.0 (On6): rysunek z OnHand jako załącznik PNG (nazwa np. „Rysunek 2026-10-24 10.42.png”).
+    suspend fun addImage(noteId: Long, bitmap: android.graphics.Bitmap, name: String): AttachmentEntity? = withContext(Dispatchers.IO) {
+        runCatching {
+            val folder = attachmentFolder(context, noteId).apply { mkdirs() }
+            val target = uniqueFile(folder, sanitizeFileName(name))
+            try {
+                target.outputStream().use { out -> check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)) }
+                val item = AttachmentEntity(
+                    noteId = noteId,
+                    path = target.relativeTo(context.filesDir).path,
+                    name = target.name,
+                    mimeType = "image/png",
+                )
+                val saved = item.copy(id = attachments.insert(item))
+                notes.touch(noteId, System.currentTimeMillis())
+                saved
+            } catch (e: Exception) {
+                target.delete()
+                throw e
+            }
+        }.getOrNull()
+    }
+
+    // Dorysowanie na rysunku PNG: nadpisujemy plik (ta sama nazwa, więc znacznik w treści się nie zmienia).
+    // Najpierw plik tymczasowy, potem zamiana — przerwany zapis nie zostawi połowy obrazu.
+    suspend fun replaceImage(item: AttachmentEntity, bitmap: android.graphics.Bitmap): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val target = file(item)
+            val temp = File(target.parentFile, target.name + ".tmp")
+            temp.outputStream().use { out -> check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)) }
+            check(temp.renameTo(target) || run { temp.copyTo(target, overwrite = true); temp.delete() })
+            notes.touch(item.noteId, System.currentTimeMillis())
+        }.isSuccess
+    }
+
     suspend fun deleteAttachment(item: AttachmentEntity) = withContext(Dispatchers.IO) {
         attachments.delete(item.id)
         file(item).delete()

@@ -69,4 +69,23 @@
     <string name="oh_attachments_other">Other attachments</string>
     <string name="oh_attachments_none">No attachments</string>
     <string name="oh_close">Close</string>
+    <!-- 1.10.0 On6 / On7: rysowanie, rysik, naklejki StickOnMe -->
+    <string name="oh_attach_drawing">Drawing</string>
+    <string name="oh_attach_sticker">Sticker from StickOnMe</string>
+    <string name="oh_draw_done">Done</string>
+    <string name="oh_draw_pen">Pen</string>
+    <string name="oh_draw_marker">Highlighter</string>
+    <string name="oh_draw_eraser">Eraser</string>
+    <string name="oh_draw_finger">Finger draws too</string>
+    <string name="oh_draw_discard_title">Discard the drawing?</string>
+    <string name="oh_draw_discard">Discard</string>
+    <string name="oh_draw_keep">Keep drawing</string>
+    <string name="oh_draw_file_name">Drawing %1$s.png</string>
+    <string name="oh_draw_copy_name">%1$s (drawing).png</string>
+    <string name="oh_draw_failed">Couldn’t save the drawing</string>
+    <string name="oh_image_open">Open</string>
+    <string name="oh_image_draw">Draw on image</string>
+    <string name="oh_image_sticker">Make a sticker (StickOnMe)</string>
+    <string name="oh_stickonme_missing">Install StickOnMe to add stickers</string>
+    <string name="oh_draw_load_failed">Couldn’t load the image</string>
 </resources>

@@ -410,5 +410,12 @@ Uwagi z 24.10: grafiki i załączniki w treści, więcej edycji (rysowanie, rysi
       ⋮ → „Załączniki (N)” = wszystkie pliki osobno; starsze załączniki spoza treści zostają pod spodem („Inne załączniki”).
       Usunięcie załącznika usuwa też znacznik. „Udostępnij → OnHand” dopisuje pliki do treści. Eksport .md w .zip:
       znaczniki → `![nazwa](<folder/nazwa>)`. Podgląd na liście i tytuł z pierwszej linii bez znaczników.
-- [ ] On6 — rysowanie i rysik.
-- [ ] On7 — naklejki ze StickOnMe w notatce.
+- [x] On6 — rysowanie i rysik (`DrawingScreen.kt`): 📎 → „Rysunek” (biała kartka) albo ⋯ na zdjęciu → „Rysuj na obrazie”.
+      Pióro (grubość z nacisku rysika), zakreślacz, gumka (całe kreski; też koniec-gumka rysika i przycisk boczny),
+      3 grubości, 8 kolorów, Cofnij / Ponów. Gdy pojawi się rysik, palec przestaje rysować (dłoń na ekranie) —
+      przełącznik „Palec też rysuje”. Wynik PNG: nowy rysunek w miejscu kursora; rysunek PNG nadpisany w miejscu;
+      inne zdjęcie (JPG) zostaje, a kopia z rysunkiem staje zaraz za nim.
+- [x] On7 — StickOnMe w notatce (`StickOnMeLink.kt`, jawne intencje jak `StickOnMeBridge` w launcherze):
+      📎 → „Naklejka ze StickOnMe” (biblioteka w trybie wyboru, wynik w treści), ⋯ na zdjęciu → „Zrób naklejkę”
+      (wycinanie w StickOnMe, naklejka wraca zaraz za zdjęciem). Bez StickOnMe — komunikat.
+- [ ] (później) Formatowanie tekstu (listy zadań, nagłówki) — treść jest zwykłym tekstem, wymagałoby Markdownu.
