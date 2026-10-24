@@ -225,4 +225,22 @@
     <string name="som_text_shadow_cd">Shadow</string>
     <string name="som_text_size_cd">Text size — drag up or down</string>
     <string name="som_text_placeholder">Type something…</string>
+    <!-- SOM 1.5.0: filtry -->
+    <string name="som_rail_filter">Filters</string>
+    <string name="som_title_filter">Filters</string>
+    <string name="som_board_filter_title">Filters</string>
+    <string name="som_filter_none">None</string>
+    <string name="som_filter_looks">Colour and texture (can be combined)</string>
+    <string name="som_filter_paintings">Painting style (one at a time)</string>
+    <string name="som_filter_bw">Black &amp; white</string>
+    <string name="som_filter_sepia">Sepia</string>
+    <string name="som_filter_vintage">Vintage</string>
+    <string name="som_filter_print">Printed photo</string>
+    <string name="som_filter_paper">Old paper</string>
+    <string name="som_filter_glass">Glass glare</string>
+    <string name="som_filter_oil">Oil paint</string>
+    <string name="som_filter_watercolor">Watercolour</string>
+    <string name="som_filter_pencil">Pencil</string>
+    <string name="som_filter_comic">Comic</string>
+    <string name="som_filter_hint">Filters are applied in a fixed order, so the result does not depend on the order you tap them.</string>
 </resources>

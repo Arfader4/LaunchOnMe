@@ -225,4 +225,22 @@
     <string name="som_text_shadow_cd">Cień</string>
     <string name="som_text_size_cd">Rozmiar tekstu — przeciągnij w górę lub w dół</string>
     <string name="som_text_placeholder">Napisz coś…</string>
+    <!-- SOM 1.5.0: filtry -->
+    <string name="som_rail_filter">Filtry</string>
+    <string name="som_title_filter">Filtry</string>
+    <string name="som_board_filter_title">Filtry</string>
+    <string name="som_filter_none">Bez</string>
+    <string name="som_filter_looks">Kolor i faktura (można łączyć)</string>
+    <string name="som_filter_paintings">Styl malarski (jeden naraz)</string>
+    <string name="som_filter_bw">Czarno-białe</string>
+    <string name="som_filter_sepia">Sepia</string>
+    <string name="som_filter_vintage">Vintage</string>
+    <string name="som_filter_print">Wydruk</string>
+    <string name="som_filter_paper">Stary papier</string>
+    <string name="som_filter_glass">Poblask szkła</string>
+    <string name="som_filter_oil">Olej</string>
+    <string name="som_filter_watercolor">Akwarela</string>
+    <string name="som_filter_pencil">Ołówek</string>
+    <string name="som_filter_comic">Komiks</string>
+    <string name="som_filter_hint">Filtry nakładają się w stałej kolejności — wynik nie zależy od kolejności dotykania.</string>
 </resources>

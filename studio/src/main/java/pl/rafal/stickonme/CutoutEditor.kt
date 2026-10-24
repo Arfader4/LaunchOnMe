@@ -50,6 +50,8 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
     var shape by mutableStateOf(StickerShapes.NONE)
     var frame by mutableStateOf(Layer.FRAME_NONE)
     var frameColor by mutableStateOf(0xFFFFFFFFL)
+    // Filtry (StickerFilters, np. "oil,paper") — nakładane po kadrze i kształcie, przed ramką (ramka zostaje czysta).
+    var filters by mutableStateOf("")
     // Kadr (jak w zwykłym edytorze zdjęć): prostokąt w ułamkach zdjęcia 0..1, NIEdestrukcyjny — maska się nie zmienia,
     // a kadr można przesuwać i zmieniać do końca edycji. Kształt (serce, koło…) wypełnia cały kadr.
     // aspect = zablokowane proporcje kadru w PIKSELACH (szer./wys.), null = dowolne.
@@ -87,7 +89,7 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
     // Ustawienia wyniku w jednym obiekcie — do przywrócenia po ✕ (jak memento).
     private data class Settings(
         val edgeSmooth: Float, val edgeShrink: Float, val shape: String, val frame: String, val frameColor: Long,
-        val rotation: Float, val outputSide: Int, val crop: CropBox, val aspect: Float?,
+        val filters: String, val rotation: Float, val outputSide: Int, val crop: CropBox, val aspect: Float?,
     )
 
     private var stepMask: Bitmap? = null
@@ -99,7 +101,7 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         stepMask?.recycle()
         stepMask = mask.copy(Bitmap.Config.ALPHA_8, false)
         stepVersion = version
-        stepSettings = Settings(edgeSmooth, edgeShrink, shape, frame, frameColor, rotation, outputSide, crop, aspect)
+        stepSettings = Settings(edgeSmooth, edgeShrink, shape, frame, frameColor, filters, rotation, outputSide, crop, aspect)
     }
 
     fun cancelStep() {
@@ -114,6 +116,7 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
             shape = st.shape
             frame = st.frame
             frameColor = st.frameColor
+            filters = st.filters
             rotation = st.rotation
             outputSide = st.outputSide
             crop = st.crop
@@ -393,7 +396,7 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         }
     }
 
-    // Kadr → kształt → przycięcie do widocznych pikseli → ramka → skala do outputSide → obrót.
+    // Kadr → kształt → przycięcie do widocznych pikseli → filtry → ramka → skala do outputSide → obrót.
     // Wejścia "cut" NIE zwalnia (podgląd trzyma je dalej); zawsze zwraca NOWĄ bitmapę albo null (nic nie zostało).
     fun finish(cut: Bitmap, rotate: Boolean = true, check: () -> Unit = {}): Bitmap? {
         var b = cut
@@ -420,6 +423,8 @@ class CutoutEditor(source: Bitmap, val fromSticker: Boolean = false) {
         if (bounds.width() != b.width || bounds.height() != b.height) {
             next(Bitmap.createBitmap(b, bounds.left, bounds.top, bounds.width(), bounds.height()))
         }
+        if (filters.isNotEmpty()) next(StickerFilters.apply(b, filters, check))
+        check()
         if (frame != Layer.FRAME_NONE) next(BoardRenderer().frameSticker(b, frame, frameColor))
         check()
         val scale = outputSide.toFloat() / maxOf(b.width, b.height)

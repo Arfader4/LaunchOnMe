@@ -24,6 +24,7 @@ data class Layer(
     val path: String? = null,
     val frame: String = FRAME_NONE,
     val frameColor: Long = 0xFFFFFFFF,
+    val filters: String = "",         // filtry obrazu (StickerFilters, np. "sepia,paper"); "" = bez
     // Tekst / emoji
     val text: String = "",
     val font: String = "sans-serif",
@@ -42,6 +43,7 @@ data class Layer(
         .put("id", id).put("kind", kind).put("x", x.toDouble()).put("y", y.toDouble())
         .put("scale", scale.toDouble()).put("rotation", rotation.toDouble())
         .putOpt("path", path).put("frame", frame).put("frameColor", frameColor)
+        .put("filters", filters)
         .put("text", text).put("font", font).put("bold", bold).put("italic", italic)
         .put("color", color).put("size", size.toDouble())
         .put("outlineColor", outlineColor).put("outlineWidth", outlineWidth.toDouble())
@@ -86,6 +88,7 @@ data class Layer(
             path = if (o.isNull("path")) null else o.optString("path"),
             frame = o.optString("frame", FRAME_NONE),
             frameColor = o.optLong("frameColor", 0xFFFFFFFF),
+            filters = o.optString("filters", ""),
             text = o.optString("text", ""),
             font = o.optString("font", "sans-serif"),
             bold = o.optBoolean("bold", false),

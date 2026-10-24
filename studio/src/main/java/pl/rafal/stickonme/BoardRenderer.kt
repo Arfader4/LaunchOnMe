@@ -106,8 +106,8 @@ class BoardRenderer(
         Img(bmp, logicalW.coerceAtLeast(1f), logicalH.coerceAtLeast(1f))
     }.getOrNull()
 
-    // Co trzeba mieć w pamięci przed rysowaniem: obraz i (jeśli jest) ramka. Tło = frame NONE.
-    data class Need(val path: String, val frame: String = Layer.FRAME_NONE, val frameColor: Long = 0)
+    // Co trzeba mieć w pamięci przed rysowaniem: obraz, (jeśli są) filtry i ramka. Tło = frame NONE, bez filtrów.
+    data class Need(val path: String, val frame: String = Layer.FRAME_NONE, val frameColor: Long = 0, val filters: String = "")
 
     // Wczytanie w tle brakujących obrazów i policzenie ramek (kontur / cień to kosztowne liczenie — nie na wątku UI).
     // check() = punkt przerwania (ensureActive korutyny), jak CancellationToken w C#.
@@ -115,7 +115,8 @@ class BoardRenderer(
         for (need in needs) {
             check()
             val img = bitmap(need.path) ?: continue
-            if (need.frame != Layer.FRAME_NONE) framedCached(img.bitmap, need.frame, need.frameColor)
+            val base = filtered(img.bitmap, need.filters, blocking = true, check)
+            if (need.frame != Layer.FRAME_NONE) framedCached(base, need.frame, need.frameColor)
         }
     }
 
@@ -130,6 +131,7 @@ class BoardRenderer(
             bitmaps.evictAll()
             missing.clear()
             framedCache.evictAll()
+            filteredCache.evictAll()
         }
         textCache.evictAll()
     }
@@ -341,7 +343,8 @@ class BoardRenderer(
             if (blocking || isMissing(layer.path)) canvas.drawRect(RectF(-200f, -200f, 200f, 200f), Paint().apply { color = 0x55808080 })
             return
         }
-        val bmp = img.bitmap
+        // Filtry zmieniają tylko kolory — rozmiar bitmapy ten sam, więc img.k dalej pasuje.
+        val bmp = filtered(img.bitmap, layer.filters, blocking)
         val filter = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
         // Piksele bitmapy → jednostki logiczne (ramka ma marginesy proporcjonalne do obrazu, więc skaluje się razem z nim).
         canvas.save()
@@ -350,10 +353,37 @@ class BoardRenderer(
             canvas.drawBitmap(bmp, -bmp.width / 2f, -bmp.height / 2f, filter)
         } else {
             // Obraz z ramką liczony raz i trzymany w pamięci (kontur to 16 kopii sylwetki — co klatkę byłoby za drogo).
-            val framed = framedCached(bmp, layer.frame, layer.frameColor)
-            canvas.drawBitmap(framed.bitmap, framed.offsetX, framed.offsetY, filter)
+            // Filtry jeszcze się liczą (podgląd dostał obraz bez nich): ramki dla tej tymczasowej wersji NIE liczymy na
+            // wątku UI — jeśli jej nie ma w pamięci, chwilę rysujemy sam obraz, a preload policzy właściwą.
+            val waiting = !blocking && bmp === img.bitmap && layer.filters.isNotEmpty()
+            val framed = if (waiting) synchronized(lock) { framedCache.get(FrameKey(bmp, layer.frame, layer.frameColor)) }
+                else framedCached(bmp, layer.frame, layer.frameColor)
+            if (framed != null) canvas.drawBitmap(framed.bitmap, framed.offsetX, framed.offsetY, filter)
+            else canvas.drawBitmap(bmp, -bmp.width / 2f, -bmp.height / 2f, filter)
         }
         canvas.restore()
+    }
+
+    // Obraz z filtrami — liczony raz i trzymany w pamięci (styl malarski to nawet kilkaset ms). Klucz jak przy ramkach:
+    // bitmapa źródłowa (po referencji) + zestaw filtrów. W podglądzie (blocking = false) bez liczenia: na razie obraz bez
+    // filtrów, a previewMiss każe ekranowi policzyć je w tle (preload) i przerysować.
+    private data class FilterKey(val source: Bitmap, val filters: String)
+    private val filteredCache = object : android.util.LruCache<FilterKey, Bitmap>(minOf(48L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 8).toInt()) {
+        override fun sizeOf(key: FilterKey, value: Bitmap) = value.byteCount + key.source.byteCount
+    }
+
+    private fun filtered(bmp: Bitmap, filters: String, blocking: Boolean, check: () -> Unit = {}): Bitmap {
+        if (filters.isEmpty()) return bmp
+        val key = FilterKey(bmp, filters)
+        val cached = synchronized(lock) { filteredCache.get(key) }
+        if (cached != null) return cached
+        if (!blocking) {
+            previewMiss = true
+            return bmp
+        }
+        val made = StickerFilters.apply(bmp, filters, check) // liczone poza lockiem
+        synchronized(lock) { filteredCache.put(key, made) }
+        return made
     }
 
     // Obraz w ramce: bitmapa z zapasem na cień + przesunięcie jej lewego górnego rogu względem środka warstwy.

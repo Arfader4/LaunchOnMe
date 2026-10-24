@@ -129,7 +129,7 @@ internal val BoardFonts: List<Pair<String, Int>> get() = Fonts
 private enum class BoardDialog { NONE, STICKER, TEXT, EMOJI, EXPORT }
 
 // Panele na dole ekranu (zamiast okien): zmiany widać od razu na tablicy, ✓ Zastosuj / ✕ Anuluj jak w edytorze naklejki.
-private enum class BoardPanel { BACKGROUND, FRAME }
+private enum class BoardPanel { BACKGROUND, FRAME, FILTER }
 
 // Edytor tablicy: warstwy można przesuwać palcem, dwoma palcami obracać i skalować. Warstwy mogą wychodzić
 // poza krawędź tablicy — tam są półprzezroczyste i przy zapisie zostaną przycięte.
@@ -174,7 +174,7 @@ fun BoardEditorScreen(
     val needs by remember {
         derivedStateOf {
             boardState.value.let { b ->
-                b.layers.mapNotNull { l -> l.path?.let { BoardRenderer.Need(it, l.frame, l.frameColor) } }.toSet() +
+                b.layers.mapNotNull { l -> l.path?.let { BoardRenderer.Need(it, l.frame, l.frameColor, l.filters) } }.toSet() +
                     setOfNotNull(b.bgImage?.let { BoardRenderer.Need(it) })
             }
         }
@@ -395,6 +395,7 @@ fun BoardEditorScreen(
                         StudioContextItem(StudioIcons.Text, stringResource(R.string.som_ctx_style)) { textDraft = selectedLayer(); dialog = BoardDialog.TEXT }
                     } else {
                         StudioContextItem(StudioIcons.Frame, stringResource(R.string.som_rail_frame)) { openPanel(BoardPanel.FRAME) }
+                        StudioContextItem(StudioIcons.Filter, stringResource(R.string.som_rail_filter)) { openPanel(BoardPanel.FILTER) }
                     }
                     StudioContextItem(StudioIcons.ToFront, stringResource(R.string.som_ctx_front)) { toFront() }
                     StudioContextItem(StudioIcons.ToBack, stringResource(R.string.som_ctx_back)) { toBack() }
@@ -460,7 +461,13 @@ fun BoardEditorScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
-                    stringResource(if (shownPanel == BoardPanel.BACKGROUND) R.string.som_board_bg_title else R.string.som_board_frame_title),
+                    stringResource(
+                        when (shownPanel) {
+                            BoardPanel.BACKGROUND -> R.string.som_board_bg_title
+                            BoardPanel.FRAME -> R.string.som_board_frame_title
+                            BoardPanel.FILTER -> R.string.som_board_filter_title
+                        },
+                    ),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -475,7 +482,9 @@ fun BoardEditorScreen(
                     )
                 } else {
                     val layer = board.layers.firstOrNull { it.id == selectedId } // panel otwarty = czytanie w kompozycji jest ok
-                    if (layer != null) {
+                    if (layer != null && shownPanel == BoardPanel.FILTER) {
+                        FilterPicker(layer.filters) { f -> board = board.updateLayer(layer.id) { it.copy(filters = f) } }
+                    } else if (layer != null) {
                         FramePanel(layer = layer, onChange = { updated -> board = board.updateLayer(layer.id) { updated } })
                     }
                 }

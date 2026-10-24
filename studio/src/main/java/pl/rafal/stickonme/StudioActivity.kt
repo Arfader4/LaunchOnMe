@@ -682,7 +682,7 @@ private fun EditorScreen(editor: CutoutEditor, onCancel: () -> Unit, onSaved: (F
             }
         }
     }
-    LaunchedEffect(cutPreview, tab, cropping, editor.crop, editor.shape, editor.frame, editor.frameColor) {
+    LaunchedEffect(cutPreview, tab, cropping, editor.crop, editor.shape, editor.frame, editor.frameColor, editor.filters) {
         val cut = cutPreview
         if (tab == 1 && !cropping && cut != null) {
             finishing = true
@@ -989,6 +989,9 @@ private fun EditorOptions(
             }
             hint(R.string.som_edge_hint)
         }
+        EditSection.FILTER -> {
+            FilterPicker(editor.filters) { editor.filters = it }
+        }
         EditSection.FRAME -> {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                 Layer.FRAMES.forEach { (key, label) -> StudioChip(label, editor.frame == key) { editor.frame = key } }
@@ -1041,6 +1044,7 @@ private enum class EditSection(@StringRes val labelRes: Int, @StringRes val titl
     BRUSH(R.string.som_rail_brush, R.string.som_title_brush, true),
     CROP(R.string.som_rail_crop, R.string.som_title_crop, false),
     EDGE(R.string.som_rail_edge, R.string.som_title_edge, false),
+    FILTER(R.string.som_rail_filter, R.string.som_title_filter, false),
     FRAME(R.string.som_rail_frame, R.string.som_title_frame, false),
     ROTATE(R.string.som_rail_rotate, R.string.som_title_rotate, false),
     SIZE(R.string.som_rail_size, R.string.som_title_size, false);
@@ -1051,6 +1055,7 @@ private enum class EditSection(@StringRes val labelRes: Int, @StringRes val titl
             BRUSH -> StudioIcons.Brush
             CROP -> StudioIcons.Crop
             EDGE -> StudioIcons.Edge
+            FILTER -> StudioIcons.Filter
             FRAME -> StudioIcons.Frame
             ROTATE -> StudioIcons.Rotate
             SIZE -> StudioIcons.Resize
