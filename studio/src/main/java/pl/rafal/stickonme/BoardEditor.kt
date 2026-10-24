@@ -593,7 +593,12 @@ fun BoardEditorScreen(
             initialFrameColor = pd.frameColor,
             initialFilters = pd.filters,
             onDone = { result -> finishPhoto(pd, result) },
-            onCancel = { photoDraft = null },
+            onCancel = {
+                photoDraft = null
+                // Nowe zdjęcie (albo do pustego miejsca) anulowane: kopia oryginału w assets nikomu już niepotrzebna.
+                val target = pd.layerId?.let { id -> board.layers.firstOrNull { it.id == id } }
+                if (target == null || target.emptySlot) runCatching { File(pd.original).delete() }
+            },
         )
     }
     }

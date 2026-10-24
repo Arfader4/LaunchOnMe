@@ -42,6 +42,9 @@ data class Layer(
     val highlight: Long? = null,      // kolor "zakreślacza" pod tekstem (null = bez)
     val align: String = ALIGN_CENTER, // wyrównanie linii tekstu: left / center / right
 ) {
+    // Puste miejsce z szablonu (czeka na zdjęcie). Getter w ciele klasy — nie wchodzi do equals / copy / JSON.
+    val emptySlot: Boolean get() = kind == KIND_IMAGE && slot > 0f && path == null
+
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("kind", kind).put("x", x.toDouble()).put("y", y.toDouble())
         .put("scale", scale.toDouble()).put("rotation", rotation.toDouble())

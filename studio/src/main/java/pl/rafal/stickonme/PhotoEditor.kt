@@ -148,7 +148,7 @@ object PhotoRender {
         val (w, h) = outputSize(edit, photo, maxSide)
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
-        val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply { colorFilter = colorFilter(edit) }
+        val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply { colorFilter = PhotoRender.colorFilter(edit) }
         canvas.drawBitmap(photo, matrix(edit, photo, w.toFloat(), h.toFloat()), paint)
         val path = StickerShapes.path(edit.shape, w.toFloat(), h.toFloat())
         if (path != null) {
@@ -220,6 +220,7 @@ fun PhotoEditorOverlay(
     var finished by remember { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(live, edit, filters, frame, frameColor) {
         if (!live) {
+            finished = null
             kotlinx.coroutines.delay(60)
             finished = withContext(Dispatchers.Default) {
                 runCatching {
@@ -254,8 +255,8 @@ fun PhotoEditorOverlay(
                     val result = withContext(Dispatchers.Default) {
                         runCatching { PhotoRender.render(snapshot, photo) to PhotoRender.covers(snapshot, photo) }.getOrNull()
                     }
-                    busy = false
-                    if (result != null) onDone(PhotoResult(result.first, result.second, snapshot, frame, frameColor, filters))
+                    // Po sukcesie zostaje busy = true: edytor zamyka tablica (drugie „Gotowe” nie doda drugiej warstwy).
+                    if (result != null) onDone(PhotoResult(result.first, result.second, snapshot, frame, frameColor, filters)) else busy = false
                 }
             }
         }

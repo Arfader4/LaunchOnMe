@@ -233,7 +233,8 @@ class BoardRenderer(
             val img = image(layer.path, blocking)
             val w = if (layer.emptySlot) SLOT_SIDE else img?.width ?: 400f
             val h = if (layer.emptySlot) SLOT_SIDE / layer.slot else img?.height ?: 400f
-            val (padX, top, bottom) = framePadding(layer.frame, w, h)
+            // Puste miejsce rysujemy bez ramki (pojawi się razem ze zdjęciem) — zaznaczenie = sam prostokąt.
+            val (padX, top, bottom) = if (layer.emptySlot) Triple(0f, 0f, 0f) else framePadding(layer.frame, w, h)
             (w + padX * 2) to (h + top + bottom)
         }
     }

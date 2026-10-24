@@ -135,7 +135,7 @@ object Templates {
 
         suspend fun pin(id: String, cx: Float, cy: Float, width: Float, rotation: Float, color: Long) {
             val pin = Pins.of(id)
-            val image = Pins.render(id, color)
+            val image = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Pins.render(id, color) }
             val path = BoardStore.importImage(context, image, png = true)
             image.recycle()
             val logical = pin.w * BoardRenderer.logicalScale(pin.w, pin.h)
