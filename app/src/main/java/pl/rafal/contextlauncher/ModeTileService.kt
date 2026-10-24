@@ -13,6 +13,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import pl.rafal.contextlauncher.data.db.LauncherDatabase
 import pl.rafal.contextlauncher.data.db.ModeEntity
+import pl.rafal.contextlauncher.system.KeepMeOn
 import pl.rafal.contextlauncher.system.ModeActivation
 import pl.rafal.contextlauncher.ui.ModeIcon
 
@@ -54,10 +55,30 @@ class ModeTileService : TileService() {
 
     private fun select(mode: ModeEntity) {
         scope.launch {
+            // 1.11.0: zablokowany KeepMeOn — kafelek nie pokaże okna odcisku palca, więc oddaje wybór launcherowi.
+            val prefs = pl.rafal.contextlauncher.data.AppPrefs.get(applicationContext)
+            val activeId = modeDao.getAll().maxByOrNull { it.lastActiveAt }?.id
+            if (KeepMeOn.isLocked(prefs, activeId, mode.id)) {
+                openLauncher(KeepMeOn.unlockIntent(applicationContext, mode.id))
+                return@launch
+            }
             // To samo co wybór trybu w launcherze: zapis + ustawienia telefonu.
             ModeActivation.activate(applicationContext, mode, manual = true)
             // Launcher obserwuje tę samą bazę (Room), więc karta zmieni się sama.
             refreshTile()
+        }
+    }
+
+    // Otwarcie aktywności z kafelka (i zwinięcie panelu). Od Androida 14 tylko przez PendingIntent.
+    private fun openLauncher(intent: android.content.Intent) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val pending = android.app.PendingIntent.getActivity(
+                this, 0, intent, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            startActivityAndCollapse(pending)
+        } else {
+            @Suppress("DEPRECATION")
+            startActivityAndCollapse(intent)
         }
     }
 

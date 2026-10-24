@@ -92,6 +92,7 @@ import pl.rafal.contextlauncher.system.PairedDevice
 import pl.rafal.contextlauncher.system.PhoneSettingsApplier
 import pl.rafal.contextlauncher.system.SignalsReader
 import pl.rafal.contextlauncher.suggest.Rule
+import pl.rafal.contextlauncher.system.KeepMeOn
 import pl.rafal.contextlauncher.suggest.bluetoothRuleParams
 import pl.rafal.contextlauncher.suggest.placeRuleParams
 import pl.rafal.contextlauncher.suggest.wifiRuleParams
@@ -192,6 +193,33 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val activeMode: StateFlow<ModeEntity?> =
         modes.map { list -> list.maxByOrNull { it.lastActiveAt } }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    // --- 1.11.0: KeepMeOn (patrz system/KeepMeOn.kt) ---
+    // Tu, zaraz po activeMode: automat czyta te pola już w bloku init (kolejność inicjalizacji jak w C# — od góry).
+    val keepMeOnMode: StateFlow<ModeEntity?> =
+        combine(modes, appPrefs.keepMeOnModeId.flow) { list, id -> list.firstOrNull { it.id == id } }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val keepMeOnActive: StateFlow<Boolean> =
+        combine(activeMode, appPrefs.keepMeOnModeId.flow) { mode, id -> mode != null && mode.id == id }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    // Widżety innych aplikacji nie słuchają aktualizacji (MainActivity), pogoda się nie pobiera.
+    val widgetsPaused: StateFlow<Boolean> =
+        combine(keepMeOnActive, appPrefs.keepMeOnPauseWidgets.flow) { on, pause -> on && pause }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val motionOff: StateFlow<Boolean> =
+        combine(keepMeOnActive, appPrefs.keepMeOnNoMotion.flow) { on, off -> on && off }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val wallpaperOff: StateFlow<Boolean> =
+        combine(keepMeOnActive, appPrefs.keepMeOnNoWallpaper.flow) { on, off -> on && off }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // Prośba o odblokowanie: ktoś chce wyjść z zablokowanego KeepMeOn (UI pyta o odcisk palca / PIN).
+    data class UnlockRequest(val mode: ModeEntity, val durationMs: Long? = null)
+    private val _unlockRequest = MutableStateFlow<UnlockRequest?>(null)
+    val unlockRequest: StateFlow<UnlockRequest?> = _unlockRequest.asStateFlow()
+
+    private fun keepMeOnLockedFor(mode: ModeEntity): Boolean =
+        KeepMeOn.isLocked(appPrefs, activeMode.value?.id, mode.id)
 
     // --- Blokowanie i ukrywanie aplikacji ---
 
@@ -744,6 +772,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun refreshWeather() {
         if (!signalsReader.hasApproxLocationPermission()) return
+        if (widgetsPaused.value) return // KeepMeOn: bez sieci w tle
         viewModelScope.launch { weatherRepository.refreshIfStale(signalsReader.lastLocation()) }
     }
 
@@ -929,6 +958,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             return
         }
         if (mode.id == appPrefs.homeModeId.value) appPrefs.setHomeModeId(null) // usunięto stronę główną
+        if (mode.id == appPrefs.keepMeOnModeId.value) appPrefs.keepMeOnModeId.set(-1L) // usunięto KeepMeOn
         viewModelScope.launch {
             // Kaskada w bazie usunie wiersze, ale nie sprząta poza nią: identyfikatory widżetów u systemu i pliki naklejek.
             cardItemDao.getForMode(mode.id).forEach(::cleanupItem) // widżety systemowe, pliki naklejek (z oryginałami)
@@ -1446,7 +1476,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     // --- Zmiany w trybach ---
 
-    fun selectMode(mode: ModeEntity) {
+    // unlocked = true: odcisk palca / PIN już potwierdzony (albo blokada nie dotyczy, np. Cofnij po automacie).
+    fun selectMode(mode: ModeEntity, unlocked: Boolean = false) {
+        if (!unlocked && keepMeOnLockedFor(mode)) {
+            _unlockRequest.value = UnlockRequest(mode)
+            return
+        }
         viewModelScope.launch {
             ModeActivation.activate(getApplication(), mode, manual = true) // zapis + ustawienia telefonu + kafelek
             _autoNotice.value = null
@@ -2203,7 +2238,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val notice = _autoNotice.value ?: return
         _autoNotice.value = null
         dismissByKey(notice.suggestionKey)
-        modes.value.firstOrNull { it.id == notice.previousModeId }?.let(::selectMode)
+        // Cofnięcie zmiany automatu (np. wejścia w KeepMeOn) nie pyta o odcisk — to ta sama chwila.
+        modes.value.firstOrNull { it.id == notice.previousModeId }?.let { selectMode(it, unlocked = true) }
     }
 
     // Dlaczego automat jeszcze nie przełączył — pokazujemy to w podpowiedzi, żeby dało się to sprawdzić na telefonie.
@@ -2229,7 +2265,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private fun maybeAutoSwitchInner(suggestion: Suggestion?, setCountdown: (AutoCountdownState) -> Unit) {
         autoRecheck?.cancel()
         _autoStatus.value = null
-        if (suggestion == null || !appPrefs.autoSwitch.value) {
+        // 1.11.0: KeepMeOn przy słabej baterii włącza się sam także wtedy, gdy automat trybów jest wyłączony.
+        val keepMeOnTarget = suggestion is Suggestion.SwitchTo && appPrefs.keepMeOnAuto.value &&
+            suggestion.modeId == appPrefs.keepMeOnModeId.value
+        if (suggestion == null || (!appPrefs.autoSwitch.value && !keepMeOnTarget)) {
             autoCandidate = null
             return
         }
@@ -2244,6 +2283,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val (targetId, leavingId) = when (suggestion) {
             is Suggestion.SwitchTo -> suggestion.modeId to activeMode.value?.id
             is Suggestion.EndMode -> suggestion.backToModeId to suggestion.activeModeId
+        }
+        // Zablokowany KeepMeOn: automat też go nie opuszcza (tylko propozycja, a ✓ zapyta o odcisk).
+        if (KeepMeOn.isLocked(appPrefs, activeMode.value?.id, targetId)) {
+            _autoStatus.value = AppText.get(R.string.vm_auto_status_keepmeon)
+            return
         }
         // Wyjątek "zawsze pytaj": ani nie włączamy takiego trybu sami, ani sami go nie kończymy.
         val alwaysAsk = appPrefs.alwaysAskModes.value
@@ -2392,7 +2436,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private var timerJob: Job? = null
 
     // Włącza tryb na określony czas; potem launcher sam wraca tam, gdzie był (albo na stronę główną).
-    fun selectModeFor(mode: ModeEntity, durationMs: Long) {
+    fun selectModeFor(mode: ModeEntity, durationMs: Long, unlocked: Boolean = false) {
+        if (!unlocked && keepMeOnLockedFor(mode)) {
+            _unlockRequest.value = UnlockRequest(mode, durationMs)
+            return
+        }
         val returnTo = activeMode.value?.id?.takeIf { it != mode.id } ?: appPrefs.homeModeId.value ?: -1L
         viewModelScope.launch {
             ModeActivation.activate(getApplication(), mode, manual = true) // zapisuje też lastManualSwitch
@@ -2401,6 +2449,130 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             appPrefs.timedUntil.set(System.currentTimeMillis() + durationMs)
             suggestionRefresh.value++
             scheduleTimer()
+        }
+    }
+
+    // --- 1.11.0: KeepMeOn ---
+
+    // Odblokowanie potwierdzone (odcisk / PIN albo okno „Wyjść z KeepMeOn?” na telefonie bez blokady ekranu).
+    // expected: prośba, na którą odpowiada okno (po obrocie ekranu stare okno nie może zamknąć nowej prośby).
+    fun confirmUnlock(expected: UnlockRequest? = null) {
+        val request = _unlockRequest.value ?: return
+        if (expected != null && expected !== request) return
+        _unlockRequest.value = null
+        val duration = request.durationMs
+        if (duration != null) selectModeFor(request.mode, duration, unlocked = true) else selectMode(request.mode, unlocked = true)
+    }
+
+    fun cancelUnlock(expected: UnlockRequest? = null) {
+        if (expected != null && expected !== _unlockRequest.value) return
+        _unlockRequest.value = null
+    }
+
+    // Z kafelka / skrótu (MainActivity): przełączenie po id, z tą samą blokadą co w launcherze.
+    fun selectModeById(id: Long) {
+        viewModelScope.launch {
+            // Aktywny tryb z bazy, nie z activeMode: po zimnym starcie (kafelek obudził proces) flow jest jeszcze puste,
+            // a blokada liczona od null przepuściłaby zmianę bez odcisku.
+            val all = modeDao.getAll()
+            val mode = all.firstOrNull { it.id == id }
+            val activeId = all.maxByOrNull { it.lastActiveAt }?.id
+            if (mode != null && KeepMeOn.isLocked(appPrefs, activeId, mode.id)) {
+                _unlockRequest.value = UnlockRequest(mode)
+            } else if (mode != null) {
+                selectMode(mode, unlocked = true)
+            }
+        }
+    }
+
+    // Tworzy tryb KeepMeOn: najważniejsze aplikacje (telefon, wiadomości, mapy, aparat…) bez widżetów,
+    // motyw AMOLED (czarne piksele na OLED nie świecą), oszczędne ustawienia telefonu i reguła „bateria poniżej X%”.
+    // Gdy już jest — tylko go włącza (activate = true).
+    private var creatingKeepMeOn = false // podwójne dotknięcie „Utwórz” nie robi dwóch trybów
+
+    fun createKeepMeOn(activate: Boolean = false) {
+        if (creatingKeepMeOn) return
+        creatingKeepMeOn = true
+        viewModelScope.launch {
+            try {
+                createKeepMeOnInner(activate)
+            } finally {
+                creatingKeepMeOn = false
+            }
+        }
+    }
+
+    private suspend fun createKeepMeOnInner(activate: Boolean) {
+        val existing = keepMeOnMode.value ?: modeDao.getAll().firstOrNull { it.id == appPrefs.keepMeOnModeId.value }
+        if (existing != null) {
+            if (activate) selectMode(existing)
+            return
+        }
+        val settings = ModePhoneSettings(brightness = 25, screenTimeoutSec = 30, batterySaver = true).toJson()
+        val modeId = modeDao.insert(
+            ModeEntity(
+                name = AppText.get(R.string.keepmeon_name),
+                icon = "bolt",
+                color = 0xFF7FD6AE,
+                sortOrder = modes.value.size,
+                palette = "AMOLED",
+                settings = settings,
+            ),
+        )
+        applyNewModeDefaults(modeId)
+        val taken = mutableListOf<GridRect>()
+        val hints = listOf("dialer", "messaging", "contacts", "camera", "com.google.android.apps.maps", "maps", "clock", "calculator")
+        pl.rafal.contextlauncher.data.matchApps(allApps.value, hints, { it.packageName }, { it.label }).forEach { app ->
+            val spot = CardGrid.findFreeSpot(taken, CardGrid.APP_SIZE, CardGrid.APP_SIZE) ?: return@forEach
+            taken += spot
+            cardItemDao.insert(
+                CardItemEntity(
+                    modeId = modeId,
+                    packageName = app.component.packageName,
+                    className = app.component.className,
+                    userSerial = app.userSerial,
+                    x = spot.x, y = spot.y, w = spot.w, h = spot.h,
+                ),
+            )
+        }
+        val percent = appPrefs.keepMeOnBattery.value
+        if (percent > 0) {
+            suggestionDao.insertRule(
+                SuggestionRuleEntity(modeId = modeId, type = SuggestionRuleEntity.TYPE_BATTERY, params = batteryRuleParams(percent)),
+            )
+        }
+        appPrefs.keepMeOnModeId.set(modeId)
+        suggestionRefresh.value++
+        if (activate) modeDao.getAll().firstOrNull { it.id == modeId }?.let { selectMode(it) }
+    }
+
+    // Próg baterii KeepMeOn (0 = bez reguły): zmienia regułę „bateria poniżej” tego trybu.
+    fun setKeepMeOnBattery(percent: Int) {
+        appPrefs.keepMeOnBattery.set(percent)
+        val modeId = appPrefs.keepMeOnModeId.value
+        if (modeId == -1L) return
+        viewModelScope.launch {
+            rules.value.filter { it.modeId == modeId && it.type == SuggestionRuleEntity.TYPE_BATTERY }
+                .forEach { suggestionDao.deleteRule(it.id) }
+            if (percent > 0) {
+                suggestionDao.insertRule(
+                    SuggestionRuleEntity(modeId = modeId, type = SuggestionRuleEntity.TYPE_BATTERY, params = batteryRuleParams(percent)),
+                )
+            }
+            suggestionRefresh.value++
+        }
+    }
+
+    // Inny istniejący tryb jako KeepMeOn (np. własny „Oszczędny”). Reguła „bateria poniżej” przechodzi na nowy tryb
+    // (uwaga: setKeepMeOnBattery zastępuje wszystkie reguły baterii trybu — KeepMeOn ma mieć jedną).
+    fun setKeepMeOnMode(mode: ModeEntity?) {
+        val oldId = appPrefs.keepMeOnModeId.value
+        if (oldId == (mode?.id ?: -1L)) return
+        viewModelScope.launch {
+            rules.value.filter { it.modeId == oldId && it.type == SuggestionRuleEntity.TYPE_BATTERY }
+                .forEach { suggestionDao.deleteRule(it.id) }
+            appPrefs.keepMeOnModeId.set(mode?.id ?: -1L)
+            setKeepMeOnBattery(appPrefs.keepMeOnBattery.value)
         }
     }
 
@@ -2433,6 +2605,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (until == 0L || System.currentTimeMillis() < until) return
         if (modes.value.isEmpty()) return // baza jeszcze się wczytuje (start aplikacji) — sprawdzimy za minutę
         val endedId = activeMode.value?.id
+        // W KeepMeOn koniec „trybu na czas” niczego nie przełącza (bateria ważniejsza niż powrót).
+        if (keepMeOnActive.value) {
+            appPrefs.timedUntil.set(0)
+            return
+        }
         val target = modes.value.firstOrNull { it.id == appPrefs.timedReturnTo.value }
             ?: modes.value.firstOrNull { it.id == appPrefs.homeModeId.value }
         appPrefs.timedUntil.set(0)

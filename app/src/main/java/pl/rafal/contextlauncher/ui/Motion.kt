@@ -95,6 +95,7 @@ object LaunchOrigin {
 
     // Systemowa animacja "wyrastania" okna aplikacji z tego prostokąta (jak w Pixel Launcherze).
     fun options(): Bundle? {
+        if (pl.rafal.contextlauncher.system.LauncherMotion.off) return null // KeepMeOn: bez animacji otwierania
         val root = view?.get() ?: return null
         val r = sourceBounds() ?: return null
         val location = IntArray(2)

@@ -34,6 +34,7 @@ w gicie jest tag `vX.Y.Z` (Android Studio: przy pushu zaznacz „Push tags”).
 | SOM 1.4.0 | StickOnMe: tekst na tablicy w stylu Instagrama — pełny ekran z podglądem na żywo, pionowy suwak rozmiaru, „A” (zwykły / tło / obrys), wyrównanie, B / I / U / cień, czcionki i kolory nad klawiaturą | 1 |
 | 1.9.2 | Hotfix: „Włączono …” to informacja (✕ = zamknij, „Wróć do …” = cofnij), szuflada „jedna lista” bez dubli aplikacji z folderów | 1 |
 | 1.10.0 | OnHand 2 (`feature/onhand-2`): On5 załączniki w treści, On6 rysowanie i rysik, On7 naklejki StickOnMe | 3 |
+| 1.11.0 | KeepMeOn (`feature/keepmeon`): tryb na słabą baterię — AMOLED, bez animacji / tapety / widżetów, blokada odciskiem | 1 |
 Razem od V1: 59 paczek. Kolejne duże tematy = 1.7, 1.8…; poprawki do nich = 1.7.1, 1.7.2…
 
 ## Etap 1 — szybkie poprawki i ikona aplikacji
@@ -244,9 +245,9 @@ Kolejność ustalona 04.10: paczka 1 → paczka 2 → tłumaczenie → duże tem
       2) biblioteka: miniatury w pamięci (LruCache) i na dysku (cache), max 3 dekodowania naraz, onTrimMemory.
       3) edytor: ML Kit na kopii ≤1024 px, wynik i maska liczone w tle; podgląd „Wykończenia” na kopii 800 px;
       zwalnianie bitmap (Cofnij, kroki pośrednie, eksport); szachownica jako wzór (shader).
-- [ ] KeepMeOn (oszczędzanie energii): tryb włączany przy słabej baterii, blokada zmiany trybu (odblokowanie odciskiem),
+- [x] KeepMeOn (oszczędzanie energii): tryb włączany przy słabej baterii, blokada zmiany trybu (odblokowanie odciskiem),
       najważniejsze aplikacje, bez animacji/tapety/odświeżania widżetów, ciemny motyw; propozycja w samouczku.
-      Systemowego oszczędzania baterii aplikacja sama nie włączy (wymaga uprawnienia nadanego przez adb).
+      Systemowego oszczędzania baterii aplikacja sama nie włączy (wymaga uprawnienia nadanego przez adb). → 1.11.0
 - [ ] Optymalizacja baterii i procesora w całym launcherze.
 - [ ] Blokada folderów w szufladzie odciskiem palca / PIN-em (systemowy BiometricPrompt).
 
@@ -419,3 +420,17 @@ Uwagi z 24.10: grafiki i załączniki w treści, więcej edycji (rysowanie, rysi
       📎 → „Naklejka ze StickOnMe” (biblioteka w trybie wyboru, wynik w treści), ⋯ na zdjęciu → „Zrób naklejkę”
       (wycinanie w StickOnMe, naklejka wraca zaraz za zdjęciem). Bez StickOnMe — komunikat.
 - [ ] (później) Formatowanie tekstu (listy zadań, nagłówki) — treść jest zwykłym tekstem, wymagałoby Markdownu.
+
+## 1.11.0 — KeepMeOn (gałąź `feature/keepmeon` od `feature/onhand-2`, plan z 24.10)
+- [x] KeepMeOn to zwykły OnMode (karta, reguły, edycja jak każdy tryb), wskazany w Ustawieniach → „KeepMeOn”.
+      „Utwórz KeepMeOn”: najważniejsze aplikacje (telefon, wiadomości, kontakty, aparat, mapy, zegar, kalkulator),
+      motyw AMOLED, ustawienia telefonu (jasność 25%, wygaszanie 30 s, oszczędzanie baterii — o ile telefon pozwala)
+      i reguła „bateria poniżej X%” (Nigdy / 10 / 15 / 20 / 30). Można też wskazać własny tryb.
+- [x] Przy słabej baterii włącza się sam, także gdy automat trybów jest wyłączony (przełącznik).
+- [x] Gdy aktywny: czarny AMOLED zawsze (też przy „Jednolitym wyglądzie”), bez animacji (`LauncherMotion` = skala
+      czasu animacji całego okna, bez animacji otwierania aplikacji), czarne tło zamiast tapety (tapeta trybu nie jest
+      ustawiana), widżety nie słuchają aktualizacji, pogoda się nie odświeża, koniec „trybu na czas” nic nie przełącza.
+- [x] Blokada: wyjście z KeepMeOn (klawisz ON, propozycja, kafelek, skrót) pyta o odcisk palca / PIN (systemowy
+      BiometricPrompt); telefon bez blokady ekranu — zwykłe pytanie. Automat nie wychodzi sam z zablokowanego KeepMeOn.
+      Kafelek i skrót otwierają launcher, który pyta.
+- [x] Samouczek: krok „KeepMeOn” z przyciskiem „Utwórz KeepMeOn”. Ustawienia: skrót do systemowego oszczędzania baterii.

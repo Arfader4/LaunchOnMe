@@ -154,11 +154,22 @@ class AppPrefs private constructor(context: Context) {
         { k, v -> putStringSet(k, v) },
     )
 
+    // --- 1.11.0: KeepMeOn (oszczędzanie energii) ---
+    // Tryb pełniący rolę KeepMeOn (-1 = jeszcze nie utworzony) i co się dzieje, gdy jest aktywny.
+    val keepMeOnModeId = Setting("keepmeon_mode_id", -1L, { k, d -> getLong(k, d) }, { k, v -> putLong(k, v) })
+    val keepMeOnBattery = Setting("keepmeon_battery", 20, { k, d -> getInt(k, d) }, { k, v -> putInt(k, v) }) // próg %, 0 = bez reguły
+    val keepMeOnAuto = bool("keepmeon_auto", true)            // włącz sam przy słabej baterii, nawet bez automatu trybów
+    val keepMeOnLock = bool("keepmeon_lock", true)            // wyjście z KeepMeOn wymaga odcisku palca / PIN-u
+    val keepMeOnNoMotion = bool("keepmeon_no_motion", true)   // bez animacji
+    val keepMeOnNoWallpaper = bool("keepmeon_no_wallpaper", true) // czarne tło zamiast tapety
+    val keepMeOnPauseWidgets = bool("keepmeon_pause_widgets", true) // widżety innych aplikacji i pogoda nie odświeżają się
+
     // --- Kopia i skróty ---
     val modeShortcuts = bool("mode_shortcuts", true)      // skróty "Włącz tryb …" dla innych aplikacji i procedur
 
     companion object {
         val AUTO_DELAY_OPTIONS = listOf(0, 5, 10, 15, 30, 45, 60) // sekundy do wyboru w Ustawieniach
+        val KEEPMEON_BATTERY_OPTIONS = listOf(0, 10, 15, 20, 30) // próg baterii KeepMeOn (%), 0 = bez reguły
         private const val KEY_HOME = "home_mode_id"
         private const val NONE = -1L
 

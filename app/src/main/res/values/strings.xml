@@ -1216,4 +1216,35 @@
     <string name="set_stickonme_move_sub">StickOnMe is now a separate app. Your library is still in the launcher — move it with one tap.</string>
     <string name="set_stickonme_missing_sub">Install the StickOnMe app first — then you can move your stickers and boards here.</string>
     <string name="set_stickonme_move_failed">Could not prepare the library for moving.</string>
+
+    <!-- 1.11.0: KeepMeOn -->
+    <string name="vm_auto_status_keepmeon">auto: KeepMeOn is locked — unlock it to switch</string>
+    <string name="keepmeon_name">KeepMeOn</string>
+    <string name="keepmeon_unlock_title">Leave KeepMeOn</string>
+    <string name="keepmeon_unlock_sub">Switch to “%1$s”</string>
+    <string name="keepmeon_unlock_plain">KeepMeOn saves battery. Switch to “%1$s” anyway?</string>
+    <string name="keepmeon_unlock_leave">Leave KeepMeOn</string>
+    <string name="keepmeon_unlock_stay">Stay</string>
+    <string name="set_section_keepmeon">KeepMeOn (low battery)</string>
+    <string name="set_keepmeon_create_title">Create KeepMeOn</string>
+    <string name="set_keepmeon_create_sub">A mode with only the essential apps, black AMOLED theme, no animations, wallpaper or widget refresh. Turns on by itself when the battery is low.</string>
+    <string name="set_keepmeon_now_title">Turn on “%1$s” now</string>
+    <string name="set_keepmeon_now_sub">Switch to the battery-saving mode right away</string>
+    <string name="set_keepmeon_mode_title">KeepMeOn mode</string>
+    <string name="set_keepmeon_battery_title">Turn on below</string>
+    <string name="set_keepmeon_battery_sub">Battery level that switches to KeepMeOn</string>
+    <string name="set_keepmeon_battery_off">Never</string>
+    <string name="set_keepmeon_auto_title">Switch automatically</string>
+    <string name="set_keepmeon_auto_sub">Even when automatic mode switching is off</string>
+    <string name="set_keepmeon_lock_title">Lock mode changes</string>
+    <string name="set_keepmeon_lock_sub">Leaving KeepMeOn needs your fingerprint or PIN</string>
+    <string name="set_keepmeon_motion_title">No animations</string>
+    <string name="set_keepmeon_wallpaper_title">Black background instead of wallpaper</string>
+    <string name="set_keepmeon_widgets_title">Pause widgets</string>
+    <string name="set_keepmeon_widgets_sub">Widgets and weather stop refreshing</string>
+    <string name="set_keepmeon_system_title">System battery saver</string>
+    <string name="set_keepmeon_system_sub">The launcher can’t turn it on by itself — opens the phone’s battery saver settings</string>
+    <string name="tut_keepmeon_title">KeepMeOn</string>
+    <string name="tut_keepmeon_text">When the battery runs low, KeepMeOn shows only the essential apps on a black screen, with no animations or widget refresh. Leaving it can require your fingerprint. You’ll find it in Settings.</string>
+    <string name="tut_keepmeon_create">Create KeepMeOn</string>
 </resources>

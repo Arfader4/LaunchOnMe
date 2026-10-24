@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,7 +53,13 @@ import androidx.annotation.StringRes
 // Jaki gest pokazuje animowana dłoń nad kartą samouczka.
 private enum class TutorialGesture { NONE, SWIPE_UP, SWIPE_DOWN, SWIPE_SIDE, HOLD, DROP }
 
-private data class TutorialStep(@StringRes val title: Int, @StringRes val text: Int, val gesture: TutorialGesture)
+// offer = krok z propozycją (1.11.0: „Utwórz KeepMeOn”) — dodatkowy przycisk obok „Dalej”.
+private data class TutorialStep(
+    @StringRes val title: Int,
+    @StringRes val text: Int,
+    val gesture: TutorialGesture,
+    val offersKeepMeOn: Boolean = false,
+)
 
 private val TutorialSteps = listOf(
     TutorialStep(R.string.tut_welcome_title, R.string.tut_welcome_text, TutorialGesture.NONE),
@@ -62,14 +69,17 @@ private val TutorialSteps = listOf(
     TutorialStep(R.string.tut_edit_title, R.string.tut_edit_text, TutorialGesture.HOLD),
     TutorialStep(R.string.tut_folders_title, R.string.tut_folders_text, TutorialGesture.DROP),
     TutorialStep(R.string.tut_pages_title, R.string.tut_pages_text, TutorialGesture.SWIPE_SIDE),
+    TutorialStep(R.string.tut_keepmeon_title, R.string.tut_keepmeon_text, TutorialGesture.NONE, offersKeepMeOn = true),
     TutorialStep(R.string.tut_done_title, R.string.tut_done_text, TutorialGesture.NONE),
 )
 
 // Samouczek pierwszego uruchomienia: przyciemniona karta, animowana dłoń i krótkie opisy gestów.
 // Nakładka łapie dotyk (nic pod spodem się nie uruchomi przypadkiem); "Pomiń" kończy od razu.
+// onCreateKeepMeOn = null: KeepMeOn już jest, krok tylko o nim opowiada (bez przycisku „Utwórz”).
 @Composable
-fun TutorialOverlay(onFinish: () -> Unit) {
+fun TutorialOverlay(onFinish: () -> Unit, onCreateKeepMeOn: (() -> Unit)? = null) {
     var step by remember { mutableIntStateOf(0) }
+    var keepMeOnCreated by remember { mutableStateOf(false) }
     BackHandler { if (step > 0) step-- else onFinish() }
     Box(
         Modifier
@@ -112,7 +122,14 @@ fun TutorialOverlay(onFinish: () -> Unit) {
                         )
                     }
                 }
-                if (step < TutorialSteps.lastIndex) {
+                if (current.offersKeepMeOn && onCreateKeepMeOn != null && !keepMeOnCreated) {
+                    TextButton(onClick = { step++ }) { Text(stringResource(R.string.common_next)) }
+                    Button(onClick = {
+                        onCreateKeepMeOn()
+                        keepMeOnCreated = true
+                        step++
+                    }) { Text(stringResource(R.string.tut_keepmeon_create)) }
+                } else if (step < TutorialSteps.lastIndex) {
                     TextButton(onClick = onFinish) { Text(stringResource(R.string.common_skip)) }
                     Button(onClick = { step++ }) { Text(stringResource(R.string.common_next)) }
                 } else {

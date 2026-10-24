@@ -27,6 +27,8 @@ object ModeActivation {
             PhoneSettingsApplier(context).apply(ModePhoneSettings.parse(mode.settings))
         }
         ModeTileService.requestUpdate(context)
-        WallpaperStore(context).applyFor(mode.id) // na końcu, bo trwa chwilę; bez tapet nic nie robi
+        // KeepMeOn bez tapety: nie dekodujemy i nie ustawiamy obrazka (launcher i tak pokazuje czarne tło).
+        val keepMeOnPlain = mode.id == prefs.keepMeOnModeId.value && prefs.keepMeOnNoWallpaper.value
+        if (!keepMeOnPlain) WallpaperStore(context).applyFor(mode.id) // na końcu, bo trwa chwilę; bez tapet nic nie robi
     }
 }

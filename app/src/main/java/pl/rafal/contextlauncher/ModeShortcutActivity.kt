@@ -5,7 +5,9 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import pl.rafal.contextlauncher.data.AppPrefs
 import pl.rafal.contextlauncher.data.db.LauncherDatabase
+import pl.rafal.contextlauncher.system.KeepMeOn
 import pl.rafal.contextlauncher.system.ModeActivation
 
 // Niewidoczna aktywność uruchamiana przez skrót "Włącz tryb …": włącza tryb i od razu się zamyka.
@@ -15,8 +17,13 @@ class ModeShortcutActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val modeId = intent.getLongExtra(EXTRA_MODE_ID, -1)
         lifecycleScope.launch {
-            val mode = LauncherDatabase.get(applicationContext).modeDao().getAll().firstOrNull { it.id == modeId }
-            if (mode != null) {
+            val all = LauncherDatabase.get(applicationContext).modeDao().getAll()
+            val mode = all.firstOrNull { it.id == modeId }
+            val activeId = all.maxByOrNull { it.lastActiveAt }?.id
+            if (mode != null && KeepMeOn.isLocked(AppPrefs.get(applicationContext), activeId, mode.id)) {
+                // 1.11.0: zablokowany KeepMeOn — launcher zapyta o odcisk palca i dopiero wtedy przełączy.
+                startActivity(KeepMeOn.unlockIntent(applicationContext, mode.id))
+            } else if (mode != null) {
                 ModeActivation.activate(applicationContext, mode, manual = true)
                 Toast.makeText(applicationContext, getString(R.string.act_mode_enabled, mode.name), Toast.LENGTH_SHORT).show()
             } else {

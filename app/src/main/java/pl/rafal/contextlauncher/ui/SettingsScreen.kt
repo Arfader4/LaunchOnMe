@@ -250,6 +250,10 @@ fun SettingsScreen(
                 )
             }
 
+            // --- 1.11.0: KeepMeOn ---
+            item { Section(stringResource(R.string.set_section_keepmeon)) }
+            item { KeepMeOnSettings(viewModel) }
+
             // --- Wygląd ---
             item { Section(stringResource(R.string.set_section_appearance)) }
             item {
@@ -615,6 +619,95 @@ private fun <T> Choice(
                 FilterChip(selected = option == selected, onClick = { onSelect(option) }, label = { Text(labelOf(option)) })
             }
         }
+    }
+}
+
+// 1.11.0: KeepMeOn — tryb na słabą baterię. Bez trybu: jedno „Utwórz”; z trybem: próg, blokada i co wyłączyć.
+@Composable
+private fun KeepMeOnSettings(viewModel: LauncherViewModel) {
+    val context = LocalContext.current
+    val prefs = viewModel.settings
+    val modes by viewModel.modes.collectAsState()
+    val keepMeOnMode by viewModel.keepMeOnMode.collectAsState()
+    val active by viewModel.keepMeOnActive.collectAsState()
+    val battery by prefs.keepMeOnBattery.flow.collectAsState()
+    val auto by prefs.keepMeOnAuto.flow.collectAsState()
+    val lock by prefs.keepMeOnLock.flow.collectAsState()
+    val noMotion by prefs.keepMeOnNoMotion.flow.collectAsState()
+    val noWallpaper by prefs.keepMeOnNoWallpaper.flow.collectAsState()
+    val pauseWidgets by prefs.keepMeOnPauseWidgets.flow.collectAsState()
+    Column {
+        val mode = keepMeOnMode
+        if (mode == null) {
+            Action(
+                title = stringResource(R.string.set_keepmeon_create_title),
+                subtitle = stringResource(R.string.set_keepmeon_create_sub),
+                onClick = { viewModel.createKeepMeOn() },
+            )
+        } else {
+            if (!active) {
+                Action(
+                    title = stringResource(R.string.set_keepmeon_now_title, mode.name),
+                    subtitle = stringResource(R.string.set_keepmeon_now_sub),
+                    onClick = { viewModel.createKeepMeOn(activate = true) },
+                )
+            }
+            // Zablokowany i aktywny KeepMeOn: zmiana trybu ani wyłączenie blokady nie są stąd dostępne
+            // (inaczej Ustawienia omijałyby odcisk palca) — najpierw wyjście z KeepMeOn.
+            val guarded = active && lock
+            if (!guarded) Choice(
+                title = stringResource(R.string.set_keepmeon_mode_title),
+                options = modes.map { it.id },
+                selected = mode.id,
+                labelOf = { id -> modes.firstOrNull { it.id == id }?.name.orEmpty() },
+                onSelect = { id -> viewModel.setKeepMeOnMode(modes.firstOrNull { it.id == id }) },
+            )
+            Choice(
+                title = stringResource(R.string.set_keepmeon_battery_title),
+                subtitle = stringResource(R.string.set_keepmeon_battery_sub),
+                options = pl.rafal.contextlauncher.data.AppPrefs.KEEPMEON_BATTERY_OPTIONS,
+                selected = battery,
+                labelOf = { p -> if (p == 0) pl.rafal.contextlauncher.AppText.get(R.string.set_keepmeon_battery_off) else "$p%" },
+                onSelect = viewModel::setKeepMeOnBattery,
+            )
+            Toggle(
+                title = stringResource(R.string.set_keepmeon_auto_title),
+                subtitle = stringResource(R.string.set_keepmeon_auto_sub),
+                checked = auto,
+                onChange = prefs.keepMeOnAuto::set,
+            )
+            if (!guarded) Toggle(
+                title = stringResource(R.string.set_keepmeon_lock_title),
+                subtitle = stringResource(R.string.set_keepmeon_lock_sub),
+                checked = lock,
+                onChange = prefs.keepMeOnLock::set,
+            )
+            Toggle(
+                title = stringResource(R.string.set_keepmeon_motion_title),
+                checked = noMotion,
+                onChange = prefs.keepMeOnNoMotion::set,
+            )
+            Toggle(
+                title = stringResource(R.string.set_keepmeon_wallpaper_title),
+                checked = noWallpaper,
+                onChange = prefs.keepMeOnNoWallpaper::set,
+            )
+            Toggle(
+                title = stringResource(R.string.set_keepmeon_widgets_title),
+                subtitle = stringResource(R.string.set_keepmeon_widgets_sub),
+                checked = pauseWidgets,
+                onChange = prefs.keepMeOnPauseWidgets::set,
+            )
+        }
+        // Systemowego oszczędzania baterii launcher sam nie włączy (wymaga uprawnienia nadawanego przez adb),
+        // więc tylko otwieramy jego ekran w ustawieniach telefonu.
+        Action(
+            title = stringResource(R.string.set_keepmeon_system_title),
+            subtitle = stringResource(R.string.set_keepmeon_system_sub),
+            onClick = {
+                runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_BATTERY_SAVER_SETTINGS)) }
+            },
+        )
     }
 }
 

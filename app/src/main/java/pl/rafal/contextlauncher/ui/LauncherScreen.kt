@@ -43,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -166,9 +167,13 @@ fun LauncherApp(
     // Motyw bierzemy z aktywnego trybu (jego schemat i kolor główny), a gdy tryb nie ma własnego — z ustawień.
     // "Jednolity wygląd" w Ustawieniach wyłącza motywy trybów: wszędzie domyślny schemat.
     val modePalette = if (uniformLook) null else Themes.find(activeMode?.palette)
+    // 1.11.0: KeepMeOn zawsze na czarnym AMOLED (na ekranie OLED czarny piksel nie świeci), bez animacji.
+    val keepMeOn by viewModel.keepMeOnActive.collectAsState()
+    val motionOff by viewModel.motionOff.collectAsState()
+    LaunchedEffect(motionOff) { pl.rafal.contextlauncher.system.LauncherMotion.off = motionOff }
     ContextLauncherTheme(
-        palette = modePalette ?: defaultPalette,
-        accent = if (uniformLook) null else activeMode?.accent,
+        palette = if (keepMeOn) Themes.AMOLED else modePalette ?: defaultPalette,
+        accent = if (uniformLook && !keepMeOn) null else activeMode?.accent,
         themeMode = themeMode,
     ) {
         // CompositionLocal ≈ wartość "dziedziczona" w dół drzewa (jak DynamicResource w WPF).
@@ -208,7 +213,46 @@ fun LauncherApp(
                 }
                 ScreenOverlayLayer(screenOverlay)
             }
+            KeepMeOnUnlock(viewModel)
         }
+    }
+}
+
+// Wyjście z zablokowanego KeepMeOn: systemowe okno odcisku palca / PIN-u, a na telefonie bez blokady ekranu
+// zwykłe pytanie. Prośbę zgłasza ViewModel (selectMode), tu tylko ją pokazujemy i odsyłamy wynik.
+@Composable
+private fun KeepMeOnUnlock(viewModel: LauncherViewModel) {
+    val request by viewModel.unlockRequest.collectAsState()
+    val context = LocalContext.current
+    val title = stringResource(R.string.keepmeon_unlock_title)
+    val current = request
+    // Blokadę ekranu można włączyć / wyłączyć w trakcie, więc sprawdzamy przy każdej prośbie.
+    val secure = remember(current) { pl.rafal.contextlauncher.system.KeepMeOn.isDeviceSecure(context) }
+    if (current != null && secure) {
+        val subtitle = stringResource(R.string.keepmeon_unlock_sub, current.mode.name)
+        // key = prośba: jedno okno systemowe na jedną prośbę. Gdy ekran znika (obrót), zamykamy okno, a jego
+        // „anulowano” ignorujemy — nowy ekran pokaże własne okno dla tej samej prośby (≈ IDisposable w C#).
+        DisposableEffect(current) {
+            val signal = android.os.CancellationSignal()
+            var disposed = false
+            pl.rafal.contextlauncher.system.KeepMeOn.authenticate(context, title, subtitle, signal) { ok ->
+                if (!disposed) {
+                    if (ok) viewModel.confirmUnlock(current) else viewModel.cancelUnlock(current)
+                }
+            }
+            onDispose {
+                disposed = true
+                signal.cancel()
+            }
+        }
+    } else if (current != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelUnlock(current) },
+            title = { Text(title) },
+            text = { Text(stringResource(R.string.keepmeon_unlock_plain, current.mode.name)) },
+            confirmButton = { TextButton(onClick = { viewModel.confirmUnlock(current) }) { Text(stringResource(R.string.keepmeon_unlock_leave)) } },
+            dismissButton = { TextButton(onClick = { viewModel.cancelUnlock(current) }) { Text(stringResource(R.string.keepmeon_unlock_stay)) } },
+        )
     }
 }
 
@@ -263,7 +307,9 @@ private fun LauncherContent(
     val favorites by viewModel.favorites.collectAsState()
     val quickStates by viewModel.quickStates.collectAsState()
     val timedUntil by viewModel.timedUntil.collectAsState()
-    val showWallpaper by viewModel.settings.showWallpaper.flow.collectAsState()
+    val wallpaperSetting by viewModel.settings.showWallpaper.flow.collectAsState()
+    val wallpaperOff by viewModel.wallpaperOff.collectAsState() // KeepMeOn: jednolite czarne tło zamiast tapety
+    val showWallpaper = wallpaperSetting && !wallpaperOff
     val wallpaperDim by viewModel.settings.wallpaperDim.flow.collectAsState()
     val wallpaperVersion by viewModel.wallpaperVersion.collectAsState()
     val leftHanded by viewModel.settings.leftHanded.flow.collectAsState()
@@ -1266,7 +1312,11 @@ private fun LauncherContent(
         if (!tutorialDone && !wizardOpen && !needsOnboarding && modes.isNotEmpty() &&
             !settingsOpen && !appRulesOpen && !drawerOpen && !editing
         ) {
-            TutorialOverlay(onFinish = { viewModel.settings.tutorialDone.set(true) })
+            val keepMeOnMode by viewModel.keepMeOnMode.collectAsState()
+            TutorialOverlay(
+                onFinish = { viewModel.settings.tutorialDone.set(true) },
+                onCreateKeepMeOn = if (keepMeOnMode == null) ({ viewModel.createKeepMeOn() }) else null,
+            )
         }
 
         // Kreator przykrywa cały ekran.

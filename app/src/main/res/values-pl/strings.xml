@@ -1232,4 +1232,35 @@
     <string name="set_stickonme_move_sub">StickOnMe jest teraz osobną aplikacją. Twoja biblioteka jest jeszcze w launcherze — przenieś ją jednym dotknięciem.</string>
     <string name="set_stickonme_missing_sub">Najpierw zainstaluj aplikację StickOnMe — potem przeniesiesz tu swoje naklejki i tablice.</string>
     <string name="set_stickonme_move_failed">Nie udało się przygotować biblioteki do przeniesienia.</string>
+
+    <!-- 1.11.0: KeepMeOn -->
+    <string name="vm_auto_status_keepmeon">auto: KeepMeOn jest zablokowany — odblokuj, aby zmienić tryb</string>
+    <string name="keepmeon_name">KeepMeOn</string>
+    <string name="keepmeon_unlock_title">Wyjście z KeepMeOn</string>
+    <string name="keepmeon_unlock_sub">Przełącz na „%1$s”</string>
+    <string name="keepmeon_unlock_plain">KeepMeOn oszczędza baterię. Mimo to przełączyć na „%1$s”?</string>
+    <string name="keepmeon_unlock_leave">Wyjdź z KeepMeOn</string>
+    <string name="keepmeon_unlock_stay">Zostań</string>
+    <string name="set_section_keepmeon">KeepMeOn (słaba bateria)</string>
+    <string name="set_keepmeon_create_title">Utwórz KeepMeOn</string>
+    <string name="set_keepmeon_create_sub">Tryb z samymi najważniejszymi aplikacjami, czarnym motywem AMOLED, bez animacji, tapety i odświeżania widżetów. Włącza się sam przy słabej baterii.</string>
+    <string name="set_keepmeon_now_title">Włącz teraz „%1$s”</string>
+    <string name="set_keepmeon_now_sub">Od razu przełącz na tryb oszczędzania baterii</string>
+    <string name="set_keepmeon_mode_title">Tryb KeepMeOn</string>
+    <string name="set_keepmeon_battery_title">Włącz poniżej</string>
+    <string name="set_keepmeon_battery_sub">Poziom baterii, przy którym launcher przełącza na KeepMeOn</string>
+    <string name="set_keepmeon_battery_off">Nigdy</string>
+    <string name="set_keepmeon_auto_title">Przełączaj automatycznie</string>
+    <string name="set_keepmeon_auto_sub">Także wtedy, gdy automat trybów jest wyłączony</string>
+    <string name="set_keepmeon_lock_title">Blokuj zmianę trybu</string>
+    <string name="set_keepmeon_lock_sub">Wyjście z KeepMeOn wymaga odcisku palca albo PIN-u</string>
+    <string name="set_keepmeon_motion_title">Bez animacji</string>
+    <string name="set_keepmeon_wallpaper_title">Czarne tło zamiast tapety</string>
+    <string name="set_keepmeon_widgets_title">Wstrzymaj widżety</string>
+    <string name="set_keepmeon_widgets_sub">Widżety i pogoda przestają się odświeżać</string>
+    <string name="set_keepmeon_system_title">Systemowe oszczędzanie baterii</string>
+    <string name="set_keepmeon_system_sub">Launcher nie włączy go sam — otwiera ustawienia oszczędzania baterii w telefonie</string>
+    <string name="tut_keepmeon_title">KeepMeOn</string>
+    <string name="tut_keepmeon_text">Gdy bateria się kończy, KeepMeOn pokazuje tylko najważniejsze aplikacje na czarnym ekranie, bez animacji i odświeżania widżetów. Wyjście może wymagać odcisku palca. Znajdziesz go w Ustawieniach.</string>
+    <string name="tut_keepmeon_create">Utwórz KeepMeOn</string>
 </resources>

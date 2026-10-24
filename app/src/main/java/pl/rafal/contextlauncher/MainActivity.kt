@@ -9,6 +9,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.InternalComposeUiApi
+import androidx.compose.ui.platform.compositionContext
+import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
+import pl.rafal.contextlauncher.system.KeepMeOn
+import pl.rafal.contextlauncher.system.LauncherMotion
 import pl.rafal.contextlauncher.data.widgets.LauncherWidgets
 import pl.rafal.contextlauncher.data.widgets.WidgetProvider
 import pl.rafal.contextlauncher.ui.LauncherApp
@@ -30,11 +40,15 @@ class MainActivity : ComponentActivity() {
         if (result.resultCode == RESULT_OK) configureOrPlaceWidget() else cancelPendingWidget()
     }
 
+    @OptIn(InternalComposeUiApi::class, ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingWidgetId = savedInstanceState?.getInt(KEY_PENDING_WIDGET, NO_WIDGET) ?: NO_WIDGET
         enableEdgeToEdge()
         pl.rafal.contextlauncher.ui.LaunchOrigin.attach(window.decorView)
+        // 1.11.0: własny Recomposer okna z naszą skalą animacji (LauncherMotion) — KeepMeOn wyłącza nią ruch
+        // w całym launcherze jednym przełącznikiem. Ustawiony przed setContent, więc ComposeView go znajdzie.
+        window.decorView.compositionContext = window.decorView.createLifecycleAwareWindowRecomposer(LauncherMotion, lifecycle)
         setContent {
             // Motyw nakłada sam LauncherApp, bo zależy od aktywnego trybu.
             LauncherApp(
@@ -43,12 +57,26 @@ class MainActivity : ComponentActivity() {
                 onAddWidget = ::startAddingWidget,
             )
         }
+        // Widżety dostają aktualizacje tylko wtedy, gdy host "słucha", czyli gdy launcher jest widoczny
+        // (repeatOnLifecycle ≈ subskrypcja tylko między onStart a onStop). 1.11.0: w KeepMeOn host nie słucha wcale.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.widgetsPaused.collect { paused ->
+                    if (paused) widgets.host.stopListening() else widgets.host.startListening()
+                }
+            }
+        }
+        // Po odtworzeniu (obrót, powrót po zabiciu procesu) system podaje tę samą intencję — nie pytamy drugi raz.
+        if (savedInstanceState == null) handleUnlockIntent(intent)
     }
 
-    // Widżety dostają aktualizacje tylko wtedy, gdy host "słucha", czyli gdy launcher jest widoczny.
-    override fun onStart() {
-        super.onStart()
-        widgets.host.startListening()
+    // Kafelek / skrót trafił na blokadę KeepMeOn: launcher pyta o odcisk i dopiero wtedy przełącza.
+    private fun handleUnlockIntent(intent: Intent?): Boolean {
+        val id = intent?.getLongExtra(KeepMeOn.EXTRA_UNLOCK_MODE, -1L) ?: -1L
+        if (id == -1L) return false
+        intent?.removeExtra(KeepMeOn.EXTRA_UNLOCK_MODE)
+        viewModel.selectModeById(id)
+        return true
     }
 
     override fun onStop() {
@@ -72,7 +100,7 @@ class MainActivity : ComponentActivity() {
     // Home naciśnięty, gdy launcher już jest na wierzchu.
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        viewModel.onHomePressed()
+        if (!handleUnlockIntent(intent)) viewModel.onHomePressed()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
